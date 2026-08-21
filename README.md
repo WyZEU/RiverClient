@@ -1,4 +1,4 @@
-# River Client
+# 🌊 River Client
 
 A Fabric client for Minecraft Java, plus the Windows launcher that installs and
 runs it. Made by WyZ_EU.
