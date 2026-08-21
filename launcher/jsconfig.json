@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/renderer-react/*"],
+      "@/components/*": ["src/renderer-react/components/*"],
+      "@/lib/*": ["src/renderer-react/lib/*"],
+      "@/hooks/*": ["src/renderer-react/hooks/*"]
+    }
+  },
+  "include": ["src/renderer-react/**/*"]
+}

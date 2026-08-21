@@ -1,0 +1,238 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * River Client launcher - shadcn/ui on Tailwind v4.
+ *
+ * Tokens mirror the in-game client's ClientUi palette so the launcher and the
+ * Right Shift menu read as one product. Keep them in sync with
+ * src/client/kotlin/dev/wyz/clientcore/ui/ClientUi.kt - the surfaces step in
+ * brightness (background -> card -> popover), not in blue tint, and there is
+ * exactly one accent. If a second accent seems necessary it is a semantic
+ * colour, not decoration.
+ */
+
+@source "./**/*.{js,jsx}";
+
+:root {
+  --radius: 0.375rem;               /* 6px - ClientUi.RADIUS_PANEL */
+
+  --background: #0b0c10;            /* ClientUi.BG */
+  --foreground: #ffffff;            /* ClientUi.TEXT */
+  --card: #15171d;                  /* ClientUi.PANEL */
+  --card-foreground: #ffffff;
+  --popover: #1b1e26;               /* ClientUi.PANEL_SOFT */
+  --popover-foreground: #ffffff;
+  --primary: #2f6fe6;
+  --primary-foreground: #ffffff;
+  --secondary: #1b1e26;
+  --secondary-foreground: #ffffff;
+  --muted: #1b1e26;
+  --muted-foreground: #9ba0ab;      /* ClientUi.MUTED */
+  --accent: #23262f;                /* ClientUi.PANEL_ALT */
+  --accent-foreground: #ffffff;
+  --destructive: #ff8fa3;
+  --destructive-foreground: #0b0c10;
+  --success: #72f1b8;               /* ClientUi.POSITIVE */
+  --warning: #ffd46b;               /* ClientUi.WARNING */
+  --border: #2f333d;                /* ClientUi.BORDER */
+  --input: #2f333d;
+  --ring: #2f6fe6;
+}
+
+/*
+ * Light theme. Same one-accent discipline as dark: surfaces step in brightness
+ * (background -> card -> popover) rather than in tint, and the blue accent is
+ * reused unchanged so the two themes read as one product. Applied when the shell
+ * stamps data-theme="light" on the root from the launcherTheme setting.
+ */
+:root[data-theme="light"] {
+  --background: #f4f5f7;
+  --foreground: #14161b;
+  --card: #ffffff;
+  --card-foreground: #14161b;
+  --popover: #ffffff;
+  --popover-foreground: #14161b;
+  --primary: #2f6fe6;
+  --primary-foreground: #ffffff;
+  --secondary: #e9ebef;
+  --secondary-foreground: #14161b;
+  --muted: #eceef2;
+  --muted-foreground: #5b616c;
+  --accent: #e9ebef;
+  --accent-foreground: #14161b;
+  --destructive: #d92f4a;
+  --destructive-foreground: #ffffff;
+  --success: #1a9e63;
+  --warning: #b9781a;
+  --border: #d8dbe1;
+  --input: #d8dbe1;
+  --ring: #2f6fe6;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  --font-sans: Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    margin: 0;
+    min-width: 940px;
+    min-height: 620px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* The frameless shell drags by its title bar; interactive chrome opts back out. */
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+    border: 2px solid var(--background);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3d424e;
+  }
+
+  /*
+   * Motion. Kept subtle and fast - a launcher should feel responsive, not showy.
+   * Buttons, cards and rows share one easing so the whole app moves as a set, and
+   * everything collapses to nothing under prefers-reduced-motion.
+   */
+  button,
+  a,
+  [role="button"] {
+    transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease,
+      transform 120ms ease, opacity 140ms ease, box-shadow 140ms ease;
+  }
+
+  /* A press dips slightly - tactile feedback without a plugin. */
+  button:not(:disabled):active,
+  [role="button"]:active {
+    transform: translateY(0.5px) scale(0.985);
+  }
+
+  /* Cards and list rows lift a touch on hover. Background is transitioned here too:
+     Tailwind's transition-colors utility outranks this base rule, so an element using
+     both would keep its colour fade but lose the transform easing and snap instead. */
+  .lift {
+    transition: transform 140ms ease, box-shadow 160ms ease, border-color 140ms ease,
+      background-color 140ms ease;
+  }
+  .lift:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.55);
+  }
+
+  /*
+   * Ambient hero art drifts slowly behind the Home launch panel, the same Ken Burns
+   * idea the in-game main menu uses, so the launcher and the client read as one
+   * product. Slow and small on purpose: it should register as depth, never as motion
+   * competing with the UI. Collapses under prefers-reduced-motion with everything else.
+   */
+  .hero-drift {
+    animation: river-drift 44s ease-in-out infinite alternate;
+    transform-origin: 50% 60%;
+    will-change: transform;
+  }
+  @keyframes river-drift {
+    from { transform: scale(1.08) translate3d(-1.2%, 0.6%, 0); }
+    to   { transform: scale(1.16) translate3d(1.2%, -1.2%, 0); }
+  }
+
+  /* Launch button gets a soft accent glow that breathes while idle. */
+  .glow-accent {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent);
+    animation: river-pulse 2.8s ease-in-out infinite;
+  }
+  @keyframes river-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 45%, transparent); }
+    50% { box-shadow: 0 0 14px 1px color-mix(in srgb, var(--primary) 30%, transparent); }
+  }
+
+  /*
+   * Theme crossfade. Only while data-theme-anim is set (the ~3s window right after
+   * the user flips the theme) does every element ease its themed colours across, so
+   * dark<->light dissolves instead of snapping. Outside that window nothing here
+   * applies, so normal hovers stay snappy.
+   */
+  :root[data-theme-anim] *,
+  :root[data-theme-anim] *::before,
+  :root[data-theme-anim] *::after {
+    transition: background-color 3s ease, color 3s ease, border-color 3s ease,
+      fill 3s ease, stroke 3s ease, box-shadow 3s ease, outline-color 3s ease !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}

@@ -1,0 +1,442 @@
+{
+  "releases": [
+    {
+      "version": "0.1.6.3",
+      "title": "River Client 0.1.6.3",
+      "summary": "Fixes launch prep being much slower than it should be for existing installs, and cleans up the standalone updater window's look.",
+      "items": [
+        "Fixed 'Preparing assets' being needlessly slow: the launcher was re-hashing every single asset file on every launch, even ones already downloaded and unchanged. It now trusts files that already exist at their expected location, which is what actually made launches feel slow for anyone with an existing install.",
+        "The standalone updater window now looks like the rest of the app instead of rendering mostly unstyled."
+      ]
+    },
+    {
+      "version": "0.1.6.2",
+      "title": "River Client 0.1.6.2",
+      "summary": "Follow-up hotfix: 0.1.6.1's classpath merge collapsed com.mojang:jtracy's platform jar and its OS-specific native jars into one entry, dropping the plain jar and crashing 1.21.4 on boot (NoClassDefFoundError: com/mojang/jtracy/TracyClient). Fixed to key the merge on the full artifact + classifier, not just the artifact name.",
+      "items": [
+        "Fixed a second 1.21.4 boot crash (NoClassDefFoundError: com/mojang/jtracy/TracyClient) introduced by 0.1.6.1's classpath fix."
+      ]
+    },
+    {
+      "version": "0.1.6.1",
+      "title": "River Client 0.1.6.1",
+      "summary": "Hotfix for 0.1.6: fixes a crash on launch for 1.21.4 instances (\"duplicate ASM classes found on classpath\"). 1.21.11 was never affected.",
+      "items": [
+        "Fixed 1.21.4 instances failing to launch with a 'duplicate ASM classes found on classpath' error, caused by the launcher combining Minecraft's own library list with Fabric's without removing the overlap."
+      ]
+    },
+    {
+      "version": "0.1.6",
+      "title": "River Client 0.1.6",
+      "summary": "River Client 0.1.6 adds full support for Minecraft 1.21.4 alongside 1.21.11 - pick your version right in the launcher and get the real River mod on both. This release also brings friends and DMs (in-game and in the launcher), one-click world hosting from singleplayer, total play time tracking, a big launcher visual pass, and fixes for the updater, inventory HUD overlap, and the old performance modules that were causing RAM leaks and FPS drops.",
+      "items": [
+        "River now supports Minecraft 1.21.4 in addition to 1.21.11 - choose your version when creating an instance and River's own mod loads on both.",
+        "Added a full friends system: add/accept/decline friends, direct messages, and a blocked list with unblock, working both in-game (Left Shift + Tab, keybind is configurable) and in the launcher.",
+        "Added world hosting from singleplayer - open your world to friends with no extra downloads, using automatic port forwarding where your router supports it.",
+        "Added total play time tracking on the home screen, with a toggle for River-only vs combined time across every Minecraft install on your PC.",
+        "Launcher visual refresh: clearer startup and progress feedback, and the UI now scales correctly on 4K monitors instead of rendering too small.",
+        "Fixed the updater not actually installing new versions of the client.",
+        "Fixed the inventory HUD overlapping the scoreboard - it now scales to fit instead.",
+        "Removed the old performance modules after reports of RAM leaks and FPS drops. Rendering is left to vanilla and the optimization mods River already installs for you (Sodium, Lithium, FerriteCore, ImmediatelyFast), rather than River doing its own culling.",
+        "Fixed a friend showing as offline in River while they were actually connected to a server."
+      ]
+    },
+    {
+      "version": "0.1.5.2",
+      "title": "River Client 0.1.5.2",
+      "summary": "River Client 0.1.5.2 brings back one-click instance export, makes Repair actually check and update your mods, opens the game log the moment you launch, and stops the launcher from ever falsely calling two working mods incompatible. The Spotify HUD element now updates smoothly every second.",
+      "items": [
+        "Brought back the Export button on every instance, so you can save a full setup as a .rvr file and share it or move it to another PC.",
+        "Repair now does real work: it checks every tracked mod for a newer version and installs it, then shows exactly what it updated, what genuinely needs your attention, and any soft conflicts to keep an eye on.",
+        "Fixed the launcher wrongly blocking a launch and claiming two mods are incompatible when they actually run together fine. Only real incompatibilities stop a launch now; soft conflicts are shown as a heads-up and never block you.",
+        "The game log now opens the instant you press Launch, so you can watch every step instead of waiting for it to show up.",
+        "Fixed 'Check for updates' always saying everything was up to date even when updates were available.",
+        "The Spotify HUD element now ticks up smoothly every second instead of jumping every few seconds."
+      ]
+    },
+    {
+      "version": "0.1.5.1",
+      "title": "River Client 0.1.5.1",
+      "summary": "River Client 0.1.5.1 fixes a crash when using the Spotify HUD element on installed builds, and tidies up the updater.",
+      "items": [
+        "Fixed the launcher crashing with a JavaScript error when the Spotify HUD element tried to run its media helper. The helper is now packaged correctly and can never take the launcher down if it fails.",
+        "Tidied up the updater: friendlier progress text, no command-prompt window flashing during install, and a fixed-size window."
+      ]
+    },
+    {
+      "version": "0.1.5",
+      "title": "River Client 0.1.5",
+      "summary": "River Client 0.1.5 gives the wardrobe a rotatable 3D skin view with one-click slim/classic and live cape previews, shows real mod icons in your instances, adds a light and dark launcher theme, redesigns the Spotify HUD, and adds a Flashback button to the main menu.",
+      "items": [
+        "New 3D wardrobe: your skin renders as a rotatable model with proper shading, one-click slim/classic switching, and live cape previews.",
+        "Installed mods now show their real icons, read straight from the mod files.",
+        "Added a light and dark launcher theme with a smooth transition, switchable in Settings.",
+        "Redesigned the Spotify HUD element: album art, track name and timestamp, with play and skip controls when a menu is open.",
+        "Added a Flashback button to the main menu that opens the Flashback replay mod, and only appears when the mod is installed.",
+        "You can now manage installed content: enable, disable, or remove mods, resource packs and shaders from the Add content screen.",
+        "Update buttons only appear when there is actually an update to install, so nothing sits there doing nothing.",
+        "Fixed the spyglass zoom not working while Static FOV was on.",
+        "Cleaned up the in-game HUD: removed the blue accent line on modules, and the watermark no longer overlaps the multiplayer server list.",
+        "CurseForge browsing is temporarily marked Soon while it is reworked. Modrinth works fully in the meantime."
+      ]
+    },
+    {
+      "version": "0.1.4.3",
+      "title": "River Client 0.1.4.3",
+      "summary": "River Client 0.1.4.3 fixes crashes on some servers, adds a live ping graph and a HUD that stays put across resolutions, brings new first-party optimizations, and lets you allocate more than 8 GB of RAM.",
+      "items": [
+        "Fixed a crash when joining some servers (an entity with no renderer no longer takes the whole game down).",
+        "Fixed a false 'Sodium conflicts with Fabric API' warning caused by a mod that bundles an old copy of Fabric API.",
+        "New Ping Graph HUD element: a rolling 30-second graph of your latency, coloured green, amber or red so spikes are obvious.",
+        "HUD elements now stay where you put them across resolution, window-size and GUI-scale changes instead of drifting or vanishing.",
+        "Restyled the in-game HUD to match the River menu - cleaner, flatter, one look.",
+        "Added a rain and snow toggle and an FPS cap for menus - two new built-in optimizations, no extra mods.",
+        "Players and dropped items no longer disappear at range when entity culling is on, and dragon's breath is never hidden (it damages you).",
+        "Added Distant Horizons to the optimization suite for far-distance terrain.",
+        "The memory slider now uses your actual RAM instead of stopping at 8 GB.",
+        "Launching is faster - checking for mod updates no longer blocks the game from starting.",
+        "Fixed the 'Could not load Home' error on the launcher home screen."
+      ]
+    },
+    {
+      "version": "0.1.4.2",
+      "title": "River Client 0.1.4.2",
+      "summary": "River Client 0.1.4.2 fixes the 'EPERM, Permission denied' error that stopped updates from installing on some PCs.",
+      "items": [
+        "Fixed the 'EPERM, Permission denied' error when installing an update. Windows ransomware protection was blocking the update folder; updates now install from a folder Windows doesn't block."
+      ]
+    },
+    {
+      "version": "0.1.4.1",
+      "title": "River Client 0.1.4.1",
+      "summary": "River Client 0.1.4.1 fixes a crash caused by particles, fixes 'Disable on this server' not saving, opens a colour-coded game log window when you launch, and gives the launcher and in-game menus a cleaner, matching look.",
+      "items": [
+        "Fixed a crash that could happen when fireworks or other particles were on screen.",
+        "Fixed 'Disable on this server' doing nothing. Per-server module rules now save instead of being wiped a moment later.",
+        "The game log now opens in its own window when you launch, with errors, warnings and info colour-coded so a crash is easy to read.",
+        "Gave the in-game menu a cleaner, flatter look.",
+        "Reorganised the main menu and fixed the large gap under the River title.",
+        "Cleaned up the launcher so it matches the in-game client.",
+        "Removed the name tag effects. They never rendered the way they should have, so they are gone rather than half working."
+      ]
+    },
+    {
+      "version": "0.1.4",
+      "title": "River Client 0.1.4",
+      "summary": "River Client 0.1.4 fixes the launch failure that stopped some players from starting the game, fixes updates never installing, adds a one-click Fix button, and brings a new Cosmetics screen with capes and name effects.",
+      "items": [
+        "Fixed the launch failure that showed 'spawn java ENOENT'. River now finds your Java automatically and installs Java 21 for you if you don't have it.",
+        "Fixed updates never installing. The update step could fail before it copied anything, so River stayed on the old version.",
+        "Fixed the update error 'EPERM, Permission denied'. River now retries and works around folders Windows has locked.",
+        "The game no longer opens a console window, so closing it can't close your game any more.",
+        "Added a Fix button. If the game fails to launch or crashes, one click repairs Java, mods, game files, natives and settings.",
+        "New Cosmetics screen with a live 3D preview of your own skin, opened from the River menu or the main menu.",
+        "Added the Sakura Valley and Moonrise capes.",
+        "New name effects: Shimmer, Fire and Ice, and effects now stack with each other.",
+        "Capes and River badges show up between River players again.",
+        "Redesigned the main menu with a new background, animations and hover effects.",
+        "Fixed HUD modules drawing twice in the HUD editor.",
+        "Logs are easier to read and the filter menu is no longer blank.",
+        "More in-game performance options, including block entity distance and a particle limit."
+      ]
+    },
+    {
+      "version": "0.1.3.1",
+      "title": "River Client 0.1.3.1",
+      "summary": "River Client 0.1.3.1 refreshes River Client's in-game mod and cleans up the launcher import flow.",
+      "items": [
+        "Updated River Client's in-game mod.",
+        "Ping, Direction, and Speed now show properly in the HUD editor preview."
+      ]
+    },
+    {
+      "version": "0.1.3",
+      "title": "River Client 0.1.3",
+      "summary": "River Client 0.1.3 updates the in-game HUD editor and now we have a brand new main menu screen! The latest in-game build is also included in this release.",
+      "items": [
+        "Updated River Client's in-game mod.",
+        "Ping, Direction, and Speed now show properly in the HUD editor preview."
+      ]
+    },
+    {
+      "version": "0.1.2.2",
+      "title": "River 0.1.2.2 mod control fix",
+      "summary": "River Client 0.1.2.2 fixes broken mod controls in instances and stops River from treating your whole mods folder like forced content.",
+      "items": [
+        "Fixed enabling, disabling, and uninstalling mods so the launcher targets the instance you actually have open.",
+        "Update checks and Update all now follow the selected instance instead of a stale launcher path.",
+        "River no longer copies an entire baseline mods folder into other instances on launch.",
+        "Shared River files still sync where needed without stomping user-managed mod choices.",
+        "Keeps the current runtime handoff and bundled in-game River client flow in place."
+      ]
+    },
+    {
+      "version": "0.1.2.1",
+      "title": "River 0.1.2.1 stability update",
+      "summary": "River Client 0.1.2.1 keeps the default optimization path focused on Sodium and fixes the launcher handoff into the in-game River client again.",
+      "items": [
+        "Automatic optimization installs no longer add Reese's Sodium Options.",
+        "Automatic optimization installs no longer add Sodium Extra.",
+        "Sodium stays as the main graphics optimization mod in the default River optimization path.",
+        "Fixed the launcher launch path so River's bootstrap agent passes clientcore into Fabric the right way again.",
+        "Updated the bundled River in-game client build used by the launcher."
+      ]
+    },
+    {
+      "version": "0.1.0.1",
+      "title": "River 0.1.0.1 bugfix pass",
+      "summary": "River Client 0.1.0.1 fixes the in-game River menu sizing and keeps bugfix builds on the 0.1.0 line.",
+      "items": [
+        "Launcher home screen now matches the cleaner River layout with quick tools, session history, and What's new.",
+        "Social drawer is back in the launcher with Shift+Tab support from in game.",
+        "In game UI is now a fullscreen NoRisk style click GUI with category, list, and inspector panels.",
+        "HUD editor sidebar was removed in favor of a minimal drag toolbar.",
+        "Instance export now saves River only .rvr archives with mods, resource packs, and shaders.",
+        "Publish update flow is faster with parallel uploads and optional skip build flags."
+      ]
+    },
+    {
+      "version": "0.1.1",
+      "title": "River 0.1.1 bugfix pass",
+      "summary": "River Client 0.1.1 rolls the current bug fixes into the next River build.",
+      "items": [
+        "Managed installs stay lined up with the current River build way more cleanly now.",
+        "The launcher update path was tightened up so releases stop fighting each other.",
+        "HUD module list scroll now reaches the real bottom of the category instead of stopping early.",
+        "Tab ping text now refreshes when latency changes instead of staying stuck on an old value.",
+        "Title screen River buttons now anchor off the real vanilla rows so they stop overlapping and drifting off-center.",
+        "Potion HUD now uses a cleaner labeled layout with proper minute:second timing, cleaner amplifier text, and better buff and debuff readability.",
+        "Added Target HUD and Gapple Count for more useful PvP info in fights.",
+        "Armor HUD durability numbers now stay bright white at max and dim a bit once the piece is no longer full.",
+        "Fixed the zoom crash when pressing C by correcting the client FOV mixin return type."
+      ]
+    },
+    {
+      "version": "1.9.8",
+      "title": "HUD fixes and PvP module pass",
+      "summary": "River Client 1.9.8 fixes the local dev mod install path, fixes HUD list scrolling and tab ping updates, cleans the main menu layout up, and adds a better PvP utility pass.",
+      "items": [
+        "Managed installs stay lined up with the current River build way more cleanly now.",
+        "The launcher update path was tightened up so releases stop fighting each other.",
+        "HUD module list scroll now reaches the real bottom of the category instead of stopping early.",
+        "Tab ping text now refreshes when latency changes instead of staying stuck on an old value.",
+        "Title screen River buttons now anchor off the real vanilla rows so they stop overlapping and drifting off-center.",
+        "Potion HUD now uses a cleaner labeled layout with proper minute:second timing and cleaner amplifier text.",
+        "Added Combo Counter, Pearl Count, and Totem Count as new server-friendly PvP modules."
+      ]
+    },
+    {
+      "version": "1.9.7",
+      "title": "Local mod priority and Discord presence pass",
+      "summary": "River Client 1.9.7 makes local dev mod builds win cleanly on your machine, tightens Discord presence payloads, and keeps the latest in-game UI cleanup work together in one build.",
+      "items": [
+        "Local workspace clientcore builds are now preferred more aggressively on your machine when they differ from the published mod jar.",
+        "If the installed River mod already matches your local workspace build, the launcher now keeps it instead of replacing it from the live manifest path.",
+        "Discord Rich Presence activity payload now explicitly marks itself as a non-instance activity while keeping River download and Discord buttons attached.",
+        "This release carries the latest in-game menu cleanup, nametag settings toggles, and HUD editor X fallback fixes into the 1.9.7 build."
+      ]
+    },
+    {
+      "version": "1.9.4",
+      "title": "Overlay bridge groundwork",
+      "summary": "River Client 1.9.4 starts shifting the heavy in-game menu path toward the desktop app with a local bridge and overlay fallback flow.",
+      "items": [
+        "Right Shift now checks for a live River desktop bridge before falling back to the old Fabric menu.",
+        "The client mod now writes a lightweight local bridge command so the desktop app can open a River overlay window.",
+        "River desktop now maintains a local bridge heartbeat while it is running.",
+        "Overlay state reads and writes the real clientcore config so module enable and scale changes sync back into the game.",
+        "Config hot-reload was added on the Fabric side so bridge-driven config changes can apply while Minecraft is running.",
+        "Version metadata was bumped to 1.9.4 for the next local build."
+      ]
+    },
+    {
+      "version": "1.9.3",
+      "title": "Launcher trust and wardrobe polish",
+      "summary": "River Client 1.9.3 upgrades the wardrobe to a real 3D Minecraft skin model, sharpens account and trust screens, and makes content and instance management clearer.",
+      "items": [
+        "Wardrobe now uses a real 3D Minecraft-style player model renderer for current and saved skin previews.",
+        "Microsoft account settings now show exact expiry times and clearer remaining-session status chips.",
+        "Trust and Privacy adds one-click verify selected instance, open app data, open crash folder, and privacy-page shortcuts.",
+        "Modrinth project pages now show richer project details, environment support, categories, and dependency lists for selected versions.",
+        "Content browser now marks projects that are already installed in the current instance more clearly.",
+        "Instances list now supports quick duplicate and repair actions directly from the row.",
+        "Launcher and client metadata were bumped to 1.9.3 for the next packaged release."
+      ]
+    },
+    {
+      "version": "1.9.2",
+      "title": "In-game UI polish",
+      "summary": "Reworked River Client's in-game menus and HUD chrome with rounded panels, smoother controls, better drag editing, and cleaner visual hierarchy.",
+      "items": [
+        "Client menus now use rounded glass panels, gradient titles, softer borders, and cleaner spacing.",
+        "Module list cards, toggles, sliders, buttons, and scrollbars now animate and react on hover.",
+        "HUD editor minimap and drag layout cards were cleaned up for easier positioning work.",
+        "Text effects screen now matches the main River Client UI style.",
+        "HUD panel rendering and keystroke keys now use the same cleaner rounded visual system."
+      ]
+    },
+    {
+      "version": "1.9.1",
+      "title": "1.9.1 release",
+      "summary": "Partner refresh (Champ SMP), launcher polish, Discord rivers role, and 1.9.1 artifacts.",
+      "items": [
+        "Featured partner updated to Champ SMP with IP champ.smp.quest (website data/partners.json and launcher partner feed).",
+        "Launcher updates no longer download automatically; use Install update when you are ready. Portable installs relaunch RiverClient.exe so the version actually applies.",
+        "Instance settings memory slider uses the same filled track as global game settings.",
+        "Wardrobe skin preview is a draggable 3D model; wardrobe, servers, and logs use full window layout.",
+        "Installed mods fetch Modrinth project icons when the jar metadata has no icon URL.",
+        "Discord community bot: Rivers member role, River Client role stack order, Stream Team rename (run /setup).",
+        "Armor HUD: low-durability pulse, optional note-block warning sound, durability counts, tighter hotbar-style defaults; reset module uses vertical slots."
+      ]
+    },
+    {
+      "version": "1.9.0",
+      "title": "1.9.0 release",
+      "summary": "Launcher UI polish, mod version sync with package.json, and 1.9.0 artifacts.",
+      "items": [
+        "Quick action buttons keep labels inside the tile (wider tiles, two-line clamp, wrap row).",
+        "Mod jar version is read from launcher package.json so clientcore naming matches builds and updates.",
+        "Instance status detects any installed clientcore-*.jar after Cloudflare download, not only the exact bundled name.",
+        "Bumped River Client launcher and Fabric mod to v1.9.0."
+      ]
+    },
+    {
+      "version": "1.8.6",
+      "title": "1.8.6 release",
+      "summary": "Minecraft 1.21.11 compatibility fixes, HUD editor overhaul, and version alignment for launcher and mod updates.",
+      "items": [
+        "Fixed Fabric client compile targets for 1.21.11 (GuiGraphics blit, Identifier, 2D pose stack, screen mouse APIs).",
+        "HUD editor: split layout, neutral styling, sliders, auto-save, and on-screen module drag support.",
+        "Armor HUD uses slot layout with durability bars and shared styling options.",
+        "Bumped River Client, launcher, and mod artifacts to 1.8.6 for the update manifest and bundled jar."
+      ]
+    },
+    {
+      "version": "1.8.5",
+      "title": "Launcher icon publish fix",
+      "summary": "The refreshed River Client logo now ships correctly in published launcher builds and update packages.",
+      "items": [
+        "Fixed the packaged launcher still showing the older River icon after updating.",
+        "Aligned the bundled client jar naming with the live launcher version.",
+        "Updated the publish pipeline so the live site and updater point at the same 1.8.5 release."
+      ]
+    },
+    {
+      "version": "1.8.4",
+      "title": "Branding refresh",
+      "summary": "Updated River Client branding and icon assets across the launcher, website, Discord bot, and in-game client.",
+      "items": [
+        "Replaced launcher branding icon assets with the new River Client icon.",
+        "Updated website icon references to the new brand image.",
+        "Updated Discord bot embed/ticket icon attachment asset.",
+        "Updated Fabric mod icon asset used by the in-game client."
+      ]
+    },
+    {
+      "version": "1.8.3",
+      "title": "Mod auto-update from Cloudflare",
+      "summary": "The launcher now always pulls the latest mod jar directly from Cloudflare before launching so the in-game client is never out of date regardless of where the launcher is installed.",
+      "items": [
+        "Launcher fetches the mod jar from Cloudflare R2 every time before launch and verifies it by sha256.",
+        "If the installed jar is already up to date it skips the download.",
+        "Old clientcore jars in the mods folder are removed automatically when a newer one is downloaded.",
+        "Falls back to the bundled jar if there is no network connection.",
+        "Publish script now uploads the mod jar to R2 and includes mod url and sha256 in the release manifest."
+      ]
+    },
+    {
+      "version": "1.8.2",
+      "title": "Mod bundle fix",
+      "summary": "Fixes the launcher shipping the wrong mod jar so the updated in-game client now actually loads.",
+      "items": [
+        "Fixed the launcher bundling the old clientcore jar instead of the current one.",
+        "Mod jar name references updated throughout the build and install pipeline to match the current version."
+      ]
+    },
+    {
+      "version": "1.8.1",
+      "title": "In-game UI overhaul + menu button fix",
+      "summary": "Full HUD and client menu visual rebuild, watermark added, button position fixed so it is always visible on screen.",
+      "items": [
+        "Rebuilt every HUD module with dark panels, indigo left accent bars, and clean off-white text.",
+        "Right Shift menu replaced with a proper dark modal panel with category tabs, scrollable module list, and sliding toggle switches.",
+        "Watermark added to the bottom right of any open GUI screen showing the River Client icon and name.",
+        "All UI elements now size and position relative to the player screen using the Minecraft GUI scale system.",
+        "Fixed the title screen River button being cut off and overlapping the copyright text.",
+        "Module default positions updated so keystroke widget, armor HUD, potion HUD, and ping no longer overlap.",
+        "Fixed mouseClicked and mouseScrolled override signatures for Minecraft 1.21.11 compatibility.",
+        "Launcher and mod version bumped to 1.8.1."
+      ]
+    },
+    {
+      "version": "1.8.0",
+      "title": "Website rework + partner servers + changelog panel fix",
+      "summary": "Full website redesign with trust and safety, FAQ, screenshots, and partner server sections. Partner servers view added to the launcher. Changelog no longer blocks the whole screen.",
+      "items": [
+        "Redesigned website with new sections: Trust and Safety, FAQ, Screenshots, Partner Servers.",
+        "Trust badges on the hero and source use notice added to the safety section.",
+        "FAQ accordion with 8 common questions using native details/summary.",
+        "Partner Servers section on the website loads from data/partners.json dynamically.",
+        "Partner Servers view added to the launcher sidebar under Servers.",
+        "Launcher fetches partner server list from the live site and shows an empty state with a Discord link.",
+        "Changelog popup replaced with a compact non-blocking panel in the bottom-right corner.",
+        "Changelog panel is scrollable, collapsible, and dismissable without blocking the launcher."
+      ]
+    },
+    {
+      "version": "1.7.1",
+      "title": "Instance settings + launcher polish",
+      "summary": "Instances now have their own settings tab. Added export, import, Java auto-install, profile switcher, quick launch, and fixed the update apply bug.",
+      "items": [
+        "Instance Settings tab: rename, change version, set memory, and add notes per instance.",
+        "Export any instance as a ZIP archive to back it up or share it.",
+        "Import a ZIP to restore or bring in an instance from someone else.",
+        "Java auto-installer downloads JRE 17 or 21 from Adoptium and sets it automatically.",
+        "Profile switcher lets you save and switch between multiple Microsoft accounts without logging out.",
+        "Quick Launch button on the home screen launches your last-used instance in one click.",
+        "Fixed: launcher updates were downloading correctly but not applying to installed files.",
+        "Discord bot: ticket transcripts on close sent to user DMs and ticket-log.",
+        "Discord bot: staff can claim tickets, bug tickets post a structured template.",
+        "Discord bot: ban, kick, and timeout now DM the user the reason.",
+        "Discord bot: roles saved on leave and restored on rejoin.",
+        "Discord bot: new /userinfo and /whois commands."
+      ]
+    },
+    {
+      "version": "1.7.0",
+      "title": "Standalone launch update",
+      "summary": "River Client packaged builds can now prepare and launch a standalone Fabric Minecraft runtime instead of stopping after installing the bundled jar.",
+      "items": [
+        "Added standalone Fabric launch support for packaged River Client builds.",
+        "The launcher now downloads Minecraft metadata, the client jar, libraries, assets, and native files when needed.",
+        "Standalone launch uses Microsoft auth when signed in and Developer Offline Test Mode when enabled.",
+        "Launch preparation now reports progress through the launcher activity panel.",
+        "Installed Modrinth content now caches project icons locally so mod icons load reliably.",
+        "Installed mods now show the Modrinth creator name beside the version."
+      ]
+    },
+    {
+      "version": "0.1.5.3",
+      "title": "Launcher update polish",
+      "summary": "Cleaner announcements, a more branded Home screen, and a stable setup download for new installs.",
+      "items": [
+        "Renamed the update popup to Announcements and removed the admin wording.",
+        "Added branded icons and a River watermark to make the Home screen feel more finished.",
+        "Startup now clearly says when River Client is up to date.",
+        "Packaged builds now install app-package updates automatically on startup.",
+        "The website setup download now points to one stable newest-installer link."
+      ]
+    },
+    {
+      "version": "0.1.1",
+      "title": "Instance and mod browser cleanup",
+      "summary": "Core mod protection, better Modrinth install states, and in-game cleanup.",
+      "items": [
+        "Protected the River core mod from being disabled or removed.",
+        "Added instance deletion with a safe managed-folder delete guard.",
+        "Improved Modrinth installed labels and mod icons.",
+        "Cleaned unused cosmetics placeholder code from the in-game client."
+      ]
+    }
+  ]
+}

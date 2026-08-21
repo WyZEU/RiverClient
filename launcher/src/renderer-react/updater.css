@@ -1,0 +1,180 @@
+/*
+ * Standalone window palette. This file is self-contained on purpose: the main
+ * launcher app is shadcn/ui on Tailwind and its token names (--accent, --muted,
+ * --card) mean different things there. Values mirror ClientUi.kt - keep in sync.
+ */
+:root {
+  color-scheme: dark;
+  --bg: #0b0c10;
+  --panel: #15171d;
+  --card: #1b1e26;
+  --card-hover: #23262f;
+  --border: #2f333d;
+  --text: #ffffff;
+  --muted: #9ba0ab;
+  --muted-2: #6e7481;
+  --accent: #2f6fe6;
+  --accent-2: #1d4ed8;
+  --success: #72f1b8;
+  --warning: #ffd46b;
+  --danger: #ff8fa3;
+  --radius: 6px;
+  --radius-sm: 4px;
+  font-family: Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* Updater-window layout. Shares design tokens and the shadcn .ui-* / .wbtn classes
+   from styles.css; this only overrides the main-app body sizing and adds the small
+   updater-specific layout. */
+body {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  user-select: none;
+  background: var(--bg);
+}
+
+.updater-titlebar {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 6px 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(12, 18, 26, 0.98), rgba(10, 15, 22, 0.98));
+}
+.updater-brand { color: var(--muted); font-size: 12px; font-weight: 600; }
+.updater-brand strong { color: var(--text); }
+.updater-window-actions { display: flex; align-items: center; gap: 2px; -webkit-app-region: no-drag; }
+
+/* Window-control buttons (minimize/close). styles.css defines these for the main window,
+   but this standalone updater window never loads styles.css, so they need their own copy. */
+.wbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.wbtn svg { width: 14px; height: 14px; }
+.wbtn:hover { background: var(--card-hover); color: var(--text); }
+.wbtn-close:hover { background: #e5484d; color: #fff; }
+
+.updater-content {
+  height: calc(100vh - 40px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(47, 111, 230, 0.10), transparent 60%),
+    var(--bg);
+}
+
+.updater-card {
+  width: min(100%, 440px);
+  background: linear-gradient(180deg, var(--card), var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+}
+.updater-card-content { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
+
+.updater-head { display: flex; gap: 13px; align-items: flex-start; }
+.updater-icon-ring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(47, 111, 230, 0.12);
+  border: 1px solid rgba(47, 111, 230, 0.28);
+}
+.updater-icon-ring.error { background: rgba(255, 143, 163, 0.12); border-color: rgba(255, 143, 163, 0.3); }
+.updater-icon-ring.success { background: rgba(114, 241, 184, 0.12); border-color: rgba(114, 241, 184, 0.3); }
+.updater-icon { width: 18px; height: 18px; color: var(--accent); }
+.updater-icon.error { color: var(--danger); }
+.updater-icon.success { color: var(--success); }
+.updater-icon.spin { animation: updater-spin 1s linear infinite; }
+@keyframes updater-spin { to { transform: rotate(360deg); } }
+
+.updater-title { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; padding-top: 6px; }
+.updater-detail { margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.4; word-break: break-word; }
+
+.updater-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.updater-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  transition: width 0.35s ease;
+}
+.updater-progress-fill.error { background: var(--danger); }
+.updater-progress-fill.success { background: var(--success); }
+
+.updater-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
+.updater-meta.error { color: var(--danger); }
+.updater-meta.success { color: var(--success); }
+
+.updater-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+
+.updater-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.updater-btn svg { width: 14px; height: 14px; }
+
+.updater-btn-outline {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+.updater-btn-outline:hover { background: var(--card-hover); }
+
+/* Calm blue Close button instead of the bright cyan app accent. */
+.updater-btn-primary {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+.updater-btn-primary:hover { background: #2f6fe0; border-color: #2f6fe0; }

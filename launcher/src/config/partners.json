@@ -1,0 +1,13 @@
+{
+  "partners": [
+    {
+      "name": "Polaris SMP",
+      "type": "Vanilla SMP",
+      "ip": "polaris.mcsh.io",
+      "discord": "https://discord.gg/polarissmp",
+      "description": "A fully vanilla SMP. No resets, no pay-to-win - just survival.",
+      "icon": "../assets/partners/polaris-smp.png",
+      "partner": true
+    }
+  ]
+}

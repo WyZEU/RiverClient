@@ -1,0 +1,95 @@
+# Build output
+.gradle/
+.kotlin/
+.wrangler/
+build/
+out/
+run/
+dist/
+dist-api/
+dist-fresh/
+*.iml
+.idea/
+.vscode/
+
+# Dependencies - never commit these. They are huge, they are not ours, and they
+# make the repo impossible to actually read through.
+node_modules/
+
+# Secrets. secrects.env is the old typo'd name; it stays listed because an early
+# commit did include it, so keep both spellings ignored forever.
+*.env
+secrets.env
+secrects.env
+.env.local
+.env.*.local
+
+# Launcher build artefacts
+launcher/app/
+launcher/bundled/
+launcher/build/
+launcher/dist/
+launcher/.vite/
+
+# Next.js
+riv3r-next/.next/
+riv3r-next/out/
+
+# Built mod jars. These are produced by `gradlew build` from the source in this
+# repo - shipping the jar as well would just be an unauditable copy of it.
+launcher/src/bundled/*.jar
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# OS noise
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Local scratch
+*.log
+crash-reports/
+
+# Prebuilt helper binary. The C# source (launcher/src/np-helper.cs) is what
+# ships; build-app.js compiles it with csc and only falls back to this if csc is
+# missing. An opaque exe in a repo people are meant to audit is the last thing
+# anyone wants to see.
+launcher/src/np-helper.exe
+
+# Staging file for the next release: holds unpublished announcement copy and
+# gets rewritten every publish. Not something that belongs in a public repo.
+launcher/release-draft.json
+
+# Editor and assistant tooling. Local scratch that helps me work on this but
+# means nothing to anyone reading the source, so none of it belongs in the repo.
+.claude/
+.codex_tmp/
+.cursor/
+.windsurf/
+.aider*
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.github/copilot-instructions.md
+graphify-out/
+
+# No binaries. The whole point of this repo is that you can read what you run,
+# and an exe nobody can read undermines that. np-helper is built from its own
+# .cs source at build time, admin tools are internal and not published.
+*.exe
+
+# Saved copy of another client's homepage, kept locally as a design reference.
+# Not mine to redistribute, and not part of River.
+norisk-home.html
+
+# Not part of the client. These stay in my local checkout but there is no
+# reason for them to be in a repo whose job is "check what River does to your
+# machine": the admin CLI and the relay are my own server-side tooling, the
+# bot runs on the Discord server, the sites run on Cloudflare, and tools/ is
+# just Blockbench scratch for building cosmetics.
+river-admin-cli/
+river-relay/
+riv3r-site/
+riv3r-next/
+discord-bot/
+tools/

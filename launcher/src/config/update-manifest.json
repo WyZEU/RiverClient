@@ -1,0 +1,48 @@
+{
+  "name": "River Client",
+  "version": "0.1.6.3",
+  "minimumVersion": "0.1.6.3",
+  "required": false,
+  "publishedAt": "2026-08-20T19:13:03.923Z",
+  "pageUrl": "https://riverclient.xyz/",
+  "installerUrl": "https://updates.riverclient.xyz/downloads/River-Client-Setup.exe",
+  "portableUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.6.3/River-Client-Portable-0.1.6.3.exe",
+  "packageUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.6.3/River-Client-App-0.1.6.3.zip",
+  "fileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.6.3/file-manifest.json",
+  "appFileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.6.3/file-manifest.json",
+  "appFileBaseUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.6.3/app/",
+  "fileCount": 81,
+  "files": {
+    "installer": {
+      "name": "River-Client-Setup.exe",
+      "size": 131261057,
+      "sha256": "4013e7bfa2261134eca039f42c894c60a9a5b5f024cd1f233079491486283b64"
+    },
+    "portable": {
+      "name": "River-Client-Portable-0.1.6.3.exe",
+      "size": 176503345,
+      "sha256": "71768fb1c79f18dceb7ba958045ae4c9d1088b8c4d833b0b614edaf1b5dadaf1"
+    },
+    "package": {
+      "name": "River-Client-App-0.1.6.3.zip",
+      "size": 195179276,
+      "sha256": "f36a8e299693659b9b68cada08de5d5eb424064b9cfa409523882140728b54d8"
+    },
+    "fileManifest": {
+      "name": "file-manifest.json",
+      "size": 24389,
+      "sha256": "8e66a74f966796c4016f86bb07587f5002dbef876738d7dbbd65f69e0d910be0",
+      "count": 81
+    }
+  },
+  "changelog": {
+    "version": "0.1.6.3",
+    "title": "River Client 0.1.6.3",
+    "summary": "Fixes launch prep being much slower than it should be for existing installs, and cleans up the standalone updater window's look.",
+    "items": [
+      "Fixed 'Preparing assets' being needlessly slow: the launcher was re-hashing every single asset file on every launch, even ones already downloaded and unchanged. It now trusts files that already exist at their expected location, which is what actually made launches feel slow for anyone with an existing install.",
+      "The standalone updater window now looks like the rest of the app instead of rendering mostly unstyled."
+    ]
+  },
+  "notes": "Fixes launch prep being much slower than it should be for existing installs, and cleans up the standalone updater window's look."
+}

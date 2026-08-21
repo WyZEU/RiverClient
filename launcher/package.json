@@ -1,0 +1,125 @@
+{
+  "name": "river-client-launcher",
+  "version": "0.1.6",
+  "riverVersion": "0.1.6.3",
+  "description": "River Client launcher by WyZ_EU",
+  "author": "WyZ_EU",
+  "main": "app/main.js",
+  "private": true,
+  "scripts": {
+    "build:app": "node scripts/build-app.js",
+    "start": "npm run build:app && electron .",
+    "dist": "npm run build:app && electron-builder --win nsis portable",
+    "dist:installer": "npm run build:app && electron-builder --win nsis",
+    "dist:portable": "npm run build:app && electron-builder --win portable",
+    "dist:dir": "npm run build:app && electron-builder --win dir",
+    "release:draft": "node scripts/release-draft.js",
+    "publish:update": "node scripts/publish-update.js",
+    "publish:update:fast": "node scripts/publish-update.js --fast"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.22",
+    "@radix-ui/react-label": "^2.1.13",
+    "@radix-ui/react-progress": "^1.1.8",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slider": "^1.4.5",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-switch": "^1.3.5",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-tooltip": "^1.2.14",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "discord-rpc": "^4.0.1",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "semver": "^7.8.2",
+    "skinview3d": "^3.4.2",
+    "tailwind-merge": "^3.5.0",
+    "tw-animate-css": "^1.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "electron": "41.4.0",
+    "electron-builder": "26.8.1",
+    "esbuild": "0.27.0",
+    "tailwindcss": "^4.3.3",
+    "wrangler": "^4.24.0"
+  },
+  "build": {
+    "appId": "dev.wyz.river.launcher",
+    "productName": "River Client",
+    "artifactName": "River-Client-${version}-${arch}.${ext}",
+    "copyright": "Copyright 2026 WyZ_EU",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "app/**/*",
+      "package.json"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "rvr",
+        "name": "River Instance",
+        "description": "River Client instance export",
+        "icon": "build/icon.ico",
+        "role": "Editor"
+      }
+    ],
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "app/bundled",
+        "to": "bundled"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "signtoolOptions": {
+        "publisherName": "WyZ_EU"
+      },
+      "signAndEditExecutable": true,
+      "requestedExecutionLevel": "asInvoker",
+      "executableName": "RiverClient",
+      "legalTrademarks": "River Client",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "River-Client-Setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "River Client",
+      "include": "build/installer.nsh"
+    },
+    "portable": {
+      "artifactName": "River-Client-Portable.${ext}",
+      "useZip": true
+    },
+    "asarUnpack": [
+      "**/np-helper.exe",
+      "**/now-playing.ps1"
+    ]
+  }
+}
