@@ -1,5 +1,5 @@
 # 🌊 River Client
-*(do i remove the wave emoji? from the title)*
+*(do i remove the wave emoji from the title?)*
 
 A Fabric client for Minecraft Java.
 - Made by WyZ_EU.
