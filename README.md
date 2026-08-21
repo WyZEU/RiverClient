@@ -11,7 +11,7 @@ Downloads: **https://riverclient.xyz**
 
 River signs you into your Microsoft account, talks to a server, and attaches a
 Java agent to your game. You should be suspicious of software that does that, so
-here it is - check it yourself.
+here it is, check it your seld
 
 River is **source-available**, not open source. Read it and build it to verify
 it; do not use it in your own project. See [LICENSE](LICENSE).
@@ -43,11 +43,7 @@ launcher/             the launcher (Electron + React)
 cloudflare-updates/   Worker: updates, friends, presence
 ```
 
-Two mod trees instead of one because Minecraft changed too much between the
-versions to share a source set. Fixes get ported by hand.
-
-The site, the Discord bot, the relay and my admin tools aren't here - none of
-them run on your PC.
+2 mod trees instead of one because Minecraft changed too much between the 2 versions.
 
 ---
 
