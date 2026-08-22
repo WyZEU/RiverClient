@@ -1,5 +1,4 @@
 # 🌊 River Client
-*(do i remove the wave emoji from the title?)*
 
 A Fabric client for Minecraft Java.
 - Made by WyZ_EU.
@@ -10,9 +9,7 @@ Downloads: **https://riverclient.xyz**
 
 ## Why this is public
 
-River signs you into your Microsoft account, talks to a server, and attaches a
-Java agent to your game. You should be suspicious of software that does that, so
-here it is, check it your seld
+River’s source-code is now public because people had a hard time believing it wasn’t a malware so that's why we decided to make it source-available
 
 River is **source-available**, not open source. Read it and build it to verify
 it; do not use it in your own project. See [LICENSE](LICENSE).
@@ -30,7 +27,7 @@ it; do not use it in your own project. See [LICENSE](LICENSE).
 | What gets injected into the game? | `src/client/java/dev/wyz/clientcore/mixin/` |
 | Does it touch my other launchers? | Only *reads* instances you import - `detectExternalMinecraftInstances` |
 
-Nothing is obfuscated. Don't take my word for any of it, that's the point.
+Nothing is obfuscated. Don't take my word for any of it.
 
 ---
 
