@@ -1,0 +1,79 @@
+# Build output
+.gradle/
+.kotlin/
+.wrangler/
+build/
+out/
+run/
+dist/
+dist-api/
+dist-fresh/
+*.iml
+.idea/
+.vscode/
+
+# Dependencies - never commit these. They are huge, they are not ours, and they
+# make the repo impossible to actually read through.
+node_modules/
+
+# Secrets. secrects.env is the old typo'd name; it stays listed because an early
+# commit did include it, so keep both spellings ignored forever.
+*.env
+secrets.env
+secrects.env
+.env.local
+.env.*.local
+
+# Launcher build artefacts
+launcher/app/
+launcher/bundled/
+launcher/build/
+launcher/dist/
+launcher/.vite/
+
+# Built mod jars. These are produced by `gradlew build` from the source in this
+# repo - shipping the jar as well would just be an unauditable copy of it.
+launcher/src/bundled/*.jar
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# OS noise
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Local scratch
+*.log
+crash-reports/
+
+# Prebuilt helper binary. The C# source (launcher/src/np-helper.cs) is what
+# ships; build-app.js compiles it with csc and only falls back to this if csc is
+# missing. An opaque exe in a repo people are meant to audit is the last thing
+# anyone wants to see.
+launcher/src/np-helper.exe
+
+# Staging file for the next release: holds unpublished announcement copy and
+# gets rewritten every publish. Not something that belongs in a public repo.
+launcher/release-draft.json
+
+# Editor and assistant tooling. Local scratch that helps me work on this but
+# means nothing to anyone reading the source, so none of it belongs in the repo.
+.claude/
+.codex_tmp/
+.cursor/
+.windsurf/
+.aider*
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.github/copilot-instructions.md
+graphify-out/
+
+# No binaries. The point of this repo is that you can read what you run, and an
+# exe nobody can read undermines that. np-helper is built from its own .cs source
+# at build time.
+*.exe
+
+# Stonecutter build output per version
+versions/*/build/
+versions/*/src/

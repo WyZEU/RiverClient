@@ -1,0 +1,48 @@
+{
+  "name": "River Client",
+  "version": "0.1.8.8",
+  "minimumVersion": "0.1.7",
+  "required": false,
+  "publishedAt": "2026-09-05T17:35:33.410Z",
+  "pageUrl": "https://riverclient.xyz/",
+  "installerUrl": "https://updates.riverclient.xyz/downloads/River-Client-Setup.exe",
+  "portableUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.8.8/River-Client-Portable-0.1.8.8.exe",
+  "packageUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.8.8/River-Client-App-0.1.8.8.zip",
+  "fileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.8.8/file-manifest.json",
+  "appFileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.8.8/file-manifest.json",
+  "appFileBaseUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.8.8/app/",
+  "fileCount": 90,
+  "files": {
+    "installer": {
+      "name": "River-Client-Setup.exe",
+      "size": 235264470,
+      "sha256": "bc490cfe5fa513bfb587e424f34bc6825d6ee0af1b1bba7479089c64fb93cfa8"
+    },
+    "portable": {
+      "name": "River-Client-Portable-0.1.8.8.exe",
+      "size": 275138452,
+      "sha256": "935367d70a956da412ace6a844b60dddeab9031578b1b3902d8f779a5742f3de"
+    },
+    "package": {
+      "name": "River-Client-App-0.1.8.8.zip",
+      "size": 299724787,
+      "sha256": "9652d05ecaeca44cb3b872d2015ec24d6163599dda83945e7d681c91890956e2"
+    },
+    "fileManifest": {
+      "name": "file-manifest.json",
+      "size": 27654,
+      "sha256": "81aa3dad9dbc082e1c7c4d1a6c92c5a1f9021eb912fb6f84be4f332ab5b5c7a5",
+      "count": 90
+    }
+  },
+  "changelog": {
+    "version": "0.1.8.8",
+    "title": "River Client 0.1.8.8",
+    "summary": "River talks to the update server far less often, and usage counting now counts one install as one install.",
+    "items": [
+      "The launcher checked for updates every fifteen seconds. It now checks every five minutes, and still checks once the moment it opens. Nothing needed the old cadence: a launcher left sitting open filed thousands of requests a day, and an update that lands while River is idle can wait a few minutes to be noticed.",
+      "Usage counting now identifies an install by a random id River generates once and keeps on your machine, rather than by your address and launcher version. The id is not derived from your hardware, your account or your address, it is hashed before anything is stored, and it replaces something more identifying than itself. It also fixes the count: because the old method included the launcher version, every release made each existing install look like a brand new person, so the totals climbed when a release shipped rather than when anyone new arrived."
+    ]
+  },
+  "notes": "River talks to the update server far less often, and usage counting now counts one install as one install."
+}

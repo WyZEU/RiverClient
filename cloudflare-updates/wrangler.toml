@@ -1,0 +1,75 @@
+name = "river-client-updates"
+main = "src/worker.js"
+compatibility_date = "2026-05-04"
+account_id = "11788fa19a00381561b1e06a6a0bee8c"
+
+[[r2_buckets]]
+binding = "UPDATES"
+bucket_name = "river-client-updates"
+
+# In-game River cosmetics presence roster (badge + cape sync). Kept for legacy KV
+# reads during rollout; the live path is the Durable Object below.
+[[kv_namespaces]]
+binding = "PRESENCE"
+id = "3c231224984d4758a87a0c35415bc72e"
+
+# Presence now lives in an in-memory Durable Object instead of KV: KV's free tier
+# caps writes/lists at 1,000/day, which a single active player blows through in about
+# an hour. The DO holds the roster in memory with no per-ping storage writes.
+[[durable_objects.bindings]]
+name = "PRESENCE_DO"
+class_name = "Presence"
+
+# Friends, direct messages and moderation. Unlike Presence this one actually uses its
+# storage: friendships and message history have to survive eviction.
+[[durable_objects.bindings]]
+name = "SOCIAL_DO"
+class_name = "Social"
+
+# Per-creator referral click counts. Storage-backed rather than in-memory like Presence:
+# these have to survive eviction, and KV is not an option because its free tier write cap
+# is the same one that made the presence roster unusable there.
+[[durable_objects.bindings]]
+name = "REFERRALS_DO"
+class_name = "Referrals"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Presence"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Social"]
+
+# Downloads, update checks, launches and failed launches. Storage-backed like Referrals:
+# these are the historical record, so they have to survive eviction. Presence stays the
+# odd one out - it is deliberately in-memory because it only describes right now.
+[[durable_objects.bindings]]
+name = "METRICS_DO"
+class_name = "Metrics"
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Referrals"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["Metrics"]
+
+# Who owns which gated cosmetic, and the codes that grant them. Storage-backed: a grant
+# is permanent, so unlike the presence roster it has to survive eviction.
+[[durable_objects.bindings]]
+name = "COSMETICS_DO"
+class_name = "Cosmetics"
+
+[[migrations]]
+tag = "v5"
+new_sqlite_classes = ["Cosmetics"]
+
+[[routes]]
+pattern = "discord.riverclient.xyz"
+custom_domain = true
+
+[[routes]]
+pattern = "updates.riverclient.xyz"
+custom_domain = true

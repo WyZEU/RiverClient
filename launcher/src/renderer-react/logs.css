@@ -1,0 +1,391 @@
+/*
+ * Standalone window palette. This file is self-contained on purpose: the main
+ * launcher app is shadcn/ui on Tailwind and its token names (--accent, --muted,
+ * --card) mean different things there. Values mirror ClientUi.kt - keep in sync.
+ */
+:root {
+  color-scheme: dark;
+  --bg: #0b0c10;
+  --panel: #15171d;
+  --card: #1b1e26;
+  --card-hover: #23262f;
+  --border: #2f333d;
+  --text: #ffffff;
+  --muted: #9ba0ab;
+  --muted-2: #6e7481;
+  --accent: #2f6fe6;
+  --accent-2: #1d4ed8;
+  --success: #72f1b8;
+  --warning: #ffd46b;
+  --danger: #ff8fa3;
+  --radius: 6px;
+  --radius-sm: 4px;
+  font-family: Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/*
+ * Game log window. Inherits the token layer from styles.css (which mirrors the in-game
+ * ClientUi palette), and adds only what a log surface needs: a level ramp, a monospace
+ * body, and a fixed shell that never scrolls the document.
+ */
+
+:root {
+  /* Level ramp. Warning and error come straight from ClientUi so a WARN here and a WARN
+     on the in-game HUD are the same yellow. Info stays neutral: it is the overwhelming
+     majority of lines, and colouring it would leave nothing for the levels that matter. */
+  --log-error: var(--danger);
+  --log-error-bg: rgba(255, 143, 163, 0.09);
+  --log-warn: var(--warning);
+  --log-warn-bg: rgba(255, 212, 107, 0.08);
+  --log-info: var(--muted);
+  --log-debug: var(--muted-2);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden; /* the document never scrolls, only .logs-body does */
+  background: var(--bg);
+  color: var(--text);
+}
+
+.logs-shell {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100%;
+  background: var(--bg);
+  user-select: none;
+}
+
+/* ---- titlebar ---- */
+
+.logs-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  padding-left: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  -webkit-app-region: drag;
+}
+
+.logs-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.logs-title-name {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.logs-title-meta {
+  font-size: 12px;
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.logs-window-controls {
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+.logs-window-controls button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 38px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+  transition: background-color 140ms ease-out, color 140ms ease-out;
+}
+
+.logs-window-controls button:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+
+.logs-window-controls button.close:hover {
+  background: #b4232f;
+  color: #ffffff;
+}
+
+.logs-window-controls button:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* ---- toolbar ---- */
+
+.logs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.logs-filters {
+  display: flex;
+  gap: 4px;
+}
+
+.logs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  cursor: default;
+  transition: background-color 140ms ease-out, border-color 140ms ease-out, color 140ms ease-out, opacity 140ms ease-out;
+}
+
+.logs-chip:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+
+.logs-chip:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Filtered-out levels stay legible - they read as switched off, not disabled. */
+.logs-chip.off {
+  opacity: 0.45;
+}
+
+.logs-chip.off .logs-chip-dot {
+  background: var(--muted-2);
+}
+
+.logs-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.logs-chip.error .logs-chip-dot { background: var(--log-error); }
+.logs-chip.warn .logs-chip-dot { background: var(--log-warn); }
+.logs-chip.info .logs-chip-dot { background: var(--log-info); }
+.logs-chip.debug .logs-chip-dot { background: var(--log-debug); }
+
+.logs-chip-count {
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.logs-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--muted-2);
+  transition: border-color 140ms ease-out;
+}
+
+.logs-search:focus-within {
+  border-color: var(--accent);
+}
+
+.logs-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: text;
+  user-select: text;
+}
+
+.logs-search input:focus {
+  outline: none;
+}
+
+.logs-search input::placeholder {
+  color: var(--muted-2);
+}
+
+.logs-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.logs-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: default;
+  transition: background-color 140ms ease-out, border-color 140ms ease-out, color 140ms ease-out;
+}
+
+.logs-actions button:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+
+.logs-actions button:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---- log body ---- */
+
+.logs-body {
+  overflow-y: auto;
+  overflow-x: auto;
+  background: var(--bg);
+}
+
+.logs-list {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.logs-line {
+  display: flex;
+  padding: 1px 12px 1px 10px;
+  border-left: 2px solid transparent;
+  font-family: "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+  color: var(--log-info);
+  user-select: text;
+  cursor: text;
+}
+
+/* Level is carried by a left rule plus text colour, not a full-bleed background: an
+   error inside a 5000-line dump has to be findable while scrolling past at speed. */
+.logs-line.error {
+  border-left-color: var(--log-error);
+  background: var(--log-error-bg);
+  color: var(--log-error);
+}
+
+.logs-line.warn {
+  border-left-color: var(--log-warn);
+  background: var(--log-warn-bg);
+  color: var(--log-warn);
+}
+
+.logs-line.debug {
+  color: var(--log-debug);
+}
+
+.logs-line-text {
+  min-width: 0;
+}
+
+.logs-empty {
+  margin: 0;
+  padding: 24px 14px;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
+/* ---- scroll-to-latest ---- */
+
+.logs-jump {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--accent-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: default;
+  transition: background-color 140ms ease-out;
+}
+
+.logs-jump:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: 1px;
+}
+
+/* ---- scrollbars ---- */
+
+.logs-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.logs-body::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+.logs-body::-webkit-scrollbar-thumb {
+  border: 3px solid var(--bg);
+  border-radius: var(--radius-sm);
+  background: #343945;
+}
+
+.logs-body::-webkit-scrollbar-thumb:hover {
+  background: #454b59;
+}
+
+.logs-body::-webkit-scrollbar-corner {
+  background: var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "required": true,
+  "package": "dev.wyz.clientcore.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "AbstractClientPlayerFovMixin",
+    "AvatarCapeMixin",
+    "AvatarRendererMixin",
+    "BlockEntityRenderDispatcherMixin",
+    "CameraInvoker",
+    "CameraMixin",
+    "ChatComponentMixin",
+    "ClientPacketListenerChatMixin",
+    "ClientPacketListenerMixin",
+    "DisconnectedScreenMixin",
+    "EntityRenderDispatcherMixin",
+    "EntityShadowMixin",
+    "FramerateLimitTrackerMixin",
+    "GameRendererBobMixin",
+    "GameRendererMixin",
+    "GuiMixin",
+    "IconSetMixin",
+    "LevelDayTimeMixin",
+    "ItemInHandRendererMixin",
+    "MinecraftMixin",
+    "MouseHandlerMixin",
+    "OptionInstanceAccessor",
+    "PackRepositoryMixin",
+    "ParticleEngineMixin",
+    "PauseScreenMixin",
+    "PlayerDisplayNameMixin",
+    "PlayerTabOverlayMixin",
+    "ScreenMixin",
+    "BossHealthOverlayMixin",
+    "ScreenEffectRendererMixin",
+    "TitleScreenMixin",
+    "WeatherEffectRendererMixin",
+    "WindowGuiScaleMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

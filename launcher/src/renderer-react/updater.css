@@ -1,0 +1,159 @@
+/*
+ * Standalone updater window. Self-contained on purpose: the main launcher app is
+ * shadcn/ui on Tailwind and its token names mean different things there. Values
+ * track the launcher's dark theme - keep roughly in sync.
+ *
+ * Design note: no floating card. The window is the container, so the content sits
+ * straight on it. A bordered card-inside-a-window with a glow behind it is the
+ * thing that made the old one look generic.
+ */
+:root {
+  color-scheme: dark;
+  --bg: #0d0e11;
+  --panel: #14161b;
+  --line: #23262e;
+  --line-soft: #1b1d24;
+  --text: #eef0f4;
+  --muted: #9297a2;
+  --muted-2: #656b76;
+  --accent: #3b82f6;
+  --success: #4ade80;
+  --danger: #f87171;
+  font-family: "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; }
+
+/* Title bar ---------------------------------------------------------------- */
+.titlebar {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  padding: 0 4px 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+.brand strong { color: var(--text); font-weight: 600; }
+.brand span { color: var(--muted-2); }
+
+.window-actions { display: flex; align-items: center; gap: 2px; -webkit-app-region: no-drag; }
+.wbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--muted-2);
+  cursor: pointer;
+  border-radius: 3px;
+}
+.wbtn svg { width: 15px; height: 15px; }
+.wbtn:hover { background: var(--panel); color: var(--text); }
+.wbtn-close:hover { background: #e5484d; color: #fff; }
+
+/* Body --------------------------------------------------------------------- */
+.body {
+  height: calc(100vh - 38px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  padding: 0 26px;
+}
+
+.line { display: flex; align-items: center; gap: 9px; }
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* Small status dot instead of a big circular icon ring. */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+.dot.busy { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.dot.success { background: var(--success); }
+.dot.error { background: var(--danger); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.detail {
+  margin: 7px 0 20px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+  word-break: break-word;
+  min-height: 18px;
+}
+
+/* Progress ----------------------------------------------------------------- */
+.track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.fill.success { background: var(--success); }
+.fill.error { background: var(--danger); }
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 11px;
+  font-size: 12px;
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
+.meta .pct { color: var(--muted); font-weight: 500; }
+.meta.success .pct { color: var(--success); }
+.meta.error .pct { color: var(--danger); }
+
+/* Actions (only when finished) --------------------------------------------- */
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+.btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.btn.ghost { background: transparent; border-color: var(--line); color: var(--text); }
+.btn.ghost:hover { background: var(--panel); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: #2f6fe0; border-color: #2f6fe0; }
