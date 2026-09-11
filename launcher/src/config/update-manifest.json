@@ -1,0 +1,49 @@
+{
+  "name": "River Client",
+  "version": "0.1.9.2",
+  "minimumVersion": "0.1.7",
+  "required": false,
+  "publishedAt": "2026-09-11T16:16:47.560Z",
+  "pageUrl": "https://riverclient.xyz/",
+  "installerUrl": "https://updates.riverclient.xyz/downloads/River-Client-Setup.exe",
+  "portableUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.9.2/River-Client-Portable-0.1.9.2.exe",
+  "packageUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.9.2/River-Client-App-0.1.9.2.zip",
+  "fileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.9.2/file-manifest.json",
+  "appFileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.9.2/file-manifest.json",
+  "appFileBaseUrl": "https://updates.riverclient.xyz/downloads/releases/0.1.9.2/app/",
+  "fileCount": 91,
+  "files": {
+    "installer": {
+      "name": "River-Client-Setup.exe",
+      "size": 241325193,
+      "sha256": "d4c87feb568d44351c5283bd75fe6855a227c03f386825682d218f9471eed571"
+    },
+    "portable": {
+      "name": "River-Client-Portable-0.1.9.2.exe",
+      "size": 281181635,
+      "sha256": "13b845d5bc51df202f17bed1544639be5e8e4d13e2c33eb9159a122ce4e93687"
+    },
+    "package": {
+      "name": "River-Client-App-0.1.9.2.zip",
+      "size": 305539074,
+      "sha256": "244020e1802302e63d4383e7a26081033444401ee594fbec93852516aad22993"
+    },
+    "fileManifest": {
+      "name": "file-manifest.json",
+      "size": 28607,
+      "sha256": "153aadcb6bff0f640ae58e5d96c4f62b135f2c1c62d8a5e70e15669a4c094900",
+      "count": 91
+    }
+  },
+  "changelog": {
+    "version": "0.1.9.2",
+    "title": "River Client 0.1.9.2",
+    "summary": "An All tab in the wardrobe menu, a new cape, and the launcher doesn't flash blank anymore.",
+    "items": [
+      "Added an All tab to the module menu, so you don't have to click through every category to find one mod.",
+      "Added the 8-Ball cape.",
+      "Fixed the launcher and updater windows sitting on a blank screen for a second when they open."
+    ]
+  },
+  "notes": "An All tab in the wardrobe menu, a new cape, and the launcher doesn't flash blank anymore."
+}

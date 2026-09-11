@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  launcher-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: launcher/package-lock.json
+
+      - name: Install launcher deps
+        working-directory: launcher
+        run: npm ci
+
+      - name: Launcher syntax check
+        run: |
+          node --check launcher/src/main.js
+          node --check launcher/src/preload.js
+          node --check launcher/scripts/build-app.js
+
+  mod-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      # Builds both mod trees and the bootstrap agent, so the jars anyone
+      # downloads can be checked against this source.
+      - name: Build
+        run: ./gradlew build --no-daemon
