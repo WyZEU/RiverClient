@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>River Client</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <svg class="icon-sprite" aria-hidden="true">
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11.4 12 5l8 6.4v7.1a1.5 1.5 0 0 1-1.5 1.5h-4v-5.5h-5V20h-4A1.5 1.5 0 0 1 4 18.5v-7.1Z"/></symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/></symbol>
+      <symbol id="i-box" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.5 7.8 7.5 4.3 7.5-4.3"/><path d="M12 12.1V21"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7.2A2.2 2.2 0 0 1 5.7 5h4.1l2 2.4h6.5a2.2 2.2 0 0 1 2.2 2.2v7.2a2.2 2.2 0 0 1-2.2 2.2H5.7a2.2 2.2 0 0 1-2.2-2.2V7.2Z"/></symbol>
+      <symbol id="i-cubes" viewBox="0 0 24 24"><path d="m7.5 4 4 2.3v4.6l-4 2.3-4-2.3V6.3L7.5 4Z"/><path d="m16.5 4 4 2.3v4.6l-4 2.3-4-2.3V6.3l4-2.3Z"/><path d="m12 12 4 2.3v4.6l-4 2.3-4-2.3v-4.6l4-2.3Z"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h8"/><path d="M16 7h4"/><path d="M14 5v4"/><path d="M4 17h4"/><path d="M12 17h8"/><path d="M10 15v4"/></symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4.5 5.5h15v13h-15v-13Z"/><path d="m8 9 3 3-3 3"/><path d="M13 15h4"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5L8 5.5Z"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><path d="M10.8 17.1a6.3 6.3 0 1 0 0-12.6 6.3 6.3 0 0 0 0 12.6Z"/><path d="m15.4 15.4 4.1 4.1"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10"/><path d="m8 10 4 4 4-4"/><path d="M5 18.5h14"/></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M9 5h10v10"/><path d="m19 5-9.5 9.5"/><path d="M18 18.5H5.5v-13H12"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.5 7.5 0 0 0-2-1.2L14.2 3h-4.4l-.4 2.7a7.5 7.5 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.4 2.4-1a7.5 7.5 0 0 0 2 1.2l.4 2.7h4.4l.4-2.7a7.5 7.5 0 0 0 2-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"/></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+      <symbol id="i-max" viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="m7 7 10 10"/><path d="m17 7-10 10"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><path d="M12 12.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5 14 10l6.5 2-6.5 2-2 6.5-2-6.5-6.5-2 6.5-2 2-6.5Z"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    </svg>
+
+    <main class="app">
+      <div class="network-banner hidden" id="network-banner">
+        <svg><use href="#i-spark"></use></svg>
+        <strong>No network connection</strong>
+        <span>Online features are paused. Downloads, login, skin uploads, and update checks will resume when Riv3r reconnects.</span>
+      </div>
+
+      <aside class="rail">
+        <div class="brand" title="River Client">
+          <img class="brand-mark" src="../assets/riv3r-client.png" alt="" />
+        </div>
+
+        <nav>
+          <button class="nav active" data-view="home" data-title="Home" title="Home"><svg><use href="#i-home"></use></svg><span>Home</span></button>
+          <button class="nav" data-view="instances" data-title="Instances" title="Instances"><svg><use href="#i-box"></use></svg><span>Instances</span></button>
+          <button class="nav" data-view="mods" data-title="Mods" title="Mods"><svg><use href="#i-cubes"></use></svg><span>Mods</span></button>
+          <button class="nav" data-view="modules" data-title="Modules" title="Modules"><svg><use href="#i-sliders"></use></svg><span>Modules</span></button>
+          <button class="nav" data-view="logs" data-title="Logs" title="Logs"><svg><use href="#i-terminal"></use></svg><span>Logs</span></button>
+        </nav>
+
+        <div class="rail-bottom">
+          <button class="quick-action" id="open-mods-folder" title="Open mods"><svg><use href="#i-folder"></use></svg></button>
+          <div class="rail-login">
+            <img src="../assets/riv3r-client.png" alt="" />
+            <div>
+              <strong id="rail-account-name">Not signed in</strong>
+              <small id="rail-account-detail">Login required</small>
+            </div>
+            <button class="quick-action" id="rail-login-button" title="Login"><svg><use href="#i-user"></use></svg></button>
+          </div>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div class="crumbs">
+            <span>River Client</span>
+            <svg><use href="#i-chevron"></use></svg>
+            <span id="subline">Fabric 1.21.11</span>
+            <svg><use href="#i-chevron"></use></svg>
+            <strong id="page-title">Home</strong>
+          </div>
+          <div class="top-actions">
+            <div class="status-pill"><i></i><span id="top-status">Preparing</span></div>
+            <button class="icon-button" data-window="minimize" title="Minimize"><svg><use href="#i-minus"></use></svg></button>
+            <button class="icon-button" data-window="maximize" title="Maximize"><svg><use href="#i-max"></use></svg></button>
+            <button class="icon-button" data-window="close" title="Close"><svg><use href="#i-close"></use></svg></button>
+          </div>
+        </header>
+
+        <section class="view active" id="home">
+          <div class="instance-head">
+            <img class="instance-logo" src="../assets/riv3r-client.png" alt="" />
+            <div>
+              <h1 id="hero-version">River Client</h1>
+              <p id="hero-copy">A clean Fabric client with PvP-safe HUD modules, mod downloads, and controlled local installs.</p>
+            </div>
+            <div class="actions">
+              <button class="primary" id="play-button"><svg><use href="#i-play"></use></svg><span>Play</span></button>
+              <button id="stop-button"><svg><use href="#i-stop"></use></svg><span>Stop</span></button>
+            </div>
+          </div>
+
+          <div class="tabs">
+            <button class="tab active"><svg><use href="#i-home"></use></svg><span>Overview</span></button>
+            <button class="tab" data-tab-target="mods"><svg><use href="#i-cubes"></use></svg><span>Content</span></button>
+            <button class="tab" data-tab-target="logs"><svg><use href="#i-terminal"></use></svg><span>Logs</span></button>
+          </div>
+
+          <div class="home-grid">
+            <article class="launch-hero">
+              <div class="hero-image" id="hero-image"></div>
+              <div class="hero-content">
+                <h2>Fabric PvP utility build</h2>
+                <p>Choose an instance, manage its mods and packs, then launch a clean Fabric setup.</p>
+                <div class="mini-actions">
+                  <button id="instance-folder"><svg><use href="#i-folder"></use></svg><span>Open instance</span></button>
+                  <button id="root-folder"><svg><use href="#i-external"></use></svg><span>Open project</span></button>
+                </div>
+              </div>
+            </article>
+
+            <div class="home-instance-list" id="home-instance-list"></div>
+          </div>
+        </section>
+
+        <section class="view" id="instances">
+          <div class="section-head">
+            <div>
+              <h2>Instances</h2>
+              <p>Create focused River installs, then click one to edit its mods, resource packs, shaders, and settings.</p>
+            </div>
+            <div class="button-row">
+              <label class="inline-field"><span>Minecraft version</span><input id="pvp-version-input" type="text" value="1.21.11" /></label>
+              <button class="primary" id="create-instance-button"><svg><use href="#i-download"></use></svg><span>Create instance</span></button>
+              <button id="create-pvp-instance"><svg><use href="#i-cubes"></use></svg><span>Create PvP</span></button>
+              <button id="open-resourcepacks-folder"><svg><use href="#i-folder"></use></svg><span>Resource packs</span></button>
+              <button id="open-shaderpacks-folder"><svg><use href="#i-folder"></use></svg><span>Shaders</span></button>
+            </div>
+          </div>
+          <div class="instance-layout">
+            <div class="instance-list" id="instance-grid"></div>
+            <article class="instance-detail">
+              <div class="instance-detail-head">
+                <div>
+                  <span id="instance-detail-type">Fabric</span>
+                  <h2 id="instance-detail-name">Select an instance</h2>
+                  <p id="instance-detail-path">Click an instance on the left to edit it.</p>
+                </div>
+                <button class="primary" id="instance-detail-play"><svg><use href="#i-play"></use></svg><span>Play</span></button>
+              </div>
+              <div class="instance-tabs">
+                <button class="active" data-instance-panel="instance-mods">Mods</button>
+                <button data-instance-panel="instance-resourcepacks">Resource packs</button>
+                <button data-instance-panel="instance-shaders">Shaders</button>
+                <button data-instance-panel="instance-tools">Tools</button>
+              </div>
+              <section class="instance-panel active" id="instance-mods">
+                <div id="instance-mod-list"></div>
+              </section>
+              <section class="instance-panel" id="instance-resourcepacks">
+                <div id="resourcepack-list"></div>
+              </section>
+              <section class="instance-panel" id="instance-shaders">
+                <div id="shaderpack-list"></div>
+              </section>
+              <section class="instance-panel" id="instance-tools">
+                <p id="launcher-update-state">Not checked yet.</p>
+                <button id="instance-detail-folder"><svg><use href="#i-folder"></use></svg><span>Open instance folder</span></button>
+              </section>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="mods">
+          <div class="section-head">
+            <div>
+              <h2>Content</h2>
+              <p>Search by source, version, loader, and tags. Modrinth downloads go straight into the managed mods folder.</p>
+            </div>
+            <div class="button-row">
+              <button id="open-source-site"><svg><use href="#i-external"></use></svg><span>Open site</span></button>
+              <button id="import-profile-button"><svg><use href="#i-folder"></use></svg><span>Import profile</span></button>
+              <button id="check-updates-button"><svg><use href="#i-search"></use></svg><span>Check updates</span></button>
+              <button class="primary" id="update-all-button"><svg><use href="#i-download"></use></svg><span>Update all</span></button>
+            </div>
+          </div>
+
+          <div class="mod-searchbar">
+            <label><span>Source</span><select id="mod-source"><option value="modrinth">Modrinth</option><option value="curseforge">CurseForge</option></select></label>
+            <label><span>Search</span><input id="mod-query" type="search" placeholder="sodium, iris, modmenu" /></label>
+            <label><span>Minecraft</span><input id="mod-version" type="text" value="1.21.11" /></label>
+            <label><span>Loader</span><select id="mod-loader"><option value="fabric">Fabric</option><option value="quilt">Quilt</option><option value="forge">Forge</option><option value="neoforge">NeoForge</option></select></label>
+            <label><span>Tags</span><input id="mod-tags" type="text" placeholder="performance, utility" /></label>
+            <button class="primary" id="mod-search-button"><svg><use href="#i-search"></use></svg><span>Search</span></button>
+          </div>
+
+          <p class="hint" id="mod-hint">Modrinth installs directly. CurseForge opens official pages unless an API key is configured.</p>
+          <div class="conflict-list" id="conflict-list"></div>
+          <div class="mod-results" id="mod-results"></div>
+
+          <div class="installed-list">
+            <div class="section-head compact">
+              <h2>Installed jars</h2>
+              <span id="installed-count">0</span>
+            </div>
+            <div id="installed-mods"></div>
+          </div>
+        </section>
+
+        <section class="view" id="modules">
+          <div class="section-head">
+            <div>
+              <h2>Modules</h2>
+              <p>Only server-friendly modules are included in this client base.</p>
+            </div>
+            <button id="sync-client-settings"><svg><use href="#i-download"></use></svg><span>Sync settings</span></button>
+          </div>
+          <div class="module-grid" id="module-grid"></div>
+        </section>
+
+        <section class="view" id="settings">
+          <div class="section-head">
+            <div>
+              <h2>Settings</h2>
+              <p>Launcher behavior, Java settings, downloads, and packaging-related options.</p>
+            </div>
+          </div>
+
+          <div class="settings-grid">
+            <label class="field"><span>Memory</span><input id="memory-input" type="range" min="2048" max="12288" step="512" /><strong id="memory-label">4096 MB</strong></label>
+            <label class="field"><span>Max parallel downloads</span><input id="parallel-input" type="number" min="1" max="8" /></label>
+            <label class="field"><span>Width</span><input id="width-input" type="number" min="854" max="3840" /></label>
+            <label class="field"><span>Height</span><input id="height-input" type="number" min="480" max="2160" /></label>
+            <label class="field"><span>Offline dev name</span><input id="offline-name-input" type="text" /></label>
+            <label class="field"><span>Java path override</span><input id="java-path-input" type="text" placeholder="Optional" /></label>
+            <label class="field"><span>UI density</span><select id="density-input"><option value="compact">Compact</option><option value="comfortable">Comfortable</option></select></label>
+            <label class="field"><span>CurseForge API key</span><input id="curseforge-key-input" type="password" placeholder="Optional" /></label>
+            <label class="toggle"><input id="keep-open-input" type="checkbox" /><span>Keep launcher open after launch</span></label>
+            <label class="toggle warning-toggle"><input id="dev-offline-input" type="checkbox" /><span>Developer Offline Test Mode</span><small>Local testing only. This does not authenticate Minecraft accounts and must stay off for public builds.</small></label>
+            <label class="toggle"><input id="verify-downloads-input" type="checkbox" /><span>Verify mod downloads when metadata is available</span></label>
+            <label class="toggle"><input id="console-input" type="checkbox" /><span>Show console window while launching</span></label>
+            <label class="toggle"><input id="telemetry-input" type="checkbox" /><span>Allow future anonymous diagnostics</span></label>
+          </div>
+        </section>
+
+        <section class="view" id="logs">
+          <div class="section-head">
+            <div>
+              <h2>Logs</h2>
+              <p>Launcher and Gradle output.</p>
+            </div>
+            <div class="button-row">
+              <button id="logs-folder"><svg><use href="#i-folder"></use></svg><span>Open logs</span></button>
+              <button id="crashes-folder"><svg><use href="#i-folder"></use></svg><span>Open crashes</span></button>
+              <button id="clear-log">Clear</button>
+            </div>
+          </div>
+          <article class="crash-card">
+            <strong>Latest crash clue</strong>
+            <span id="crash-summary">No crash reports found.</span>
+          </article>
+          <pre id="log"></pre>
+        </section>
+      </section>
+
+      <aside class="side-panel" hidden></aside>
+    </main>
+
+    <section class="boot-screen" id="boot-screen">
+      <div class="boot-card">
+        <img class="dragon-mark" src="../assets/riv3r-client.png" alt="" />
+        <span>River Client</span>
+        <h2 id="boot-title">Booting launcher</h2>
+        <p id="boot-detail">Preparing automatic build and install.</p>
+        <div class="boot-bar"><i></i></div>
+      </div>
+    </section>
+    <section class="auth-overlay hidden" id="auth-overlay" aria-hidden="true">
+      <div class="auth-modal">
+        <img src="../assets/riv3r-client.png" alt="" />
+        <span>Microsoft sign-in</span>
+        <h2>Enter this code</h2>
+        <strong id="auth-user-code">--------</strong>
+        <p id="auth-detail">Use the Microsoft page that opened in your browser. This code is temporary and will be cleared after login.</p>
+        <div class="auth-modal-actions">
+          <button class="primary" id="auth-open-browser"><svg><use href="#i-external"></use></svg><span>Open Microsoft</span></button>
+          <button id="auth-close">Hide</button>
+        </div>
+      </div>
+    </section>
+    <section class="activity-panel hidden" id="activity-panel" aria-live="polite">
+      <div>
+        <strong id="activity-title">Working</strong>
+        <span id="activity-detail">Please wait...</span>
+      </div>
+      <div class="activity-progress"><i id="activity-progress"></i></div>
+      <small id="activity-count">0 / 0</small>
+    </section>
+    <div class="toast-stack" id="toast-stack"></div>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

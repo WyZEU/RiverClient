@@ -1,0 +1,12 @@
+{
+  "providers": [
+    { "type": "bitmap", "file": "minecraft:item/end_crystal.png",      "height": 8, "ascent": 7, "chars": [""] },
+    { "type": "bitmap", "file": "minecraft:item/diamond_sword.png",    "height": 8, "ascent": 7, "chars": [""] },
+    { "type": "bitmap", "file": "minecraft:item/diamond_axe.png",      "height": 8, "ascent": 7, "chars": [""] },
+    { "type": "bitmap", "file": "minecraft:item/splash_potion.png",    "height": 8, "ascent": 7, "chars": [""] },
+    { "type": "bitmap", "file": "minecraft:item/netherite_helmet.png", "height": 8, "ascent": 7, "chars": [""] },
+    { "type": "bitmap", "file": "minecraft:item/totem_of_undying.png", "height": 8, "ascent": 7, "chars": [""] },
+    { "type": "bitmap", "file": "minecraft:item/golden_apple.png",     "height": 8, "ascent": 7, "chars": [""] },
+    { "type": "bitmap", "file": "minecraft:item/mace.png",             "height": 8, "ascent": 7, "chars": [""] }
+  ]
+}

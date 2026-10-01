@@ -1,0 +1,19 @@
+# Normalise line endings. Everything is authored on Windows but the CI runner
+# and anyone cloning on Linux gets LF, which is what shell scripts and gradlew
+# need to actually run.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF, they are run by cmd.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Must stay LF and executable or the Linux build dies with "permission denied".
+gradlew text eol=lf
+
+# Binary, never touch.
+*.png binary
+*.jpg binary
+*.ico binary
+*.jar binary
+*.exe binary

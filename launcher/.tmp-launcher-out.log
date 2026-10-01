@@ -1,0 +1,2 @@
+
+[renderer:3] Uncaught ReferenceError: Terminal is not defined (file:///C:/Users/vojir.WYZ/Desktop/Client/launcher/dist/win-unpacked/resources/app.asar/app/renderer/renderer.js:3897)

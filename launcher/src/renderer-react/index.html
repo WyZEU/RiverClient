@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>River Client</title>
+    <!--
+      The window opens instantly and the boot splash below is written into the document
+      so it can paint on the first frame. A render-blocking <link> to Google Fonts undid
+      that: every launch waited a network round trip (and on a cold or offline start, the
+      full timeout) before anything was on screen. Loaded non-blocking instead - the UI
+      paints immediately in Segoe UI and Inter swaps in when it arrives.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <!--
+      The launcher window opens instantly but React is not on screen for a moment after
+      that, and until now that moment was an empty dark rectangle - long enough on a cold
+      start to read as "did it open?".
+
+      This is deliberately written into the document rather than rendered: it is markup
+      and inline styles, so it paints on the first frame, before styles.css has loaded and
+      well before the renderer bundle has parsed. Anything built in React could not
+      possibly be on screen in time to cover the gap it exists to cover.
+    -->
+    <style>
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #0b0c10;
+        /* Matches the window background exactly, so there is no flash on either side. */
+        color: #ffffff;
+        font-family: Inter, "Segoe UI", system-ui, sans-serif;
+        -webkit-app-region: drag;
+        transition: opacity 260ms ease;
+      }
+      #boot.boot-done { opacity: 0; pointer-events: none; }
+      #boot img {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+        animation: boot-breathe 2.4s ease-in-out infinite;
+      }
+      #boot strong {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      #boot .boot-bar {
+        width: 180px;
+        height: 3px;
+        border-radius: 999px;
+        background: #2f333d;
+        overflow: hidden;
+      }
+      #boot .boot-bar i {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: inherit;
+        background: #2f6fe6;
+        animation: boot-slide 1.15s ease-in-out infinite;
+      }
+      @keyframes boot-slide {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(350%); }
+      }
+      @keyframes boot-breathe {
+        0%, 100% { transform: scale(1); opacity: 0.92; }
+        50% { transform: scale(1.04); opacity: 1; }
+      }
+      /*
+        Someone who has asked for less movement gets a still logo and a bar that is simply
+        present rather than travelling.
+      */
+      @media (prefers-reduced-motion: reduce) {
+        #boot img { animation: none; }
+        #boot .boot-bar i { width: 100%; animation: none; }
+      }
+    </style>
+    <div id="boot" role="status" aria-label="Starting River Client">
+      <img src="../assets/river-logo.png" alt="" />
+      <strong>River Client</strong>
+      <div class="boot-bar"><i></i></div>
+    </div>
+    <div id="root"></div>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

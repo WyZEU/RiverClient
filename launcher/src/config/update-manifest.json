@@ -1,0 +1,68 @@
+{
+  "name": "River Client",
+  "version": "0.2.1",
+  "minimumVersion": "0.1.7",
+  "required": false,
+  "publishedAt": "2026-10-01T16:25:15.007Z",
+  "pageUrl": "https://riverclient.xyz/",
+  "installerUrl": "https://updates.riverclient.xyz/downloads/River-Client-Setup.exe",
+  "portableUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.1/River-Client-Portable-0.2.1.exe",
+  "linuxUrl": "https://updates.riverclient.xyz/downloads/River-Client-Linux.tar.gz",
+  "packageUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.1/River-Client-App-0.2.1.zip",
+  "packageParts": [
+    {
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.1/River-Client-App-0.2.1.zip.001",
+      "size": 262144000,
+      "sha256": "0a26dbb3cb43078753ef5d95675103b1dd55d4ee5d3139ed6869e48e2ec8dd45"
+    },
+    {
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.1/River-Client-App-0.2.1.zip.002",
+      "size": 69172511,
+      "sha256": "203995928b064003527962dcab38685bbb89d457a84fc0b8236d7a46c91fcdae"
+    }
+  ],
+  "fileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.1/file-manifest.json",
+  "appFileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.1/file-manifest.json",
+  "appFileBaseUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.1/app/",
+  "fileCount": 93,
+  "files": {
+    "installer": {
+      "name": "River-Client-Setup.exe",
+      "size": 267165293,
+      "sha256": "1ea61652fc8739eecb568d79fe3e940be237f94559f8e96ca5ce556fc166f33c"
+    },
+    "portable": {
+      "name": "River-Client-Portable-0.2.1.exe",
+      "size": 306799550,
+      "sha256": "1b01e2c9a029fa315693e191538e9ec213f7b7ddf78610a39ee35a64a4d666d1"
+    },
+    "linux": {
+      "name": "River-Client-Linux-0.2.1.tar.gz",
+      "size": 289060072,
+      "sha256": "ac2de5c9c304227fbe52d7f4ad995e3ef758892cf6d21c9ba2c8b43563642b2b"
+    },
+    "package": {
+      "name": "River-Client-App-0.2.1.zip",
+      "size": 331316511,
+      "sha256": "f55d519f470894287e43dd71d64d825578a42ce7bb34b9a42cf77d7b165ccd2e"
+    },
+    "fileManifest": {
+      "name": "file-manifest.json",
+      "size": 29073,
+      "sha256": "1efc48504db815d3e05289c225a4168331005fb721367ec27fd31b5ae673b1f2",
+      "count": 93
+    }
+  },
+  "changelog": {
+    "version": "0.2.1",
+    "title": "River Client 0.2.1",
+    "summary": "River now runs on Linux (experimental), and creative flying can be a lot faster.",
+    "items": [
+      "River now runs on Linux (experimental): download the tar.gz from riverclient.xyz, extract it and run ./river-client.",
+      "On Linux, Java is found in the usual places or downloaded for you, other launchers' profiles are found for importing (Minecraft launcher, Modrinth, Prism, MultiMC and more), and screenshots copy through wl-copy or xclip.",
+      "Linux can't update itself yet: when a new version is out, the launcher opens the download page.",
+      "Added Creative Fly Speed (Gameplay): fly up to 10x faster in creative mode. It only affects creative, and vanilla speed returns when you leave creative or turn it off."
+    ]
+  },
+  "notes": "River now runs on Linux (experimental), and creative flying can be a lot faster."
+}

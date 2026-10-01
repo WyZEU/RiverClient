@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "clientcore",
+  "version": "${version}",
+  "name": "River Client",
+  "icon": "assets/clientcore/icon.png",
+  "description": "A Fabric ${minecraft_version} PvP-friendly client by WyZ_EU.",
+  "authors": [
+    "WyZ_EU"
+  ],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      {
+        "adapter": "kotlin",
+        "value": "dev.wyz.clientcore.ClientCore"
+      }
+    ]
+  },
+  "mixins": [
+    "clientcore.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${fabric_loader}",
+    "minecraft": "${minecraft_version}",
+    "java": ">=${java_version}",
+    "fabric-api": "*",
+    "fabric-language-kotlin": "*"
+  }
+}
