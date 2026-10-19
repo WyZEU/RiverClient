@@ -1,0 +1,15 @@
+pluginManagement {
+	repositories {
+		maven { name = "Fabric"; url = "https://maven.fabricmc.net/" }
+		maven { name = "legacy-fabric"; url = "https://maven.legacyfabric.net/" }
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+plugins {
+	// Downloads the Java 8 runtime 1.8.9 needs for runClient.
+	id "org.gradle.toolchains.foojay-resolver-convention" version "1.0.0"
+}
+
+rootProject.name = "river-legacy"

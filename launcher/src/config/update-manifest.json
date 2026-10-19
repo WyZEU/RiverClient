@@ -1,0 +1,163 @@
+{
+  "name": "River Client",
+  "version": "0.2.6",
+  "minimumVersion": "0.1.7",
+  "required": false,
+  "publishedAt": "2026-10-19T19:25:53.363Z",
+  "pageUrl": "https://riverclient.xyz/",
+  "installerUrl": "https://updates.riverclient.xyz/downloads/River-Client-Setup.exe",
+  "portableUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.6/River-Client-Portable-0.2.6.exe",
+  "linuxUrl": "https://updates.riverclient.xyz/downloads/River-Client-Linux.tar.gz",
+  "packageUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.6/River-Client-App-0.2.6.zip",
+  "packageParts": [
+    {
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/River-Client-App-0.2.6.zip.001",
+      "size": 262144000,
+      "sha256": "f7bc4ca1365e1c5483d8f45a0528dee6e0adb2d11d9c0d87a668576de2e665cb"
+    },
+    {
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/River-Client-App-0.2.6.zip.002",
+      "size": 127870387,
+      "sha256": "81782a8200a948b192001728d32a33c59b550f286c5fcb3b8b6c816bf2d396f9"
+    }
+  ],
+  "fileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.6/file-manifest.json",
+  "appFileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.6/file-manifest.json",
+  "appFileBaseUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.6/app/",
+  "fileCount": 93,
+  "files": {
+    "installer": {
+      "name": "River-Client-Setup.exe",
+      "size": 325841835,
+      "sha256": "8fbc40d1f446a468b067492c5289a03dff01a4bc59e8aa43eba3d8083e258143"
+    },
+    "portable": {
+      "name": "River-Client-Portable-0.2.6.exe",
+      "size": 363376136,
+      "sha256": "f3686c5a86d0129084b5e4e5a73813b6afd452bc124d81f754c039ed83090796"
+    },
+    "linux": {
+      "name": "River-Client-Linux-0.2.6.tar.gz",
+      "size": 347734683,
+      "sha256": "072d0b2e76b0e769d9bd9f1264bec4bad30d4309b313dda09d4e16ad78f91d48"
+    },
+    "package": {
+      "name": "River-Client-App-0.2.6.zip",
+      "size": 390014387,
+      "sha256": "1338dc2a0c644d94fac34618a9993af129d4944fbae4b24a47fc397912053d23"
+    },
+    "fileManifest": {
+      "name": "file-manifest.json",
+      "size": 29073,
+      "sha256": "81a85028ad72f46d67334b6452df9a21c5645a92d5690e045cc64fe1ed92fe40",
+      "count": 93
+    }
+  },
+  "mods": [
+    {
+      "minecraft": "26.2",
+      "name": "clientcore-0.2.6+26.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B26.2.jar",
+      "size": 7808266,
+      "sha256": "0b62d0e507330450434aaea29403e2d908b21e4926016b59907850dbb6d6c323"
+    },
+    {
+      "minecraft": "26.1.2",
+      "name": "clientcore-0.2.6+26.1.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B26.1.2.jar",
+      "size": 7806772,
+      "sha256": "125878be45a99eab450e26d249e90558a017616c8c45b6816bad466a50db596d"
+    },
+    {
+      "minecraft": "1.21.11",
+      "name": "clientcore-0.2.6+1.21.11.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.11.jar",
+      "size": 7840833,
+      "sha256": "ef3a0597796645b2f8c1e24f12c04185d34d4ebd62afd1359e5f6106fe5a3cfc"
+    },
+    {
+      "minecraft": "1.21.10",
+      "name": "clientcore-0.2.6+1.21.10.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.10.jar",
+      "size": 7834857,
+      "sha256": "62c2502a2e61c498bf800c2e5ae60dd5c9b6a944ac00762b5b6c1f8d8d7eb246"
+    },
+    {
+      "minecraft": "1.21.8",
+      "name": "clientcore-0.2.6+1.21.8.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.8.jar",
+      "size": 7831695,
+      "sha256": "55e7e6b486dacffeae7afc651d88cd7471d251b11cc2d4f5e34354ae8386be64"
+    },
+    {
+      "minecraft": "1.21.7",
+      "name": "clientcore-0.2.6+1.21.7.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.7.jar",
+      "size": 7831694,
+      "sha256": "8bbeca9c19b5217b5ee7fc7ef37fb1dfd395c375c4d897fd20b07f47e5bfa898"
+    },
+    {
+      "minecraft": "1.21.6",
+      "name": "clientcore-0.2.6+1.21.6.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.6.jar",
+      "size": 7831695,
+      "sha256": "6b87f1c09b125de2e6c8d914da75e7c0d12baf5585cc42825d5889dc2790c450"
+    },
+    {
+      "minecraft": "1.21.5",
+      "name": "clientcore-0.2.6+1.21.5.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.5.jar",
+      "size": 7831214,
+      "sha256": "b1bcd6ebe4e6df00091d80d43bc123a0e8d6cbb2ae2b0f165e4a61263fafd57b"
+    },
+    {
+      "minecraft": "1.21.4",
+      "name": "clientcore-0.2.6+1.21.4.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.4.jar",
+      "size": 7830008,
+      "sha256": "048bb5d329530390c41855d276af4e3fb209bf37cfc96193b9147f339d4ee604"
+    },
+    {
+      "minecraft": "1.21.3",
+      "name": "clientcore-0.2.6+1.21.3.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.3.jar",
+      "size": 7829940,
+      "sha256": "c633cba39e05fe470fd39b64abed4a661a40d7dfdaba06c8999bab4acae441b6"
+    },
+    {
+      "minecraft": "1.21.2",
+      "name": "clientcore-0.2.6+1.21.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.2.jar",
+      "size": 7829936,
+      "sha256": "55b6d000fa526d4bfc2ce09d06e62bc72216d5f27c7f7701daaeff138ea94dde"
+    },
+    {
+      "minecraft": "1.21.1",
+      "name": "clientcore-0.2.6+1.21.1.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.1.jar",
+      "size": 7830275,
+      "sha256": "a628aeabc1df913e3298ddef87eeb61c664c319bfd26a581b9cb0e933779dd63"
+    },
+    {
+      "minecraft": "1.21",
+      "name": "clientcore-0.2.6+1.21.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.6/mod/clientcore-0.2.6%2B1.21.jar",
+      "size": 7830272,
+      "sha256": "05280473f086988599a743599b789d708f08c361724d400c49fcf386a153d4b7"
+    }
+  ],
+  "changelog": {
+    "version": "0.2.6",
+    "title": "River Client 0.2.6",
+    "summary": "Glass menus and HUD, style settings for every module, a server browser and six new modules.",
+    "items": [
+      "New: Glass. Menus and the HUD blur the game behind them. Turn it off under Theme in Settings.",
+      "New: Module styles. Every HUD module has Style settings: presets, glass, colors, rounded corners, bold and small caps text. One button puts a module's look on all the others.",
+      "New: Server browser. A Servers button on the main menu and in Multiplayer lists popular servers with player counts. Join in one click or add one to your list.",
+      "New: Six modules: TPS, Server Address, Saturation, Day Counter, Pack Display and Stopwatch.",
+      "Improved: The River menu, Content, Cosmetics, Friends and module settings have a new look, with bold titles and small caps labels.",
+      "Improved: Labels and notes across the client are shorter and plainer."
+    ]
+  },
+  "notes": "Glass menus and HUD, style settings for every module, a server browser and six new modules."
+}

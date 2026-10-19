@@ -1,0 +1,22 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "clientcore:font/river_badge.png",
+      "height": 10,
+      "ascent": 8,
+      "chars": [
+        "\ue000"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "clientcore:font/river_badge_halloween.png",
+      "height": 10,
+      "ascent": 8,
+      "chars": [
+        "\ue001"
+      ]
+    }
+  ]
+}

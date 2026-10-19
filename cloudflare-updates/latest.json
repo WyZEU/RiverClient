@@ -1,0 +1,45 @@
+{
+  "name": "River Client",
+  "version": "0.1.1",
+  "minimumVersion": "0.1.1",
+  "required": false,
+  "publishedAt": "2026-07-06T13:12:54.334Z",
+  "pageUrl": "https://riverclient.xyz/",
+  "installerUrl": "https://river-client-updates.wyzeu.workers.dev/downloads/River-Client-Setup.exe",
+  "portableUrl": "https://river-client-updates.wyzeu.workers.dev/downloads/releases/0.1.1/River-Client-Portable-0.1.1.exe",
+  "packageUrl": "https://river-client-updates.wyzeu.workers.dev/downloads/releases/0.1.1/River-Client-App-0.1.1.zip",
+  "files": {
+    "installer": {
+      "name": "River-Client-Setup.exe",
+      "size": 106958411,
+      "sha256": "826b7cb9aaf31e95f86595cb9f8a0935c8d5a0579fb91c83caacf6ea1e1797cf"
+    },
+    "portable": {
+      "name": "River-Client-Portable-0.1.1.exe",
+      "size": 151691782,
+      "sha256": "5397853a342ba0ea6feaf245fc58e87f7c755ab83d87972837ff9e645eebfc64"
+    },
+    "package": {
+      "name": "River-Client-App-0.1.1.zip",
+      "size": 170206316,
+      "sha256": "b96a765e4a9b0536569f1c90e2c13b023c4b60abfce7c0c801bd133423b3313f"
+    }
+  },
+  "changelog": {
+    "version": "0.1.1",
+    "title": "River 0.1.1 bugfix pass",
+    "summary": "River Client 0.1.1 rolls the current bug fixes into the next River build.",
+    "items": [
+      "Managed installs stay lined up with the current River build way more cleanly now.",
+      "The launcher update path was tightened up so releases stop fighting each other.",
+      "HUD module list scroll now reaches the real bottom of the category instead of stopping early.",
+      "Tab ping text now refreshes when latency changes instead of staying stuck on an old value.",
+      "Title screen River buttons now anchor off the real vanilla rows so they stop overlapping and drifting off-center.",
+      "Potion HUD now uses a cleaner labeled layout with proper minute:second timing, cleaner amplifier text, and better buff and debuff readability.",
+      "Added Target HUD and Gapple Count for more useful PvP info in fights.",
+      "Armor HUD durability numbers now stay bright white at max and dim a bit once the piece is no longer full.",
+      "Fixed the zoom crash when pressing C by correcting the client FOV mixin return type."
+    ]
+  },
+  "notes": "River Client 0.1.1 rolls the current bug fixes into the next River build."
+}
