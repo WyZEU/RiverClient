@@ -1,0 +1,153 @@
+{
+  "name": "River Client",
+  "version": "0.2.7",
+  "minimumVersion": "0.1.7",
+  "required": false,
+  "publishedAt": "2026-10-27T17:10:49.337Z",
+  "pageUrl": "https://riverclient.xyz/",
+  "installerUrl": "https://updates.riverclient.xyz/downloads/River-Client-Setup.exe",
+  "portableUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.7/River-Client-Portable-0.2.7.exe",
+  "linuxUrl": "https://updates.riverclient.xyz/downloads/River-Client-Linux.tar.gz",
+  "packageUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.7/River-Client-App-0.2.7.zip",
+  "packageParts": [],
+  "fileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.7/file-manifest.json",
+  "appFileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.7/file-manifest.json",
+  "appFileBaseUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.7/app/",
+  "fileCount": 80,
+  "files": {
+    "installer": {
+      "name": "River-Client-Setup.exe",
+      "size": 139375762,
+      "sha256": "6a252e8e9156f58946cf0ec4ae2fcdfbfc03b4b9f95273e52f8a8fb70e74d9be"
+    },
+    "portable": {
+      "name": "River-Client-Portable-0.2.7.exe",
+      "size": 175945135,
+      "sha256": "41b4ca5b5926f4393c33508dbfffdd9073e851530bbdc6f7a5b75176e9b18f1c"
+    },
+    "linux": {
+      "name": "River-Client-Linux-0.2.7.tar.gz",
+      "size": 160366601,
+      "sha256": "62dda26ce2831c0f378106b87d43ba65f2681e6c75c3663856b96102d2febed0"
+    },
+    "package": {
+      "name": "River-Client-App-0.2.7.zip",
+      "size": 201973262,
+      "sha256": "d9cbd59258f296506803f74539e646446b2982069cdf60f4b547aa3070a1b5d4"
+    },
+    "fileManifest": {
+      "name": "file-manifest.json",
+      "size": 24434,
+      "sha256": "902b4789656dbec298256231ab100a7843a639ae999c89421d2a8ada2ba005d7",
+      "count": 80
+    }
+  },
+  "mods": [
+    {
+      "minecraft": "26.2",
+      "name": "clientcore-0.2.7+26.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B26.2.jar",
+      "size": 7834389,
+      "sha256": "6957d0766e1c1e864b54fe9ba564b610421752df305ad550c730b7716ec62ef2"
+    },
+    {
+      "minecraft": "26.1.2",
+      "name": "clientcore-0.2.7+26.1.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B26.1.2.jar",
+      "size": 7832871,
+      "sha256": "21a108ef8c08aca717c136c1267477186f12f9281182dff6b893cbf94a92f991"
+    },
+    {
+      "minecraft": "1.21.11",
+      "name": "clientcore-0.2.7+1.21.11.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.11.jar",
+      "size": 7965212,
+      "sha256": "a43abc3676f8a55a8c11d0471fbcd8687abb449a61dc15dbbf0dcea13ac762dd"
+    },
+    {
+      "minecraft": "1.21.10",
+      "name": "clientcore-0.2.7+1.21.10.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.10.jar",
+      "size": 7861823,
+      "sha256": "580c2bcd332ed6bf7dbdb35329134f427a20727ff96aa377c4fa23289076f0d6"
+    },
+    {
+      "minecraft": "1.21.8",
+      "name": "clientcore-0.2.7+1.21.8.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.8.jar",
+      "size": 7858633,
+      "sha256": "81ae5642f91a9a1029e3e02f041c7fa3f919bbcad9c2deee069bc2f168b7845f"
+    },
+    {
+      "minecraft": "1.21.7",
+      "name": "clientcore-0.2.7+1.21.7.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.7.jar",
+      "size": 7858630,
+      "sha256": "a5c14fc27cac04c21fa7a7dfa4181ab51e7db12c23f64355ff1360a9283a9bed"
+    },
+    {
+      "minecraft": "1.21.6",
+      "name": "clientcore-0.2.7+1.21.6.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.6.jar",
+      "size": 7858634,
+      "sha256": "29780d057ef04073f460fbb99b0449d8baf4bb5585a090ea479ade287a0910a0"
+    },
+    {
+      "minecraft": "1.21.5",
+      "name": "clientcore-0.2.7+1.21.5.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.5.jar",
+      "size": 7858147,
+      "sha256": "6b6511914a910ce71f9c5ebcab694061357524069a14991df9098d85a2621e92"
+    },
+    {
+      "minecraft": "1.21.4",
+      "name": "clientcore-0.2.7+1.21.4.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.4.jar",
+      "size": 7856942,
+      "sha256": "abf4e2849422563b2950e7a0b4ce3b8257c03fe38f7bfdede6e0a82db525e3ba"
+    },
+    {
+      "minecraft": "1.21.3",
+      "name": "clientcore-0.2.7+1.21.3.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.3.jar",
+      "size": 7856874,
+      "sha256": "6215296f27d01e25a431e059c92adc31886bf73e953691be05c909ef7d514677"
+    },
+    {
+      "minecraft": "1.21.2",
+      "name": "clientcore-0.2.7+1.21.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.2.jar",
+      "size": 7856872,
+      "sha256": "a1614f44720f608c4f607aff479171be3df4097189ebd3823ee93555c9c36662"
+    },
+    {
+      "minecraft": "1.21.1",
+      "name": "clientcore-0.2.7+1.21.1.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.1.jar",
+      "size": 7857209,
+      "sha256": "9e63f8bc0a5ab71d277143fab30e3e36d19e9a0ec9a757877a8c5eada4b3c564"
+    },
+    {
+      "minecraft": "1.21",
+      "name": "clientcore-0.2.7+1.21.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.7/mod/clientcore-0.2.7%2B1.21.jar",
+      "size": 7857208,
+      "sha256": "557dc9437cf9434653305a4202d8ed5b40748b7792646ad2f5aab88c0e97316d"
+    }
+  ],
+  "changelog": {
+    "version": "0.2.7",
+    "title": "River Client 0.2.7",
+    "summary": "A texture picker, chat filters, a fixed instance import and the Modern launcher layout.",
+    "items": [
+      "New: Texture picker. The resource pack screen has a Texture picker button. Pick the texture for any item, block or other thing from any of your packs, with a 3D preview. 1.21.11 for now.",
+      "New: Chat filters in Chat Tweaks. Hide repeated lines, ads and swearing. All three are off until you turn them on.",
+      "New: Particle Effects, Auto GG and Cosmetics modules. Change hit particles and the crit colour, get one GG per game on servers, and hide other players' capes and badges.",
+      "New: Start with Windows. Turn it on in Settings and River opens minimized when you sign in.",
+      "Fixed: Importing an exported instance downloads the mods again. Mods that are not on Modrinth come along inside the file.",
+      "Fixed: Lunar Client profiles are found in the folder they really live in.",
+      "Improved: The launcher's Modern layout has a Minecraft landscape behind the window and frosted panels."
+    ]
+  },
+  "notes": "A texture picker, chat filters, a fixed instance import and the Modern launcher layout."
+}
