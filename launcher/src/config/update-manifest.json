@@ -1,0 +1,179 @@
+{
+  "name": "River Client",
+  "version": "0.2.9",
+  "minimumVersion": "0.1.7",
+  "required": false,
+  "publishedAt": "2026-11-05T19:30:35.309Z",
+  "pageUrl": "https://riverclient.xyz/",
+  "installerUrl": "https://updates.riverclient.xyz/downloads/River-Client-Setup.exe",
+  "portableUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.9/River-Client-Portable-0.2.9.exe",
+  "linuxUrl": "https://updates.riverclient.xyz/downloads/River-Client-Linux.tar.gz",
+  "packageUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.9/River-Client-App-0.2.9.zip",
+  "packageParts": [],
+  "fileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.9/file-manifest.json",
+  "appFileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.9/file-manifest.json",
+  "appFileBaseUrl": "https://updates.riverclient.xyz/downloads/releases/0.2.9/app/",
+  "fileCount": 80,
+  "files": {
+    "installer": {
+      "name": "River-Client-Setup.exe",
+      "size": 140910139,
+      "sha256": "3f83e8d0c378f8870bd57f33251a4ae870bcc3a06313e96bace3ca49450ec1f1"
+    },
+    "portable": {
+      "name": "River-Client-Portable-0.2.9.exe",
+      "size": 177115254,
+      "sha256": "daab80125c6cfb738b148f27afa949b3144d8ad39548e31a520aa435a08cbbfe"
+    },
+    "linux": {
+      "name": "River-Client-Linux-0.2.9.tar.gz",
+      "size": 161920390,
+      "sha256": "5900b1857632eaa875ac52132e09a7d37476961296ab8080f2a486135c2bbc48"
+    },
+    "package": {
+      "name": "River-Client-App-0.2.9.zip",
+      "size": 203532852,
+      "sha256": "1aed7370501ded6f9b7ea7428b82c0a5ef4b0f5db467ceff54bef4ef160d7fa5"
+    },
+    "fileManifest": {
+      "name": "file-manifest.json",
+      "size": 24434,
+      "sha256": "a8bd2923eccba04ee0ad2d3bb15471c844a77e4340158a2ea241ee17538f34a8",
+      "count": 80
+    }
+  },
+  "mods": [
+    {
+      "minecraft": "26.3",
+      "name": "clientcore-0.2.9+26.3.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B26.3.jar",
+      "size": 8221411,
+      "sha256": "ce6f8514bede1291ed148a5c0db2659f9274ee1994b11d507b5118802d795885"
+    },
+    {
+      "minecraft": "26.2",
+      "name": "clientcore-0.2.9+26.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B26.2.jar",
+      "size": 8216940,
+      "sha256": "857611334a7cfb3930f425b40ab9b646a5711c07a832cf80136b9e04b2076f1e"
+    },
+    {
+      "minecraft": "26.1.2",
+      "name": "clientcore-0.2.9+26.1.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B26.1.2.jar",
+      "size": 8218937,
+      "sha256": "a2dccda07b731d6a151ef0fed58143e9e0ec0d30a88fd38f45fced5d7b3be87d"
+    },
+    {
+      "minecraft": "1.21.11",
+      "name": "clientcore-0.2.9+1.21.11.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.11.jar",
+      "size": 8358766,
+      "sha256": "2bdf48de0e030fe58b09b6865cbe5199f66e6b04e8a0d8abef3d3c0ae70e7b18"
+    },
+    {
+      "minecraft": "1.21.10",
+      "name": "clientcore-0.2.9+1.21.10.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.10.jar",
+      "size": 8255002,
+      "sha256": "72e03bf5464b8d4b29b183dc6d2ef3c73e302f90bd9d731b846ebd6e500cc8c9"
+    },
+    {
+      "minecraft": "1.21.8",
+      "name": "clientcore-0.2.9+1.21.8.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.8.jar",
+      "size": 8251575,
+      "sha256": "14652ee90251bb8c70c6ed25c61aa1dfc8d9383a945977248648093f44ef6f9c"
+    },
+    {
+      "minecraft": "1.21.7",
+      "name": "clientcore-0.2.9+1.21.7.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.7.jar",
+      "size": 8251575,
+      "sha256": "55458f273d9c4ebaafdcfa72e594d98a7d1fa0e31928f39061d6bb39c67dc734"
+    },
+    {
+      "minecraft": "1.21.6",
+      "name": "clientcore-0.2.9+1.21.6.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.6.jar",
+      "size": 8251577,
+      "sha256": "fee39162ae42e3c2d16c7f75df65913542fe3c2076d6d34ce03e1aed41b721ba"
+    },
+    {
+      "minecraft": "1.21.5",
+      "name": "clientcore-0.2.9+1.21.5.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.5.jar",
+      "size": 8243734,
+      "sha256": "09f82543a06b66d40564c519a1f03c4627e96205dfed5b2b8119bf339caafe04"
+    },
+    {
+      "minecraft": "1.21.4",
+      "name": "clientcore-0.2.9+1.21.4.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.4.jar",
+      "size": 8242519,
+      "sha256": "37196903b8d084db4c465767ddd7ea06e0aa628d27020651fa90596dfee8a3d8"
+    },
+    {
+      "minecraft": "1.21.3",
+      "name": "clientcore-0.2.9+1.21.3.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.3.jar",
+      "size": 8242455,
+      "sha256": "b66c8876801a56b19feb2aca7973693b097d146b8a7bbca30145192d998d5205"
+    },
+    {
+      "minecraft": "1.21.2",
+      "name": "clientcore-0.2.9+1.21.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.2.jar",
+      "size": 8242453,
+      "sha256": "f3123a006c6b200b57d61ac2d762c02ffe4298e3ccf906e5aba7b360e1df2a3b"
+    },
+    {
+      "minecraft": "1.21.1",
+      "name": "clientcore-0.2.9+1.21.1.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.1.jar",
+      "size": 8242799,
+      "sha256": "47f0777cda28351c0f5e9890427d9eb7b82729211ea9a7e5794857d9ce98e664"
+    },
+    {
+      "minecraft": "1.21",
+      "name": "clientcore-0.2.9+1.21.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.2.9/mod/clientcore-0.2.9%2B1.21.jar",
+      "size": 8242795,
+      "sha256": "991cda9b422250f178bf99c7afab57f1cccfe57a8543949a6c9d382ca792eb72"
+    }
+  ],
+  "changelog": {
+    "version": "0.2.9",
+    "title": "River Client 0.2.9",
+    "summary": "Minecraft 26.3, interface themes, lyrics that follow the singing, Game HUD, and most of what you asked for.",
+    "items": [
+      "New: Minecraft 26.3.",
+      "New: Interface themes. River Dark, River Light, Minecraft Dark and Minecraft Light in the menu's settings, plus a switch for menu animations.",
+      "New: Game HUD module. Change the size, background and animation of the boss bar, action bar, tab list and title.",
+      "New: To-Do module. Your own task list on screen, ticked off line by line. It can also add what your Litematica schematic still needs.",
+      "New: Chat Window module. A movable chat box for your name or chosen words, and those lines marked in the normal chat.",
+      "New: Change the version of a mod from its row on the instance page. An older version stays until you change it back.",
+      "New: Change an instance's picture. Hover over it on the instance page.",
+      "New: Pick your River cape and badge in the launcher, in Wardrobe.",
+      "New: Pick your own launcher background in Settings.",
+      "New: Lyrics can read YouTube Music and other players in your browser.",
+      "New: Lyrics on Linux and Steam Deck. Not tested on a real Deck yet, so tell us how it goes.",
+      "Improved: Sky Effects' aurora now goes around the whole sky.",
+      "Improved: Many more songs have lyrics timed word by word.",
+      "Improved: Stats, Time and other readouts can run in a horizontal line.",
+      "Improved: Scoreboard has a background setting and goes up to 150%.",
+      "Improved: Newer Fabric Loader for every instance, and you can pick another one on the instance page.",
+      "Improved: River's main menu steps aside for Essential, and River's buttons make room for ReplayMod's.",
+      "Fixed: Zoom did nothing on Minecraft 26.1.2 and 26.2.",
+      "Fixed: Your account could get logged out a few hours into playing, and servers would stop letting you join.",
+      "Fixed: The Spotify module stayed blank when the launcher's reader found nothing.",
+      "Fixed: The mouse cursor comes back if it goes missing in a menu.",
+      "Fixed: Updates failed straight away on some PCs with a \"powershell.exe\" error.",
+      "Fixed: Discord and other capture apps could still freeze on the game in full screen.",
+      "Fixed: The friends connection could reconnect over and over on slow internet.",
+      "Changed: The game's window title starts with Minecraft again, which should let Medal and other clipping apps find it.",
+      "Changed: The standalone mod needs a premium Minecraft account."
+    ]
+  },
+  "notes": "Minecraft 26.3, interface themes, lyrics that follow the singing, Game HUD, and most of what you asked for."
+}

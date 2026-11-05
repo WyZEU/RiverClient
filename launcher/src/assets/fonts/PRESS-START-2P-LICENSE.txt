@@ -1,0 +1,8 @@
+Press Start 2P
+Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name "Press Start 2P".
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The full license text is available at https://openfontlicense.org
+
+Used by the launcher's Modern layout for small labels and the Play button, the same face
+riverclient.xyz uses. The two .woff2 files are the latin and latin-ext subsets.

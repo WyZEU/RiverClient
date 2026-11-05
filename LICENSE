@@ -1,0 +1,68 @@
+River Client - Source Available License
+Copyright (c) 2026 WyZ_EU. All rights reserved.
+
+This source code is published for ONE reason: so that anyone who runs River
+Client, or is thinking about running it, can read exactly what it does and
+confirm for themselves that it is not malware and is not doing anything behind
+their back.
+
+That is the whole point. It is not a grant of permission to use this code.
+
+This is NOT open source in the OSI sense, and it is not free software.
+
+
+WHAT YOU MAY DO
+
+  1. Read, view and study this source code.
+  2. Download or clone the repository for the purpose of reading it.
+  3. Compile and run it locally, unmodified, purely to verify that the published
+     River Client builds match this source.
+  4. Quote short excerpts when reporting a bug, a security issue, or when
+     discussing or reviewing River Client itself.
+
+
+WHAT YOU MAY NOT DO
+
+  1. Use this code, in whole or in part, in any other project, product or
+     service - free, paid, personal, public or private.
+  2. Copy, reproduce, adapt, translate or create derivative works from it.
+  3. Redistribute it, or distribute builds made from it.
+  4. Reuse its code, assets, textures, icons, names or branding anywhere else.
+  5. Publish a modified version of River Client, or a client based on it.
+  6. Remove or alter this licence or the copyright notices.
+  7. Use the "River" or "River Client" name, logo or branding for anything other
+     than referring to this project.
+
+If you want to do any of the above, ask first. Permission has to be given in
+writing by the copyright holder, and without it the answer is no.
+
+
+CONTRIBUTIONS
+
+Bug reports and security reports are very welcome. If you send a patch or a pull
+request, you agree that the copyright holder may use it in River Client under
+this same licence, and that you are not granted any additional rights in return.
+
+
+NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+THIRD PARTY CODE
+
+River Client is built on top of, and links against, software owned by other
+people, under their own licences. Nothing above applies to any of it:
+
+  - Minecraft is owned by Mojang Studios / Microsoft. River Client is not
+    affiliated with, endorsed by, or associated with Mojang or Microsoft.
+  - Fabric Loader and Fabric API are licensed under Apache 2.0.
+  - SpongePowered Mixin is licensed under the MIT licence.
+  - Kotlin, Electron, React and the other dependencies keep their own licences.
+  - The UI icons are Lucide (ISC licence) - see
+    src/client/resources/ICONS-LICENSE.txt.

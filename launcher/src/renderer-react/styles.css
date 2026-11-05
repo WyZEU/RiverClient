@@ -1,0 +1,763 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * River Client launcher - shadcn/ui on Tailwind v4.
+ *
+ * Tokens mirror the in-game client's ClientUi palette so the launcher and the
+ * Right Shift menu read as one product. Keep them in sync with
+ * src/client/kotlin/dev/wyz/clientcore/ui/ClientUi.kt - the surfaces step in
+ * brightness (background -> card -> popover), not in blue tint, and there is
+ * exactly one accent. If a second accent seems necessary it is a semantic
+ * colour, not decoration.
+ */
+
+@source "./**/*.{js,jsx}";
+
+:root {
+  --radius: 0.375rem;               /* 6px - ClientUi.RADIUS_PANEL */
+
+  --background: #0b0c10;            /* ClientUi.BG */
+  --foreground: #ffffff;            /* ClientUi.TEXT */
+  --card: #15171d;                  /* ClientUi.PANEL */
+  --card-foreground: #ffffff;
+  --popover: #1b1e26;               /* ClientUi.PANEL_SOFT */
+  --popover-foreground: #ffffff;
+  --primary: #2f6fe6;
+  --primary-foreground: #ffffff;
+  --secondary: #1b1e26;
+  --secondary-foreground: #ffffff;
+  --muted: #1b1e26;
+  --muted-foreground: #9ba0ab;      /* ClientUi.MUTED */
+  --accent: #23262f;                /* ClientUi.PANEL_ALT */
+  --accent-foreground: #ffffff;
+  --destructive: #ff8fa3;
+  --destructive-foreground: #0b0c10;
+  --success: #72f1b8;               /* ClientUi.POSITIVE */
+  --warning: #ffd46b;               /* ClientUi.WARNING */
+  --border: #2f333d;                /* ClientUi.BORDER */
+  --input: #2f333d;
+  --ring: #2f6fe6;
+}
+
+/*
+ * Light theme. Same one-accent discipline as dark: surfaces step in brightness
+ * (background -> card -> popover) rather than in tint, and the blue accent is
+ * reused unchanged so the two themes read as one product. Applied when the shell
+ * stamps data-theme="light" on the root from the launcherTheme setting.
+ */
+:root[data-theme="light"] {
+  --background: #f4f5f7;
+  --foreground: #14161b;
+  --card: #ffffff;
+  --card-foreground: #14161b;
+  --popover: #ffffff;
+  --popover-foreground: #14161b;
+  --primary: #2f6fe6;
+  --primary-foreground: #ffffff;
+  --secondary: #e9ebef;
+  --secondary-foreground: #14161b;
+  --muted: #eceef2;
+  --muted-foreground: #5b616c;
+  --accent: #e9ebef;
+  --accent-foreground: #14161b;
+  --destructive: #d92f4a;
+  --destructive-foreground: #ffffff;
+  --success: #1a9e63;
+  --warning: #b9781a;
+  --border: #d8dbe1;
+  --input: #d8dbe1;
+  --ring: #2f6fe6;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  --font-sans: Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  /* River's pixel face, the one riverclient.xyz uses. Bundled in assets/fonts, so it works offline. */
+  --font-pixel: "Press Start 2P", ui-monospace, "Cascadia Mono", monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    margin: 0;
+    min-width: 940px;
+    min-height: 620px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* The frameless shell drags by its title bar; interactive chrome opts back out. */
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+    border: 2px solid var(--background);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3d424e;
+  }
+
+  /*
+   * Motion. Kept subtle and fast - a launcher should feel responsive, not showy.
+   * Buttons, cards and rows share one easing so the whole app moves as a set, and
+   * everything collapses to nothing under prefers-reduced-motion.
+   */
+  button,
+  a,
+  [role="button"] {
+    transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease,
+      transform 120ms ease, opacity 140ms ease, box-shadow 140ms ease;
+  }
+
+  /* A press dips slightly - tactile feedback without a plugin. */
+  button:not(:disabled):active,
+  [role="button"]:active {
+    transform: translateY(0.5px) scale(0.985);
+  }
+
+  /* Cards and list rows lift a touch on hover. Background is transitioned here too:
+     Tailwind's transition-colors utility outranks this base rule, so an element using
+     both would keep its colour fade but lose the transform easing and snap instead. */
+  .lift {
+    transition: transform 140ms ease, box-shadow 160ms ease, border-color 140ms ease,
+      background-color 140ms ease;
+  }
+  .lift:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.55);
+  }
+
+  /*
+   * Ambient hero art drifts slowly behind the Home launch panel, the same Ken Burns
+   * idea the in-game main menu uses, so the launcher and the client read as one
+   * product. Slow and small on purpose: it should register as depth, never as motion
+   * competing with the UI. Collapses under prefers-reduced-motion with everything else.
+   */
+  .hero-drift {
+    animation: river-drift 44s ease-in-out infinite alternate;
+    transform-origin: 50% 60%;
+    will-change: transform;
+  }
+  @keyframes river-drift {
+    from { transform: scale(1.08) translate3d(-1.2%, 0.6%, 0); }
+    to   { transform: scale(1.16) translate3d(1.2%, -1.2%, 0); }
+  }
+
+  /* Launch button gets a soft accent glow that breathes while idle. */
+  .glow-accent {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent);
+    animation: river-pulse 2.8s ease-in-out infinite;
+  }
+  @keyframes river-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 45%, transparent); }
+    50% { box-shadow: 0 0 14px 1px color-mix(in srgb, var(--primary) 30%, transparent); }
+  }
+
+  /*
+   * Theme crossfade. Only while data-theme-anim is set (the ~3s window right after
+   * the user flips the theme) does every element ease its themed colours across, so
+   * dark<->light dissolves instead of snapping. Outside that window nothing here
+   * applies, so normal hovers stay snappy.
+   */
+  :root[data-theme-anim] *,
+  :root[data-theme-anim] *::before,
+  :root[data-theme-anim] *::after {
+    transition: background-color 3s ease, color 3s ease, border-color 3s ease,
+      fill 3s ease, stroke 3s ease, box-shadow 3s ease, outline-color 3s ease !important;
+  }
+
+  /*
+   * A row leans very slightly when you point at it, and settles.
+   *
+   * Deliberately much gentler and slower than the usual version of this effect: a tenth
+   * of a degree over most of a second, rather than a degree and a half in a third of one.
+   * At the larger values it reads as a cartoon bounce, and on a list of a dozen rows that
+   * is exhausting rather than lively. The point is that the row feels touchable, not that
+   * it performs.
+   *
+   * Applied on top of .lift, so the row still rises and the rotation is the only addition.
+   */
+  @keyframes river-lean {
+    0% { transform: translateY(-1px) rotate(0deg); }
+    60% { transform: translateY(-1px) rotate(0.22deg) scale(1.004); }
+    100% { transform: translateY(-1px) rotate(0.12deg) scale(1.004); }
+  }
+  .lean:hover {
+    animation: river-lean 620ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  }
+  .lean:active {
+    animation: none;
+    transform: translateY(0) scale(0.997);
+  }
+
+  /*
+   * The launch screen's bar. Nothing can know how far into loading a modded instance
+   * is, so it reports that something is still happening rather than inventing a
+   * percentage that would sit still and look frozen.
+   */
+  .launch-sweep {
+    animation: river-sweep 1.15s ease-in-out infinite;
+  }
+  @keyframes river-sweep {
+    0% { transform: translateX(-110%); }
+    100% { transform: translateX(320%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    /* The lean is decoration, so it goes entirely rather than snapping to its end state. */
+    .lean:hover { animation: none; transform: translateY(-1px); }
+  }
+}
+
+
+/*
+ * Seasons. A season only swaps the accent and, in the dark theme, tints the neutral ramp a
+ * touch toward the season's hue; nothing else about the layout changes. Stamped on the root
+ * as data-season by the shell (see lib/seasons.js).
+ */
+:root[data-season="halloween"] {
+  --primary: #e0702b;
+  --primary-foreground: #1a0f08;
+  --ring: #e0702b;
+}
+
+:root[data-season="halloween"][data-theme="dark"] {
+  --background: #0d0b10;
+  --card: #16131b;
+  --popover: #1d1923;
+  --secondary: #1d1923;
+  --muted: #1d1923;
+  --accent: #272230;
+  --border: #342d3d;
+  --input: #342d3d;
+  --muted-foreground: #a39dac;
+}
+
+:root[data-season="halloween"][data-theme="light"] {
+  --primary: #c4560f;
+  --primary-foreground: #ffffff;
+  --ring: #c4560f;
+}
+
+/* The River logo turns orange with the theme, wherever an <img> shows it. */
+:root[data-season="halloween"] img[src$="river-logo.png"] {
+  content: url("../assets/river-logo-halloween.png");
+}
+:root[data-season="halloween"] img[src$="riv3r-client.png"] {
+  content: url("../assets/riv3r-client-halloween.png");
+}
+
+.season-decor {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.season-web {
+  position: absolute;
+  top: 32px;
+  width: 150px;
+  height: 150px;
+  opacity: 0.5;
+  image-rendering: auto;
+}
+.season-web-left { left: 56px; }
+/* Right web hangs in the corner of the main column, next to the friends panel. */
+.season-web-right { right: 256px; width: 120px; height: 120px; opacity: 0.4; }
+
+/* Pages without the friends panel: both webs sit in the corners, smaller and fainter so
+   they never run over a page heading, and clear of the scrollbar. */
+.season-wide .season-web { width: 96px; height: 96px; opacity: 0.3; }
+.season-wide .season-web-left { left: 56px; }
+.season-wide .season-web-right { right: 14px; }
+
+/* Bat sprite sheet: 8 frames of 96 x 60, shown at half size. */
+.season-bat {
+  position: absolute;
+  top: 54px;
+  left: -60px;
+  width: 48px;
+  height: 30px;
+  --sheet: 384px;
+  background: url("../assets/season/bat.png") 0 0 / var(--sheet) 100% no-repeat;
+  opacity: 0;
+  animation: season-bat-flap 0.56s steps(8) infinite, season-bat-cross 28s linear infinite;
+}
+.season-bat-b { top: 92px; width: 36px; height: 22.5px; --sheet: 288px; animation-delay: 0s, 9s; animation-duration: 0.5s, 33s; }
+.season-bat-c { top: 70px; width: 30px; height: 18.75px; --sheet: 240px; animation-delay: 0s, 19s; animation-duration: 0.6s, 38s; }
+
+@keyframes season-bat-flap {
+  to { background-position-x: calc(-1 * var(--sheet)); }
+}
+
+@keyframes season-bat-cross {
+  0% { transform: translate(0, 0); opacity: 0; }
+  3% { opacity: 0.6; }
+  22% { transform: translate(calc(100vw * 0.5), -10px); }
+  40% { transform: translate(calc(100vw * 0.85), 12px); opacity: 0.6; }
+  48% { transform: translate(calc(100vw + 80px), 4px); opacity: 0; }
+  100% { transform: translate(calc(100vw + 80px), 4px); opacity: 0; }
+}
+
+/* Jack o'lantern above the settings cog in the sidebar. */
+.season-pumpkin {
+  position: absolute;
+  left: 12px;
+  bottom: 84px;
+  width: 32px;
+  height: 32px;
+}
+.season-pumpkin img {
+  position: absolute;
+  inset: 0;
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+.season-pumpkin-glow {
+  position: absolute;
+  left: -28px;
+  top: -22px;
+  width: 88px;
+  height: 88px;
+  background: radial-gradient(circle, rgba(255, 122, 30, 0.35) 0%, rgba(255, 122, 30, 0) 65%);
+  animation: season-flicker 2.3s ease-in-out infinite;
+}
+.season-pumpkin-light { animation: season-flicker 1.7s ease-in-out infinite; }
+
+@keyframes season-flicker {
+  0%, 100% { opacity: 1; }
+  30% { opacity: 0.72; }
+  55% { opacity: 0.92; }
+  75% { opacity: 0.64; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .season-bat { display: none; }
+  .season-pumpkin-glow, .season-pumpkin-light { animation: none; }
+}
+
+
+/*
+ * Modern layout (Settings > Appearance > Interface), stamped on the root as data-ui="modern".
+ *
+ * Colours stay with the theme and the season, so dark, light and Halloween all work as they
+ * are. What changes is shape and weight: rounder controls, image-led cards, heavier headings,
+ * and the pixel face for small labels and the Play button. Everything here is scoped to
+ * data-ui="modern" or to m- classes that only the Modern views use, so Classic is untouched.
+ */
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/press-start-2p-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/press-start-2p-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* 10px controls; panels and cards use rounded-2xl (16px). */
+:root[data-ui="modern"] {
+  --radius: 0.625rem;
+}
+
+/*
+ * Glass. Modern draws a landscape behind the whole window (components/backdrop.jsx), so the
+ * surfaces become see-through and frosted instead of solid: card for the rail and panels,
+ * popover a little more solid because menus and dialogs carry the most text. The input wells
+ * keep --background, so fields stay dark and readable on any part of the picture.
+ */
+:root[data-ui="modern"]:not([data-theme="light"]) {
+  --card: rgb(13 15 20 / 0.56);
+  --popover: rgb(19 21 27 / 0.9);
+  --secondary: rgb(255 255 255 / 0.07);
+  --muted: rgb(255 255 255 / 0.06);
+  --accent: rgb(255 255 255 / 0.09);
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.14);
+}
+:root[data-ui="modern"][data-theme="light"] {
+  --card: rgb(255 255 255 / 0.62);
+  --popover: rgb(255 255 255 / 0.92);
+  --secondary: rgb(255 255 255 / 0.55);
+  --muted: rgb(255 255 255 / 0.5);
+  --accent: rgb(20 22 27 / 0.07);
+  --border: rgb(20 22 27 / 0.1);
+  --input: rgb(20 22 27 / 0.14);
+}
+:root[data-ui="modern"] :is([class*="bg-card"], [class*="bg-popover"]) {
+  backdrop-filter: blur(22px) saturate(1.35);
+}
+.app-backdrop-shade {
+  background:
+    linear-gradient(90deg, rgb(6 7 10 / 0.8) 0%, rgb(6 7 10 / 0.5) 42%, rgb(6 7 10 / 0.6) 100%),
+    linear-gradient(0deg, rgb(6 7 10 / 0.55) 0%, transparent 45%);
+}
+:root[data-theme="light"] .app-backdrop-shade {
+  background:
+    linear-gradient(90deg, rgb(244 245 247 / 0.82) 0%, rgb(244 245 247 / 0.5) 42%, rgb(244 245 247 / 0.6) 100%),
+    linear-gradient(0deg, rgb(244 245 247 / 0.55) 0%, transparent 45%);
+}
+
+/* In the components layer so a utility class on the element can still override them. */
+@layer components {
+  /* Small pixel-face label above a heading. The face is drawn on an 8px grid, so it stays at 8px. */
+  .m-kicker {
+    font-family: var(--font-pixel);
+    font-size: 8px;
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /*
+   * The block button: the Play action, built like a Minecraft block rather than a flat chip. A
+   * lit top edge, a shaded bottom edge it sinks into when pressed, and a 4px pixel texture over
+   * the accent, so it follows the theme and turns orange for Halloween with everything else.
+   */
+  .m-block {
+    --rx: 0deg;
+    --ry: 0deg;
+    --lift: 0px;
+    --glare: 0;
+    --edge: color-mix(in srgb, var(--primary) 42%, #000);
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    overflow: hidden;
+    border-radius: var(--radius);
+    background-color: var(--primary);
+    /* A glare that follows the cursor (set from JS), under the texture and the label. */
+    background-image: radial-gradient(130px circle at var(--mx, 50%) var(--my, 0%), rgb(255 255 255 / var(--glare)), transparent 70%);
+    color: var(--primary-foreground);
+    font-family: var(--font-pixel);
+    letter-spacing: 0.04em;
+    /* Lit top edge, shaded underside, a solid 5px slab below it, and a soft shadow on the floor. */
+    box-shadow:
+      inset 0 2px 0 rgb(255 255 255 / 0.28),
+      inset 0 -4px 0 rgb(0 0 0 / 0.26),
+      0 5px 0 var(--edge),
+      0 12px 16px -6px rgb(0 0 0 / 0.5);
+    transform: perspective(520px) translate3d(0, var(--lift), 0) rotateX(var(--rx)) rotateY(var(--ry));
+    transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 150ms, background-color 150ms;
+  }
+  /*
+   * Both layers animate transform only, which the browser runs on the GPU at the display's full
+   * refresh rate (a background-position animation repaints every frame instead). The texture
+   * layer is one tile bigger than the button and slides exactly one tile, so the loop has no seam.
+   */
+  .m-block::before {
+    content: "";
+    position: absolute;
+    inset: -48px 0 0 -48px;
+    z-index: -1;
+    background: url("../assets/modern/pixel-noise.png") 0 0 / 48px 48px repeat;
+    image-rendering: pixelated;
+    pointer-events: none;
+    will-change: transform;
+    animation: m-block-drift 5s linear infinite;
+  }
+  /* A soft band of light that glides across now and then. */
+  .m-block::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 45%;
+    z-index: -1;
+    background: linear-gradient(105deg, transparent 0%, rgb(255 255 255 / 0.24) 50%, transparent 100%);
+    pointer-events: none;
+    will-change: transform;
+    transform: translateX(-120%);
+    animation: m-block-sheen 4.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+  @keyframes m-block-drift {
+    to { transform: translate3d(48px, 48px, 0); }
+  }
+  @keyframes m-block-sheen {
+    0%, 55% { transform: translate3d(-120%, 0, 0); }
+    100% { transform: translate3d(320%, 0, 0); }
+  }
+  .m-block:disabled::before,
+  .m-block:disabled::after {
+    animation-play-state: paused;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .m-block::before,
+    .m-block::after {
+      animation: none;
+    }
+  }
+  .m-block:hover:not(:disabled) {
+    --lift: -2px;
+    background-color: color-mix(in srgb, var(--primary) 88%, #ffffff);
+  }
+  .m-block:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 4px;
+  }
+  /* Pressed: the slab is pushed flat and the button sinks onto it. */
+  button.m-block:not(:disabled):active {
+    --lift: 4px;
+    transition-duration: 60ms;
+    box-shadow:
+      inset 0 2px 0 rgb(255 255 255 / 0.14),
+      inset 0 -2px 0 rgb(0 0 0 / 0.26),
+      0 1px 0 var(--edge),
+      0 3px 6px -2px rgb(0 0 0 / 0.45);
+  }
+  .m-block:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  /* Quiet: the neutral surface with a faint texture, turning into the accent block on hover. */
+  .m-block.m-block-quiet {
+    --edge: color-mix(in srgb, var(--secondary) 55%, #000);
+    background-color: var(--secondary);
+    color: var(--foreground);
+  }
+  .m-block.m-block-quiet::before {
+    opacity: 0.16;
+    animation: none;
+    transition: opacity 150ms;
+  }
+  .m-block.m-block-quiet::after {
+    display: none;
+  }
+  .m-block.m-block-quiet:hover:not(:disabled),
+  .m-block.m-block-quiet:focus-visible {
+    --edge: color-mix(in srgb, var(--primary) 42%, #000);
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .m-block.m-block-quiet:hover:not(:disabled)::before,
+  .m-block.m-block-quiet:focus-visible::before {
+    opacity: 1;
+  }
+  /* Stop, while the game runs: same block, in the danger colour. */
+  .m-block.m-block-danger {
+    --edge: color-mix(in srgb, var(--destructive) 42%, #000);
+    background-color: var(--destructive);
+    color: var(--destructive-foreground);
+  }
+  .m-block.m-block-danger:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--destructive) 88%, #ffffff);
+  }
+
+  /* A Modern toast's bar, running out over the five seconds it stays on screen. */
+  .toast-timer {
+    animation: toast-timer 5s linear forwards;
+  }
+  @keyframes toast-timer {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+  }
+
+  /* The launch screen's block row while the length of the wait is unknown. */
+  .m-wave {
+    background-color: var(--secondary);
+    animation: m-wave 1.3s ease-in-out infinite;
+  }
+  @keyframes m-wave {
+    0%, 100% { background-color: var(--secondary); }
+    40% { background-color: var(--primary); }
+  }
+}
+
+/*
+ * Modern Halloween (components/modern-season.jsx): the game's title-screen art inside the
+ * cards, in place of Classic's window-level decor, which Modern does not draw.
+ */
+.m-mist {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 96px;
+  background: url("../assets/season/mist.png") 0 100% / 512px 96px repeat-x;
+  opacity: 0.5;
+  pointer-events: none;
+  animation: m-mist 70s linear infinite;
+}
+@keyframes m-mist {
+  to { background-position: 512px 100%; }
+}
+.m-pumpkin {
+  position: absolute;
+  pointer-events: none;
+}
+.m-pumpkin img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.m-pumpkin-glow {
+  position: absolute;
+  left: -75%;
+  top: -62%;
+  width: 250%;
+  height: 250%;
+  background: radial-gradient(circle, rgb(255 122 30 / 0.32) 0%, rgb(255 122 30 / 0) 62%);
+  animation: season-flicker 2.3s ease-in-out infinite;
+}
+.m-pumpkin-light {
+  animation: season-flicker 1.7s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .m-mist, .m-pumpkin-glow, .m-pumpkin-light { animation: none; }
+}
+
+/*
+ * Modern's raised buttons. Unlayered on purpose: the Button component's own utility classes
+ * (transition-colors, bg-*, hover:bg-*) live in a cascade layer and would otherwise win.
+ * Solid buttons get a slab of their own colour under them, outlined ones a thinner dark one;
+ * both lift on hover, sink when pressed, and lean towards the cursor like the Play block.
+ */
+.m-btn {
+  --rx: 0deg;
+  --ry: 0deg;
+  --lift: 0px;
+  --edge: rgb(0 0 0 / 0.42);
+  transform: perspective(600px) translate3d(0, var(--lift), 0) rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 150ms, background-color 150ms, border-color 150ms, color 150ms;
+}
+.m-btn[data-variant="default"] {
+  --edge: color-mix(in srgb, var(--primary) 45%, #000);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), inset 0 -2px 0 rgb(0 0 0 / 0.2), 0 3px 0 var(--edge), 0 8px 12px -5px rgb(0 0 0 / 0.45);
+}
+.m-btn[data-variant="destructive"] {
+  --edge: color-mix(in srgb, var(--destructive) 45%, #000);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -2px 0 rgb(0 0 0 / 0.2), 0 3px 0 var(--edge), 0 8px 12px -5px rgb(0 0 0 / 0.45);
+}
+.m-btn[data-variant="outline"],
+.m-btn[data-variant="secondary"] {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 3px 0 var(--edge), 0 8px 12px -6px rgb(0 0 0 / 0.4);
+}
+/* On a light surface a black slab reads as a heavy outline; a soft grey edge reads as depth. */
+html[data-theme="light"] .m-btn[data-variant="outline"],
+html[data-theme="light"] .m-btn[data-variant="secondary"] {
+  --edge: rgb(15 23 42 / 0.16);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 3px 0 var(--edge), 0 6px 10px -6px rgb(15 23 42 / 0.25);
+}
+html[data-theme="light"] .m-block.m-block-quiet {
+  --edge: rgb(15 23 42 / 0.18);
+}
+.m-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.m-btn:hover:not(:disabled) {
+  --lift: -1.5px;
+}
+.m-btn:active:not(:disabled) {
+  --lift: 2.5px;
+  transition-duration: 60ms;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 0.5px 0 var(--edge), 0 2px 4px -1px rgb(0 0 0 / 0.4);
+}
+
+/*
+ * A launcher that is not the window being used stands still: its looping animations pause
+ * (drifting textures, the Halloween scene, spinners) and the 3D buttons lie flat. Only looping
+ * decoration is listed: pausing a one-shot entrance fade would leave it invisible. Set from
+ * lib/window-focus.js.
+ */
+html[data-window-focus="off"] .m-block::before,
+html[data-window-focus="off"] .m-block::after,
+html[data-window-focus="off"] :is(
+  .hero-drift, .glow-accent, .launch-sweep, .animate-spin, .m-wave, .m-mist,
+  .m-pumpkin-glow, .m-pumpkin-light, .season-bat, .season-pumpkin-glow, .season-pumpkin-light
+) {
+  animation-play-state: paused !important;
+}
+html[data-window-focus="off"] .m-block,
+html[data-window-focus="off"] .m-btn {
+  --rx: 0deg !important;
+  --ry: 0deg !important;
+  --glare: 0 !important;
+}
