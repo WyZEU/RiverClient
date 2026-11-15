@@ -1,0 +1,8 @@
+{
+  "category.clientcore.keybinds": "River Client",
+  "key.clientcore.menu": "Open River Menu",
+  "key.clientcore.zoom": "Zoom",
+  "key.clientcore.screenshot": "ClientCore Screenshot",
+  "clientcore.tooltip.hold_shift": "Hold Left Shift to preview",
+  "clientcore.tooltip.shift_suffix": "  (Shift)"
+}

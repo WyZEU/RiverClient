@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "river",
+  "version": "${version}",
+  "name": "River Client",
+  "description": "River Client for Minecraft 1.8.9.",
+  "authors": ["WyZ"],
+  "contact": {
+    "homepage": "https://riverclient.xyz",
+    "sources": "https://github.com/WyZEU/RiverClient"
+  },
+  "license": "All-Rights-Reserved",
+  "icon": "assets/river/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.wyz.river.legacy.RiverLegacy"]
+  },
+  "mixins": ["river.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.8.9"
+  }
+}

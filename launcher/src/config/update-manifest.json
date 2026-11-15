@@ -1,0 +1,182 @@
+{
+  "name": "River Client",
+  "version": "0.3.0",
+  "minimumVersion": "0.1.7",
+  "required": false,
+  "publishedAt": "2026-11-15T10:46:32.662Z",
+  "pageUrl": "https://riverclient.xyz/",
+  "installerUrl": "https://updates.riverclient.xyz/downloads/River-Client-Setup.exe",
+  "portableUrl": "https://updates.riverclient.xyz/downloads/releases/0.3.0/River-Client-Portable-0.3.0.exe",
+  "linuxUrl": "https://updates.riverclient.xyz/downloads/River-Client-Linux.tar.gz",
+  "packageUrl": "https://updates.riverclient.xyz/downloads/releases/0.3.0/River-Client-App-0.3.0.zip",
+  "packageParts": [
+    {
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/River-Client-App-0.3.0.zip.001",
+      "size": 262144000,
+      "sha256": "c347c0c381cc86c8edda4779e1e5bf86e3536fcbfefa72d9fce206a749939edf"
+    },
+    {
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/River-Client-App-0.3.0.zip.002",
+      "size": 46319114,
+      "sha256": "887b7a577868c712554b718e2ed3fbe0a7d7c60f2c7585f34dd067fc71eff01f"
+    }
+  ],
+  "fileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.3.0/file-manifest.json",
+  "appFileManifestUrl": "https://updates.riverclient.xyz/downloads/releases/0.3.0/file-manifest.json",
+  "appFileBaseUrl": "https://updates.riverclient.xyz/downloads/releases/0.3.0/app/",
+  "fileCount": 80,
+  "files": {
+    "installer": {
+      "name": "River-Client-Setup.exe",
+      "size": 244247707,
+      "sha256": "01f50579efa1ff96d3a4430e98427f0398d07c00df198c1d3b1badd0980f9ebd"
+    },
+    "portable": {
+      "name": "River-Client-Portable-0.3.0.exe",
+      "size": 255848177,
+      "sha256": "53301024ae15a46b5f21a1f0115e0d2f1146d74a6836a80a64c693c86fa38d80"
+    },
+    "linux": {
+      "name": "River-Client-Linux-0.3.0.tar.gz",
+      "size": 266855315,
+      "sha256": "c5f5d635fae5d8201532f7c808fb771d4756eb56de890d48599547944e853836"
+    },
+    "package": {
+      "name": "River-Client-App-0.3.0.zip",
+      "size": 308463114,
+      "sha256": "8218736a3f5d7516ff20730dfcaed6cb0a2b4c016f57a4d6a69698fc0ca02ab4"
+    },
+    "fileManifest": {
+      "name": "file-manifest.json",
+      "size": 24723,
+      "sha256": "4029dc7d26d51aa2f55c64d0b5311d791b510596b1614d2df46412e44dd6a45a",
+      "count": 80
+    }
+  },
+  "mods": [
+    {
+      "minecraft": "26.3",
+      "name": "clientcore-0.3.0+26.3.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B26.3.jar",
+      "size": 34510170,
+      "sha256": "3ba3df388d2a3eab8b2a169961aef12e1676c7f0da980c8ece93fe2b1ed13b23"
+    },
+    {
+      "minecraft": "26.2",
+      "name": "clientcore-0.3.0+26.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B26.2.jar",
+      "size": 34505575,
+      "sha256": "2835f1cae07b2739be097756726a846b565d3f14f8397da52c8de7f3d57f9b67"
+    },
+    {
+      "minecraft": "26.1.2",
+      "name": "clientcore-0.3.0+26.1.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B26.1.2.jar",
+      "size": 34507235,
+      "sha256": "c0bc1b7cf213057dba7aef29782c63585b90322c2bb9a1e84d96b81e4f71c688"
+    },
+    {
+      "minecraft": "1.21.11",
+      "name": "clientcore-0.3.0+1.21.11.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.11.jar",
+      "size": 34560963,
+      "sha256": "476e8d5edc7898528981f465a1661830703b666376322bffb1412c57eaae5018"
+    },
+    {
+      "minecraft": "1.21.10",
+      "name": "clientcore-0.3.0+1.21.10.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.10.jar",
+      "size": 34550230,
+      "sha256": "26d38732292c54eb864b831da3f77cda86bde3c4e39ce2e3d6cb59c7754ac298"
+    },
+    {
+      "minecraft": "1.21.8",
+      "name": "clientcore-0.3.0+1.21.8.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.8.jar",
+      "size": 34545033,
+      "sha256": "ee397b4ebbfb88d32555e895a3448d84edafcc3949089c27dad0647c3ae15494"
+    },
+    {
+      "minecraft": "1.21.7",
+      "name": "clientcore-0.3.0+1.21.7.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.7.jar",
+      "size": 34545032,
+      "sha256": "70aca47691fda7dbb449fa12e9344abc92842f31f170b5046ec37ae23e9effbd"
+    },
+    {
+      "minecraft": "1.21.6",
+      "name": "clientcore-0.3.0+1.21.6.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.6.jar",
+      "size": 34545034,
+      "sha256": "0cc64d479f3cacda2bd5e8ff0e4a16f1f30fd39e616538d56664393ec6c3a5d0"
+    },
+    {
+      "minecraft": "1.21.5",
+      "name": "clientcore-0.3.0+1.21.5.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.5.jar",
+      "size": 34537149,
+      "sha256": "1eacf4e2978d16f08bde10258c3bc1422be0379ee44aacf1f46bf6ffd941faba"
+    },
+    {
+      "minecraft": "1.21.4",
+      "name": "clientcore-0.3.0+1.21.4.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.4.jar",
+      "size": 34535799,
+      "sha256": "1587432dfba29e9a85f07832ccf3f6b52eac58d969c548444f4ea2459063dbe6"
+    },
+    {
+      "minecraft": "1.21.3",
+      "name": "clientcore-0.3.0+1.21.3.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.3.jar",
+      "size": 34535734,
+      "sha256": "ba776572abe497c368baf076c882fcf9a91700160cd27b119e3ccc112b8f2e75"
+    },
+    {
+      "minecraft": "1.21.2",
+      "name": "clientcore-0.3.0+1.21.2.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.2.jar",
+      "size": 34535733,
+      "sha256": "e4bf43cefca1a03c863bd6df4a1b911527c3071d2b545b493cb0d3beb1840cc9"
+    },
+    {
+      "minecraft": "1.21.1",
+      "name": "clientcore-0.3.0+1.21.1.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.1.jar",
+      "size": 34536146,
+      "sha256": "917c8bbb5f5cc2c8e5e9d3d6ee9419bed646a86c593d881de93cd41e2059d042"
+    },
+    {
+      "minecraft": "1.21",
+      "name": "clientcore-0.3.0+1.21.jar",
+      "url": "https://updates.riverclient.xyz/downloads/releases/0.3.0/mod/clientcore-0.3.0%2B1.21.jar",
+      "size": 34536143,
+      "sha256": "247dcfa4cd20a191fc797060a523dc72ec97ac85ebfe92cd39cfefdcdeb492d2"
+    }
+  ],
+  "changelog": {
+    "version": "0.3.0",
+    "title": "River Client 0.3.0",
+    "summary": "A cleaner River menu, a Keybinds page, performance mods by default, 26.3 launching again, and the lyrics crash fixed.",
+    "items": [
+      "New: The River menu uses a smooth font and quieter cards. The Minecraft styles keep the pixel font.",
+      "New: Clicking a module in the HUD editor opens its settings beside it, so changes show in place.",
+      "New: Every River instance gets Sodium, Lithium, FerriteCore, ImmediatelyFast, Entity Culling and more once, on its next launch. Remove any of them and they stay removed. Skipped with OptiFine.",
+      "New: Usage stats switch in launcher Settings.",
+      "New: Keybinds page in the River menu. Every River key in one list, and the menu key can be changed.",
+      "New: Custom Text module. Your own lines with live values like {fps} and {ping}.",
+      "New: Teleport to a waypoint, when the server lets you use /tp.",
+      "New: Realms button on River's main menu.",
+      "New: HUD modules pushed against each other join into one panel.",
+      "Improved: Start typing anywhere in the River menu to search, and it opens where you left it.",
+      "Improved: River costs less FPS. Glass blur and Coordinates were the most expensive parts.",
+      "Improved: River no longer reads your login token itself, and the launcher no longer has old certificate code, so fewer scanners flag it.",
+      "Fixed: 26.3 instances not starting with \"1 confirmed mod compatibility issue\".",
+      "Fixed: The game crashing on 26.3 when lyrics or waypoint names showed new letters.",
+      "Fixed: Time Changer, module icons on the title screen, the cape in the main menu preview, GUI scale after leaving full screen, and River's HUD showing in Flashback replays.",
+      "Fixed: Cancelling a launch before the game starts.",
+      "Improved: Launcher updates are signed, so an altered update list is ignored."
+    ]
+  },
+  "notes": "A cleaner River menu, a Keybinds page, performance mods by default, 26.3 launching again, and the lyrics crash fixed.",
+  "signature": "4XprrzYAJkm8V29vbpEwJRBXa/eaWdg9YiVptZl4AfSBFYqysd6C1idbGI1HQjV7KE8GRpcp+1hFwVyYpLxDDQ=="
+}

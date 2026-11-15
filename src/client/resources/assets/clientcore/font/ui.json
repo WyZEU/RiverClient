@@ -1,0 +1,8 @@
+{
+  "providers": [
+    {"type": "ttf", "file": "clientcore:inter-500-latin.ttf", "size": 9.5, "oversample": 4.0, "shift": [0, 0.5]},
+    {"type": "ttf", "file": "clientcore:inter-500-latin-ext.ttf", "size": 9.5, "oversample": 4.0, "shift": [0, 0.5]},
+    {"type": "ttf", "file": "clientcore:inter-500-cyrillic.ttf", "size": 9.5, "oversample": 4.0, "shift": [0, 0.5]},
+    {"type": "reference", "id": "minecraft:default"}
+  ]
+}

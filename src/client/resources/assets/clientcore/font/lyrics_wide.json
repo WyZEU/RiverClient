@@ -1,0 +1,7 @@
+{
+  "providers": [
+    {"type": "ttf", "file": "clientcore:exo-2-300-latin.ttf", "size": 11.0, "oversample": 8.0, "shift": [0, 0]},
+    {"type": "ttf", "file": "clientcore:exo-2-300-cyrillic.ttf", "size": 11.0, "oversample": 8.0, "shift": [0, 0]},
+    {"type": "reference", "id": "minecraft:default"}
+  ]
+}
