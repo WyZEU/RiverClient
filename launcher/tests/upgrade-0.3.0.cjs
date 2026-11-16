@@ -79,7 +79,10 @@ async function main() {
       assert.equal(result.status, 0, result.stderr + result.log);
       assert.match(result.launches, /RiverClient.exe/);
       assert.doesNotMatch(result.launches, /river-update-failed/);
-      for (const entry of files) assert.deepEqual(await digestFile(path.join(installDir, entry.path)), { size: entry.size, sha256: entry.sha256 }, entry.path);
+      for (const entry of files) {
+        assert.ok(fs.existsSync(path.join(installDir, entry.path)), `Missing ${entry.path} after ${mode}:\n${result.log}`);
+        assert.deepEqual(await digestFile(path.join(installDir, entry.path)), { size: entry.size, sha256: entry.sha256 }, entry.path);
+      }
       assert.equal(fs.readFileSync(path.join(installDir, "Uninstall River Client.exe"), "utf8"), "existing uninstaller fixture");
       assert.deepEqual(fs.readFileSync(path.join(userData, "minecraft-auth.json")), beforeAuth, "app replacement must not touch credentials");
       assert.deepEqual(nativeVersion(installDir), expectedVersion);

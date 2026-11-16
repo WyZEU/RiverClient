@@ -65,6 +65,12 @@ the new app. If that first copy fails, reinstall from the approved installer whi
 keeping user data. The new rollback protection applies to updates initiated by the
 corrected launcher.
 
+The old 0.3.0 cleanup also assumes a fully expanded installation path: Windows 8.3
+aliases can make it misidentify resources as obsolete. The upgrade test uses the
+runner's normal full path, as an installed launcher does. The corrected apply script
+normalizes its roots before comparing paths; it cannot replace the helper already
+running inside 0.3.0.
+
 ## Fixes verified locally
 
 - The Worker no longer rewrites `minimumVersion` in signed manifests. Route tests

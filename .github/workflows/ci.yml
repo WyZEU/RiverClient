@@ -75,6 +75,9 @@ jobs:
           npx --no-install electron-builder --win dir --x64 --publish never --config.win.signAndEditExecutable=false "--config.directories.output=$env:RUNNER_TEMP\river-upgrade-candidate"
           if ($LASTEXITCODE -ne 0) { throw 'Candidate packaging failed.' }
       - name: Upgrade the public 0.3.0 client and verify login across restart
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: |
           node launcher/tests/upgrade-0.3.0.cjs "$env:RUNNER_TEMP\river-upgrade-candidate\win-unpacked"
           if ($LASTEXITCODE -ne 0) { throw 'Public-client upgrade test failed.' }
