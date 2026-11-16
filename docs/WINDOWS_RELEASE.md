@@ -101,7 +101,7 @@ The `river-windows-<full-commit>` artifact contains:
 - `WINDOWS-BUILD-INFO.json`, `WINDOWS-FILES.json`, `signatures.jsonl`, `SHA256SUMS.txt`.
 
 The app ZIP is retained because the custom updater needs the signed app files,
-not only the NSIS installer. Any future file manifest/blockmaps must be generated
+not only the NSIS installer. The publication workflow generates file manifests/blockmaps
 from these exact files **after signing**. Modifying or rebuilding them afterward
 invalidates the relationship between signatures, hashes and tested artifacts.
 `WINDOWS-FILES.json` records the final file hashes; ZIP contents are checked
@@ -109,11 +109,16 @@ against them before upload.
 
 ## Publishing an automatic update is a separate step
 
-The current `publish:update` script can rebuild through the ordinary unsigned
-`dist` command, including after `--skip-build` when its freshness check fails.
-Do not feed a verified signed release into that path yet. A publishing adapter
-must consume the immutable signed artifact, verify its commit/checksums, generate
-update hashes/blockmaps from it, and sign the update manifest before upload.
+Use the separate `publish-windows-update.yml` workflow, documented in
+[UPDATE_PUBLICATION.md](UPDATE_PUBLICATION.md). It defaults to preparation only,
+checks the successful source build and artifact hashes, verifies native signatures,
+and generates update hashes/blockmaps from the exact signed bytes. Live mode uses
+the protected `river-update-production` environment, verifies immutable R2 uploads,
+then conditionally promotes the signed channel manifest.
+
+The legacy `publish:update` script can rebuild through the ordinary unsigned
+`dist` command, even after `--skip-build` when its freshness check fails. Do not
+use that path for verified signed artifacts.
 
 Publication also needs the existing Ed25519 update private key matching
 `launcher/src/config/update-public-key.txt` and access to the owner's Cloudflare
@@ -141,3 +146,9 @@ autoupdate defects were reproduced locally without changing production state.
 The checks ran on macOS with local Temurin JDKs 21/25. Native Windows compilation
 of the C# helper, Azure OIDC token exchange/signing, NSIS install/uninstall and
 packaged runtime checks are prepared in the workflow but have not run yet.
+
+After adding immutable update publication and the concurrent Tebex fixes on
+2026-11-16, all **114 JavaScript tests** passed on Node **22.23.5**. The launcher
+bundle, release configuration, Actionlint and PowerShell parsing passed again.
+Publication tests use generated test keys and simulated storage/HTTP; they do not
+substitute for an original-key signature, live R2 upload or Windows acceptance.

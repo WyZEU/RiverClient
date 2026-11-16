@@ -31,8 +31,9 @@ The separate `legacy/` project is not included in that build.
 ## Windows releases
 
 See [signed Windows builds](docs/WINDOWS_RELEASE.md) for the Supro Nivelo signing
-workflow and first-run setup, and [automatic updates](docs/AUTOUPDATE.md) for the
-current update protocol and publication requirements.
+workflow and first-run setup, [automatic updates](docs/AUTOUPDATE.md) for the
+current update protocol, and [signed update publication](docs/UPDATE_PUBLICATION.md)
+for the separate review/publish workflow and GitHub environment secrets.
 
 ## Something's broken
 

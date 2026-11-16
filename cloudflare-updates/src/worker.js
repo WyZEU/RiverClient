@@ -93,6 +93,16 @@ export function isPublicDownloadKey(key) {
     && parts.slice(2).every((part) => part && part !== "." && part !== ".." && !/[\\\x00-\x1f\x7f]/.test(part));
 }
 
+export function publishedInstallerTarget(manifest) {
+  try {
+    const target = new URL(manifest?.installerUrl);
+    const key = decodeURIComponent(target.pathname.slice("/downloads/".length));
+    return target.origin === publicUpdateBaseUrl && !target.username && !target.password && !target.search && !target.hash
+      && target.pathname.startsWith("/downloads/releases/") && isPublicDownloadKey(key)
+      && key.endsWith("/River-Client-Setup.exe") ? target.href : null;
+  } catch { return null; }
+}
+
 // A remote River user is considered "present" for this many ms after their last
 // ping. KV's minimum expirationTtl is 60s, so entries are GC'd at 60s but filtered
 // out of the roster sooner than that here.
@@ -440,6 +450,10 @@ export default {
       return Response.redirect(discordInviteUrl, 302);
     }
 
+    if (url.pathname === "/release-capabilities.json" && request.method === "GET") {
+      return Response.json({ publicationProtocol: 1 }, { headers });
+    }
+
     /*
       The in-game server browser's list (ServerDirectory in the client). Kept in the bucket at
       config/servers.json so servers can be added or featured without a release; with no file
@@ -743,7 +757,15 @@ export default {
         plus every changed file, which is dozens of requests per version. Counting the
         whole /downloads/ prefix would report an update rolling out as a wave of new users.
       */
-      if (key === "River-Client-Setup.exe") recordMetric(env, ctx, "install", request);
+      if (key === "River-Client-Setup.exe") {
+        recordMetric(env, ctx, "install", request);
+        // New releases use immutable installer URLs. The rolling website URL follows
+        // the same atomic latest.json promotion as the updater; no second mutable
+        // installer upload can expose a partially published or mismatched release.
+        const target = publishedInstallerTarget(await publishedManifest(env));
+        if (target) return new Response(null, { status: 302, headers: { ...headers, Location: target } });
+        // Legacy manifests point back to this rolling key; continue serving it.
+      }
 
       /*
         Range requests, so a client can ask for part of a file instead of all of it.

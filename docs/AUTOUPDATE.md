@@ -15,8 +15,9 @@ The bundled manifest is a fallback when no remote manifest can be accepted.
 
 A newer release is offered to the user. Play is blocked only if the running
 version is below `minimumVersion`, or an available update is marked `required`.
-The launcher uses the minimum from the signed manifest. Set `RIVER_MINIMUM_VERSION`
-when publishing to change it; the resulting manifest must be signed with the existing
+The launcher uses the minimum from the signed manifest. Set the signed publication
+workflow's explicit `minimum_version` input (`RIVER_MINIMUM_VERSION` in the legacy
+publisher) to change it; the resulting manifest must be signed with the existing
 update key. The Worker serves `/` and `/latest.json` without altering any signed fields.
 
 The separate `/version-status.json` endpoint applies the Worker's dynamic policy to
@@ -83,13 +84,19 @@ it does not validate the manifest signature or an installed client's full update
 Whalebone accepted a domain/subdomain classification review; its exact reason for
 blocking and global removal remain pending. No Cloudflare configuration was changed.
 
-## Remaining publishing work
+## Prepared publication and remaining release checks
 
-**Immutable signed publication is not connected.** The old publisher may rebuild
-an unsigned app. Integrate the signed artifact before publishing; compute file
-hashes/blockmaps after Authenticode signing and retain the existing Ed25519 key.
-See [WINDOWS_RELEASE.md](WINDOWS_RELEASE.md).
+The new `publish-windows-update.yml` workflow consumes the immutable signed
+Windows artifact, computes compatible hashes/blockmaps and signs with the existing
+Ed25519 key. It defaults to local preparation; live publication verifies R2 bytes
+before conditionally changing the channel. Stable website downloads follow the
+same manifest through an immutable installer redirect. Partial and beta uploads
+do not advance standalone-mod history. See [UPDATE_PUBLICATION.md](UPDATE_PUBLICATION.md)
+for owner secrets, review, explicit publication and failure recovery.
 
-The two updater fixes are local source changes. The Worker fix must be deployed and
-the launcher fix included in a release before users receive them. No production Worker,
-update key, or channel has been changed by this preparation.
+Before the first live run, the owner must configure the original key and R2 secrets
+in the master-only environment and resolve GitHub's billing lock. The publication
+Worker routes must be deployed and the launcher fix included in a new version.
+Actual Windows signing and an update from an installed older client still require
+release acceptance checks. This publication preparation does not deploy the Worker,
+replace the update key or change a production channel.

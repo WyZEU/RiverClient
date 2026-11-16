@@ -1,0 +1,152 @@
+name: Publish signed Windows update
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful Signed Windows release run ID
+        required: true
+        type: string
+      source_commit:
+        description: Full 40-character commit of that Windows build
+        required: true
+        type: string
+      channel:
+        description: Update channel
+        type: choice
+        options: [stable, beta]
+        default: stable
+      minimum_version:
+        description: Oldest allowed launcher version (do not raise automatically)
+        required: true
+        type: string
+      expected_previous_version:
+        description: Current target channel version, or none for an empty beta channel
+        required: true
+        type: string
+      release_notes:
+        description: JSON with version, approved=true, title, summary and items
+        required: true
+        type: string
+      required_update:
+        description: Require this update for existing clients
+        type: boolean
+        default: false
+      publish:
+        description: Upload and promote the channel (false only prepares a review artifact)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: river-update-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'WyZEU/RiverClient' && github.ref == 'refs/heads/master'
+    runs-on: windows-2022
+    timeout-minutes: 90
+    environment: river-update-production
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      UPDATE_CHANNEL: ${{ inputs.channel }}
+      MINIMUM_VERSION: ${{ inputs.minimum_version }}
+      EXPECTED_PREVIOUS_VERSION: ${{ inputs.expected_previous_version }}
+      RELEASE_NOTES_JSON: ${{ inputs.release_notes }}
+      REQUIRED_UPDATE: ${{ inputs.required_update }}
+    steps:
+      - name: Check out reviewed publisher code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+
+      - name: Install publisher dependencies
+        run: |
+          npm ci --prefix launcher --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'Publisher dependencies failed.' }
+
+      - name: Check production environment configuration
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node launcher/scripts/configure-update-publishing.js --policy-only
+          if ($LASTEXITCODE -ne 0) { throw 'Configure the master-only publication environment and its secrets first.' }
+
+      - name: Download and verify the exact successful signed build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node launcher/scripts/download-signed-build.js --run-id $env:BUILD_RUN_ID --commit $env:SOURCE_COMMIT --output "$env:RUNNER_TEMP\river-signed-build" --record "$env:RUNNER_TEMP\river-build-source.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Signed build provenance validation failed.' }
+
+      - name: Prepare update hashes, blockmaps and manifest without rebuilding
+        run: |
+          $notesFile = "$env:RUNNER_TEMP\river-release-notes.json"
+          [IO.File]::WriteAllText($notesFile, $env:RELEASE_NOTES_JSON)
+          $source = Get-Content -Raw "$env:RUNNER_TEMP\river-build-source.json" | ConvertFrom-Json
+          $params = @('launcher/scripts/prepare-signed-update.js', '--artifact', "$env:RUNNER_TEMP\river-signed-build", '--output', "$env:RUNNER_TEMP\river-publication", '--commit', $env:SOURCE_COMMIT, '--notes', $notesFile, '--minimum-version', $env:MINIMUM_VERSION, '--channel', $env:UPDATE_CHANNEL, '--published-at', $source.publishedAt)
+          if ($env:REQUIRED_UPDATE -eq 'true') { $params += '--required' }
+          node @params
+          if ($LASTEXITCODE -ne 0) { throw 'Publication preparation failed.' }
+          ./launcher/scripts/verify-publish-signatures.ps1 -ArtifactDirectory "$env:RUNNER_TEMP\river-signed-build" -PublicationDirectory "$env:RUNNER_TEMP\river-publication"
+
+      - name: Retain the reviewable publication plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: river-update-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/river-build-source.json
+            ${{ runner.temp }}/river-publication/publication-plan.json
+            ${{ runner.temp }}/river-publication/manifest.unsigned.json
+            ${{ runner.temp }}/river-publication/metadata/file-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Sign and promote the verified update
+        if: inputs.publish
+        env:
+          UPDATE_PRIVATE_KEY_PEM: ${{ secrets.RIVER_UPDATE_SIGNING_KEY_PEM }}
+          RIVER_R2_ACCESS_KEY_ID: ${{ secrets.RIVER_R2_ACCESS_KEY_ID }}
+          RIVER_R2_SECRET_ACCESS_KEY: ${{ secrets.RIVER_R2_SECRET_ACCESS_KEY }}
+        run: |
+          $keyFile = "$env:RUNNER_TEMP\river-update-key.pem"
+          try {
+            if ([string]::IsNullOrWhiteSpace($env:UPDATE_PRIVATE_KEY_PEM)) { throw 'Missing existing Ed25519 update key.' }
+            [IO.File]::WriteAllText($keyFile, $env:UPDATE_PRIVATE_KEY_PEM)
+            $env:UPDATE_PRIVATE_KEY_PEM = $null
+            $env:RIVER_UPDATE_SIGNING_KEY = $keyFile
+            node launcher/scripts/prepare-signed-update.js --sign "$env:RUNNER_TEMP\river-publication"
+            if ($LASTEXITCODE -ne 0) { throw 'Update signing failed.' }
+            node launcher/scripts/publish-signed-update.js --prepared "$env:RUNNER_TEMP\river-publication" --publish --expect-current-version $env:EXPECTED_PREVIOUS_VERSION
+            if ($LASTEXITCODE -ne 0) { throw 'Publication failed; inspect publication-result.json for whether the channel committed.' }
+          } finally {
+            Remove-Item -LiteralPath $keyFile -Force -ErrorAction SilentlyContinue
+            $env:RIVER_UPDATE_SIGNING_KEY = $null
+          }
+
+      - name: Retain publication result
+        if: always() && inputs.publish
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: river-update-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/river-publication/publication-result.json
+            ${{ runner.temp }}/river-publication/manifest.json
+          if-no-files-found: ignore
+          retention-days: 14

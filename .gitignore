@@ -23,6 +23,7 @@ secrets.env
 secrects.env
 .env.local
 .env.*.local
+river-update-signing.key
 
 # Launcher build artefacts
 launcher/app/

@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
-import worker from "../src/worker.js";
-import { resetUpdatePolicyCache } from "../src/update-policy.js";
+import worker, { publishedInstallerTarget } from "../src/worker.js";
+import { resetUpdatePolicyCache, releaseVersions } from "../src/update-policy.js";
 import signatures from "../../launcher/src/update-signature.js";
 
 const { signManifest, verifyManifest } = signatures;
@@ -68,4 +68,37 @@ test("standalone mod policy still raises its minimum without changing the launch
   const served = await get("/latest.json", env);
   assert.deepEqual(served, signed);
   assert.equal(verifyManifest(served, publicKey), true);
+});
+
+test("publication capability and rolling installer use the committed immutable release", async () => {
+  const target = "https://updates.riverclient.xyz/downloads/releases/0.3.1-abcdef123456/River-Client-Setup.exe";
+  const env = environment({ version: "0.3.1", installerUrl: target }, {});
+  assert.deepEqual(await get("/release-capabilities.json", env), { publicationProtocol: 1 });
+  const response = await worker.fetch(new Request("https://updates.riverclient.xyz/downloads/River-Client-Setup.exe"), env, { waitUntil() {} });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), target);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("legacy rolling installer remains readable and redirects cannot escape public downloads", async () => {
+  const base = "https://updates.riverclient.xyz";
+  for (const target of [`${base}/downloads/River-Client-Setup.exe`, "https://elsewhere.example/releases/River-Client-Setup.exe",
+    `${base}/downloads/config/River-Client-Setup.exe`, `${base}/downloads/releases/0.3.1/River-Client-Setup.exe?secret=1`,
+    `${base}/downloads/releases/0.3.1/other.exe`]) assert.equal(publishedInstallerTarget({ installerUrl: target }), null);
+  const env = environment({ version: "0.3.0", installerUrl: `${base}/downloads/River-Client-Setup.exe` }, {});
+  const previous = env.UPDATES.get;
+  env.UPDATES.get = async (key) => key === "River-Client-Setup.exe" ? { body: "legacy installer", httpEtag: '"legacy"' } : previous(key);
+  const response = await worker.fetch(new Request(`${base}/downloads/River-Client-Setup.exe`), env, { waitUntil() {} });
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "legacy installer");
+});
+
+test("partial uploads and beta namespaces do not advance standalone-mod release policy", async () => {
+  resetUpdatePolicyCache();
+  const prefixes = ["releases/0.3.0/", "releases/0.3.1-abcdef123456/", "releases/0.3.2-beta-abcdef123456/"];
+  const env = { UPDATES: { list: async () => ({ delimitedPrefixes: prefixes, truncated: false }) } };
+  assert.deepEqual(await releaseVersions(env), ["0.3.0"]);
+  prefixes.push("releases/0.3.1/"); // Final marker, written only after latest.json commits.
+  resetUpdatePolicyCache();
+  assert.deepEqual(await releaseVersions(env), ["0.3.1", "0.3.0"]);
 });

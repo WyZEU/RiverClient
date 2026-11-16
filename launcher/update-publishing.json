@@ -1,0 +1,9 @@
+{
+  "repository": "WyZEU/RiverClient",
+  "buildWorkflow": ".github/workflows/windows-release.yml",
+  "releaseBranch": "master",
+  "accountId": "11788fa19a00381561b1e06a6a0bee8c",
+  "bucket": "river-client-updates",
+  "publicBaseUrl": "https://updates.riverclient.xyz",
+  "pageUrl": "https://riverclient.xyz/"
+}
