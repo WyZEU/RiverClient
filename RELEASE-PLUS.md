@@ -39,22 +39,43 @@ Only the Tebex configuration and handler changes were applied to the live Worker
 existing bundle (version `e8764193`). The Windows updater changes elsewhere in PR #1
 have not been deployed by this operation.
 
+## Test checkout — passed 2026-11-16
+
+A three-month checkout completed through Tebex's **Test Payments** simulator, with no
+real charge. The displayed €13.99 total included €2.43 sales tax for the Czech checkout.
+The return URL reached the site's "You have River Plus" confirmation.
+
+Tests used the synthetic Minecraft UUID `00000000000040008000000000000001`:
+
+| Event | Tebex delivery | Production `/plus/status` after delivery |
+| --- | --- | --- |
+| `payment.completed` from the checkout | Successful; handler returned `granted` | `plus: true` |
+| `recurring-payment.renewed` via Send Test | Successful; handler returned `granted` | `plus: true` |
+| `payment.refunded` via Send Test | Successful | `plus: false` |
+| Another `recurring-payment.renewed` via Send Test | Successful | `plus: true` |
+| `recurring-payment.ended` via Send Test | Successful | `plus: false` |
+
+The actual renewal payload contained both `subject.initial_payment` and
+`subject.last_payment`, with the expected three-month product and custom UUID. The
+94-day duration is covered by the local regression tests; the public production status
+endpoint deliberately exposes only the active flag. Test access was removed by the final
+ended event. The store remains in test mode.
+
+Tebex onboarding now shows **75% complete / 1 of 4 steps pending**. Only **Link Wallet**
+remains before the project can be submitted for review.
+
 ## Remaining launch steps
 
-1. Complete the first test checkout and check that `payment.completed` activates Plus
-   for the basket's test UUID. Then test renewal and refund/end events through Tebex;
-   verify the paid duration and revocation. Creating a basket and validating the webhook
-   alone do not prove the complete payment-to-entitlement flow.
-2. The owner will finish the **Supro Nivelo payout wallet and identity verification**.
+1. The owner will finish the **Supro Nivelo payout wallet and identity verification**.
    These were explicitly deferred; do not use the former account holder's details.
-3. Finish the Tebex onboarding checklist, submit the project for review, and enable live
-   payments after approval. The integration and wallet steps are still pending.
-4. Turn on `LAUNCHED` in `src/client/kotlin/dev/wyz/clientcore/cosmetic/RiverPlus.kt` and
+2. Finish the Tebex onboarding checklist, submit the project for review, and enable live
+   payments after approval.
+3. Turn on `LAUNCHED` in `src/client/kotlin/dev/wyz/clientcore/cosmetic/RiverPlus.kt` and
    `PLUS_LAUNCHED` in `launcher/src/renderer-react/components/river-cosmetics.jsx`.
-5. Prepare the 0.3.1 release: update the version and `release-draft.json`, build all 14
+4. Prepare the 0.3.1 release: update the version and `release-draft.json`, build all 14
    supported Minecraft targets plus the launcher, and complete the release checks.
-6. In the separately maintained website, remove the `/plus` password and restore the
+5. In the separately maintained website, remove the `/plus` password and restore the
    River Plus sentence in the "Is River free?" FAQ
    (`riv3r-next/src/components/HomeSections.tsx` in the website checkout), then deploy.
-7. Check the gold badge, Plus capes and cloth cape on a real Minecraft account. Publish
+6. Check the gold badge, Plus capes and cloth cape on a real Minecraft account. Publish
    the client release and announce Plus once the purchase and delivery flow is verified.
