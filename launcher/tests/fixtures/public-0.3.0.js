@@ -16,7 +16,7 @@ const release = {
 const hash = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
 function publicSource(file) {
   assert.equal(hash(fs.readFileSync(file)), release.asarSha256, "Use the exact public 0.3.0 ASAR");
-  return asar.extractFile(file, "app/main.js").toString("utf8");
+  return asar.extractFile(file, path.join("app", "main.js")).toString("utf8");
 }
 function loadFunctions(source, names, bindings) {
   const context = vm.createContext(bindings);

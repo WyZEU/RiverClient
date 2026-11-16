@@ -40,8 +40,9 @@ async function main() {
     const old = loadFunctions(source, ["verifyJsonSha256", "normalizeUpdateFilePath", "hashFileStreaming", "listRelativeFiles", "buildDifferentialUpdatePlan", "buildApplyUpdateScript"], {
       fs, ofs: fs, path, crypto, Buffer, escapePowerShell: quote
     });
-    assert.equal(asar.extractFile(oldAsar, "app/config/update-public-key.txt").toString().trim(),
-      asar.extractFile(path.join(candidate, "resources/app.asar"), "app/config/update-public-key.txt").toString().trim());
+    const keyPath = path.join("app", "config", "update-public-key.txt");
+    assert.equal(asar.extractFile(oldAsar, keyPath).toString().trim(),
+      asar.extractFile(path.join(candidate, "resources/app.asar"), keyPath).toString().trim());
     const nativeVersion = (dir) => JSON.parse(run(path.join(dir, "RiverClient.exe"), ["-p", "JSON.stringify({electron:process.versions.electron,node:process.versions.node})"], {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" }
     }));
