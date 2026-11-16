@@ -65,6 +65,8 @@ object ModUpdateCheck {
                     .coerceAtLeast(if (compare(newest, ownVersion) > 0) 1 else 0)
                 latest = newest
                 turnedOff = minimum.isNotEmpty() && compare(minimum, ownVersion) > 0
+                // Standalone: fetch the new jar now, it goes in when the game closes.
+                if (compare(newest, ownVersion) > 0) ModSelfUpdate.fetch(http, ownVersion, newest)
             }
             // Offline or the server is down: nothing is shown and nothing is turned off.
         }, "river-mod-update-check").apply { isDaemon = true }.start()
@@ -75,6 +77,7 @@ object ModUpdateCheck {
         if (latest.isEmpty() || behind <= 0) return
         val font = client.font
         val line = when {
+            ModSelfUpdate.ready.isNotEmpty() -> "River Client ${ModSelfUpdate.ready} is downloaded. Restart Minecraft to finish the update."
             turnedOff -> "River Client $ownVersion is too old and is turned off. Get $latest at riverclient.xyz"
             maxBehind > 0 -> "River Client $latest is out. Update at riverclient.xyz, versions $maxBehind updates behind stop working."
             else -> "River Client $latest is out. Update at riverclient.xyz"

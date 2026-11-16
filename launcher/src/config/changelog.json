@@ -5,6 +5,7 @@
   "items": [
     "Improved: The Windows installer is back to about 230 MB instead of 1 GB. It carries River for Minecraft 1.21.11; other versions download the first time you play them.",
     "Improved: The Mac and Linux downloads are smaller for the same reason.",
+    "Added: The standalone mod updates itself. It downloads the new version in the background, checks it is a real River release, and switches to it the next time you start Minecraft.",
     "Fixed: With FancyMenu installed, River's main menu no longer covers FancyMenu's custom menus."
   ]
 }
