@@ -1,18 +1,9 @@
 {
-  "version": "0.3.1",
-  "title": "River Client 0.3.1",
-  "summary": "Signed Windows releases, native macOS builds and more reliable updates.",
+  "version": "0.3.2",
+  "title": "River Client 0.3.2",
+  "summary": "A much smaller download.",
   "items": [
-    "Added: Native macOS builds for Apple Silicon and Intel.",
-    "Added: Fox cape, free for everyone.",
-    "Changed: The Galaxy cape is now Galaxysdc's creator cape. Enter the code GALAXY in Cosmetics to keep wearing it.",
-    "Improved: The Windows app and installer are signed by Supro Nivelo s.r.o., so Windows no longer warns about an unknown publisher.",
-    "Improved: Saved accounts are stored encrypted.",
-    "Fixed: The Wardrobe now shows every cape in the game's order, instead of the first seven.",
-    "Fixed: Module settings only show the options that module actually uses, and the Spotify module draws its background, border and colours properly.",
-    "Fixed: The in-game browser now finds shaders and resource packs for the version you are playing, not only 1.21.11.",
-    "Fixed: Update checks rejecting a release when the server changed its minimum version.",
-    "Fixed: A failed update now rolls back instead of leaving the launcher half updated.",
-    "Fixed: Instance exports move between PCs, long profile names no longer hang an import, and interrupted mod updates recover."
+    "Improved: The Windows installer is back to about 230 MB instead of 1 GB. It carries River for Minecraft 1.21.11; other versions download the first time you play them.",
+    "Improved: The Mac and Linux downloads are smaller for the same reason."
   ]
 }

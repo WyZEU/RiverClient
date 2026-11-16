@@ -49,8 +49,21 @@ try {
     if ($runtime.sourceCommit -ne $env:GITHUB_SHA -or $runtime.version -ne $pkg.riverVersion) {
         throw 'Packaged runtime provenance mismatch.'
     }
+    # Only the default Minecraft version and the bootstrap ship inside the app. The other
+    # versions go into River-Client-Mods.zip and are downloaded when an instance needs them.
+    $mods = Join-Path $scratch 'mods'
+    New-Item -ItemType Directory -Path $mods | Out-Null
+    $bundledJar = "clientcore-$($runtime.version)+$($runtime.bundledMinecraft).jar"
+    if (-not ($runtime.files | Where-Object { $_.name -eq $bundledJar })) { throw "Missing bundled JAR $bundledJar." }
     foreach ($jar in $runtime.files) {
-        $file = Join-Path $unpacked ("resources\bundled\" + $jar.name)
+        $inApp = Join-Path $unpacked ("resources\bundled\" + $jar.name)
+        if ($jar.name -eq $bundledJar -or $jar.name -match '^river-bootstrap-[0-9.]+\.jar$') {
+            $file = $inApp
+        } else {
+            if (Test-Path -LiteralPath $inApp) { throw "A non-default Minecraft version is inside the app: $($jar.name)" }
+            $file = Join-Path $mods $jar.name
+            Copy-Item -LiteralPath (Join-Path $launcher ("release-mods\" + $jar.name)) -Destination $file
+        }
         if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $jar.sha256) {
             throw "Packaged JAR changed after staging: $($jar.name)"
         }
@@ -92,6 +105,7 @@ try {
     if (Test-Path $release) { throw 'Release output already exists; start from a fresh build.' }
     New-Item -ItemType Directory -Path $release | Out-Null
     Copy-Item -LiteralPath $setup, $portable -Destination $release
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($mods, (Join-Path $release 'River-Client-Mods.zip'))
     $zip = Join-Path $release 'River-Client-App.zip'
     $appFiles = @(Get-ChildItem -LiteralPath $unpacked -File -Recurse | ForEach-Object {
         [ordered]@{

@@ -9,10 +9,19 @@ const yauzl = require("yauzl");
 const signing = require("../windows-signing.json");
 
 const ARTIFACT_FILES = ["River-Client-Setup.exe", "River-Client-Portable.exe", "River-Client-App.zip",
-  "WINDOWS-BUILD-INFO.json", "WINDOWS-FILES.json", "signatures.jsonl", "SHA256SUMS.txt"];
+  "River-Client-Mods.zip", "WINDOWS-BUILD-INFO.json", "WINDOWS-FILES.json", "signatures.jsonl", "SHA256SUMS.txt"];
 const MAX_BYTES = 8 * 1024 ** 3;
 const isHash = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 function assert(condition, message) { if (!condition) throw new Error(message); }
+/**
+ * Whether a runtime JAR ships inside the app. Only the launcher's default Minecraft version
+ * and the bootstrap do; the other versions travel in River-Client-Mods.zip and are downloaded
+ * on demand. Runtime records without bundledMinecraft predate that and bundled everything.
+ */
+function runtimeFileBundled(runtime, name) {
+  if (!runtime?.bundledMinecraft) return true;
+  return /^river-bootstrap-[0-9.]+\.jar$/.test(name) || name === `clientcore-${runtime.version}+${runtime.bundledMinecraft}.jar`;
+}
 function assertCommit(value) { assert(/^[a-f0-9]{40}$/.test(value || ""), "A full expected source commit is required."); }
 function json(file) {
   assert(fs.statSync(file).size <= 16 * 1024 ** 2, `JSON metadata is too large: ${path.basename(file)}`);
@@ -158,13 +167,22 @@ async function verifyArtifact(directory, expectedCommit) {
   const jarNames = runtime.minecraftVersions.map((mc) => `clientcore-${info.version}+${mc}.jar`);
   assert(runtime.files.filter((f) => /^river-bootstrap-[0-9.]+\.jar$/.test(f.name)).length === 1, "Missing bootstrap JAR.");
   for (const name of jarNames) assert(runtime.files.some((f) => f.name === name), `Missing Minecraft target: ${name}`);
+  assert(runtime.minecraftVersions.includes(runtime.bundledMinecraft), "Missing the Minecraft version bundled in the app.");
+  const mods = new Map();
   for (const file of runtime.files) {
-    assert(!file.name.includes("/"), "Invalid bundled JAR name.");
+    assert(!file.name.includes("/") && !file.name.includes("\\"), "Invalid bundled JAR name.");
     const entry = files.get(`resources/bundled/${file.name}`);
-    assert(entry && entry.sha256 === file.sha256 && entry.size === file.size, `Runtime JAR differs from staged build: ${file.name}`);
+    if (runtimeFileBundled(runtime, file.name)) {
+      assert(entry && entry.sha256 === file.sha256 && entry.size === file.size, `Runtime JAR differs from staged build: ${file.name}`);
+    } else {
+      // Inside the app it would put every version back into the installer.
+      assert(!entry, `Runtime JAR should not be inside the app: ${file.name}`);
+      assert(Number.isSafeInteger(file.size) && file.size > 0 && isHash(file.sha256), `Invalid runtime JAR record: ${file.name}`);
+      mods.set(file.name, { size: file.size, sha256: file.sha256 });
+    }
   }
-  return { info, files, hashes };
+  return { info, files, hashes, mods };
 }
 
-module.exports = { ARTIFACT_FILES, MAX_BYTES, assert, assertCommit, isHash, safePath, regularFile, json,
+module.exports = { ARTIFACT_FILES, MAX_BYTES, runtimeFileBundled, assert, assertCommit, isHash, safePath, regularFile, json,
   digestStream, digestFile, fileIndex, extractZip, verifyArtifact };

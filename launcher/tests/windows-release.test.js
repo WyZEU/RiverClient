@@ -17,6 +17,7 @@ function fixture(t) {
   write("launcher/package.json", JSON.stringify({ riverVersion: "0.3.0" }));
   write("settings.gradle.kts", 'versions("1.21.11", "26.3")\n');
   write("river-bootstrap/build.gradle.kts", 'version = "0.1.9.0"\n');
+  write("launcher/src/main.js", 'const DEFAULT_MC_VERSION = "1.21.11";\n');
   for (const file of releasePlan(root).files) {
     // A synthetic ZIP header is sufficient here: these tests exercise staging and
     // provenance, while the actual Gradle job produces/validates real Java archives.
@@ -26,7 +27,7 @@ function fixture(t) {
   return { root, write };
 }
 
-test("release staging includes every active target and records exact artifact hashes", (t) => {
+test("release staging bundles only the default target and records every artifact hash", (t) => {
   const { root, write } = fixture(t);
   write("launcher/src/bundled/clientcore-old.jar", "stale");
   write("launcher/src/bundled/README.md", "keep");
@@ -35,10 +36,16 @@ test("release staging includes every active target and records exact artifact ha
   assert.deepEqual(result.minecraftVersions, ["1.21.11", "26.3"]);
   assert.equal(result.sourceCommit, commit);
   assert.equal(result.files.length, 3);
+  assert.equal(result.bundledMinecraft, "1.21.11");
+  // The installer carries the default version and the bootstrap; 26.3 is published separately.
+  assert.deepEqual(fs.readdirSync(path.join(root, "launcher/src/bundled")).filter((name) => name.endsWith(".jar")).sort(),
+    ["clientcore-0.3.0+1.21.11.jar", "river-bootstrap-0.1.9.0.jar"]);
+  assert.deepEqual(fs.readdirSync(path.join(root, "launcher/release-mods")), ["clientcore-0.3.0+26.3.jar"]);
   assert.equal(fs.existsSync(path.join(root, "launcher/src/bundled/clientcore-old.jar")), false);
   assert.equal(fs.readFileSync(path.join(root, "launcher/src/bundled/README.md"), "utf8"), "keep");
   for (const file of result.files) {
-    const bytes = fs.readFileSync(path.join(root, "launcher/src/bundled", file.name));
+    const folder = file.name.includes("+26.3") ? "launcher/release-mods" : "launcher/src/bundled";
+    const bytes = fs.readFileSync(path.join(root, folder, file.name));
     assert.equal(file.sha256, crypto.createHash("sha256").update(bytes).digest("hex"));
     assert.equal(file.size, bytes.length);
   }

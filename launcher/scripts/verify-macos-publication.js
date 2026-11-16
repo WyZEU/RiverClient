@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { parseArgs } = require("node:util");
-const { assert, regularFile, json, digestFile } = require("./release-artifact");
+const { assert, regularFile, json, digestFile, runtimeFileBundled } = require("./release-artifact");
 const { architectures, verifyMacArtifact } = require("./prepare-macos-publication");
 
 async function verifyMacSignatures(directory, expectedCommit, requestedArchitectures = architectures) {
@@ -42,6 +42,8 @@ async function verifyMacSignatures(directory, expectedCommit, requestedArchitect
       assert(Array.isArray(runtime.minecraftVersions) && runtime.minecraftVersions.length > 0
         && Array.isArray(runtime.files) && runtime.files.length === runtime.minecraftVersions.length + 1, "Incomplete packaged Mac runtime inventory.");
       for (const file of runtime.files) {
+        // Only the default Minecraft version ships in the app; the rest download on demand.
+        if (!runtimeFileBundled(runtime, file.name)) continue;
         const digest = await digestFile(regularFile(bundle, file.name));
         assert(digest.sha256 === file.sha256 && digest.size === file.size, "Packaged Mac JAR checksum mismatch.");
       }

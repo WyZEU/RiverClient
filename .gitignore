@@ -36,6 +36,7 @@ launcher/.vite/
 # repo - shipping the jar as well would just be an unauditable copy of it.
 launcher/src/bundled/*.jar
 launcher/src/bundled/river-build-info.json
+launcher/release-mods/
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 

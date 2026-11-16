@@ -42,10 +42,12 @@ function fixture(t, { large = false } = {}) {
   const artifactDirectory = path.join(root, "artifact"), outputDirectory = path.join(root, "prepared");
   fs.mkdirSync(artifactDirectory);
   const version = "0.3.1", commit = "c".repeat(40);
-  const jars = [{ name: `clientcore-${version}+26.3.jar`, bytes: Buffer.from("PK synthetic mod") },
+  // 1.21.11 and the bootstrap ship in the app; 26.3 travels separately in River-Client-Mods.zip.
+  const jars = [{ name: `clientcore-${version}+1.21.11.jar`, bytes: Buffer.from("PK synthetic default mod") },
     { name: "river-bootstrap-0.1.9.0.jar", bytes: Buffer.from("PK synthetic bootstrap") }];
-  const runtime = { schemaVersion: 1, version, sourceCommit: commit, minecraftVersions: ["26.3"],
-    files: jars.map(({ name, bytes }) => ({ name, size: bytes.length, sha256: hash(bytes) })) };
+  const separateJars = [{ name: `clientcore-${version}+26.3.jar`, bytes: Buffer.from("PK synthetic mod") }];
+  const runtime = { schemaVersion: 1, version, sourceCommit: commit, minecraftVersions: ["1.21.11", "26.3"], bundledMinecraft: "1.21.11",
+    files: [...jars, ...separateJars].map(({ name, bytes }) => ({ name, size: bytes.length, sha256: hash(bytes) })) };
   const app = [
     { name: "RiverClient.exe", bytes: Buffer.from("MZ synthetic signed app") },
     { name: "resources/app.asar.unpacked/app/np-helper.exe", bytes: Buffer.from("MZ synthetic signed helper") },
@@ -57,6 +59,7 @@ function fixture(t, { large = false } = {}) {
   write("River-Client-Setup.exe", "MZ synthetic signed installer");
   write("River-Client-Portable.exe", "MZ synthetic signed portable");
   write("River-Client-App.zip", zip(app));
+  write("River-Client-Mods.zip", zip(separateJars));
   const inventory = { sourceCommit: commit, version, files: app.map(({ name, bytes }) => ({ path: name, size: bytes.length, sha256: hash(bytes) })) };
   write("WINDOWS-FILES.json", JSON.stringify(inventory));
   const signed = [

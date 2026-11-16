@@ -1,7 +1,7 @@
 {
   "name": "river-client-launcher",
   "version": "0.1.7",
-  "riverVersion": "0.3.1",
+  "riverVersion": "0.3.2",
   "description": "River Client launcher by WyZ_EU",
   "author": "WyZ_EU",
   "main": "app/main.js",

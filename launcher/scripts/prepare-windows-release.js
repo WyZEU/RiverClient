@@ -19,13 +19,22 @@ function releasePlan(root) {
   const bootstrap = fs.readFileSync(path.join(root, "river-bootstrap/build.gradle.kts"), "utf8")
     .match(/^version\s*=\s*"([0-9.]+)"/m)?.[1];
   if (!bootstrap) throw new Error("Missing explicit bootstrap version.");
+  // Only the launcher's default version ships inside the app. The others are published
+  // next to it and downloaded the first time an instance needs them (prefetchRiverModJar),
+  // which keeps the installer near 230 MB instead of 1 GB.
+  const bundledMinecraft = fs.readFileSync(path.join(root, "launcher/src/main.js"), "utf8")
+    .match(/^const DEFAULT_MC_VERSION = "([0-9.]+)";/m)?.[1];
+  if (!bundledMinecraft || !targets.includes(bundledMinecraft)) {
+    throw new Error("The launcher's DEFAULT_MC_VERSION must be one of the Minecraft targets.");
+  }
   const files = targets.map((target) => ({
     name: `clientcore-${version}+${target}.jar`,
-    source: path.join(root, "versions", target, "build/libs", `clientcore-${version}+${target}.jar`)
+    source: path.join(root, "versions", target, "build/libs", `clientcore-${version}+${target}.jar`),
+    bundled: target === bundledMinecraft
   }));
   files.push({ name: `river-bootstrap-${bootstrap}.jar`,
-    source: path.join(root, "river-bootstrap/build/libs", `river-bootstrap-${bootstrap}.jar`) });
-  return { version, targets, files };
+    source: path.join(root, "river-bootstrap/build/libs", `river-bootstrap-${bootstrap}.jar`), bundled: true });
+  return { version, targets, bundledMinecraft, files };
 }
 
 function stageRelease(root, sourceCommit) {
@@ -41,15 +50,20 @@ function stageRelease(root, sourceCommit) {
       sha256: crypto.createHash("sha256").update(data).digest("hex") };
   });
   const destination = path.join(root, "launcher/src/bundled");
-  fs.mkdirSync(destination, { recursive: true });
-  const existing = fs.readdirSync(destination).filter((name) => name.endsWith(".jar"));
-  if (existing.some((name) => !/^(clientcore-|river-bootstrap-)/.test(name))) {
-    throw new Error("Unexpected third-party JAR in the release bundle.");
+  const separate = path.join(root, "launcher/release-mods");
+  for (const directory of [destination, separate]) {
+    fs.mkdirSync(directory, { recursive: true });
+    const existing = fs.readdirSync(directory).filter((name) => name.endsWith(".jar"));
+    if (existing.some((name) => !/^(clientcore-|river-bootstrap-)/.test(name))) {
+      throw new Error("Unexpected third-party JAR in the release bundle.");
+    }
+    for (const name of existing) fs.unlinkSync(path.join(directory, name));
   }
-  for (const name of existing) fs.unlinkSync(path.join(destination, name));
-  for (const file of plan.files) fs.copyFileSync(file.source, path.join(destination, file.name));
+  for (const file of plan.files) {
+    fs.copyFileSync(file.source, path.join(file.bundled ? destination : separate, file.name));
+  }
   const manifest = { schemaVersion: 1, version: plan.version, sourceCommit,
-    minecraftVersions: plan.targets, files };
+    minecraftVersions: plan.targets, bundledMinecraft: plan.bundledMinecraft, files };
   fs.writeFileSync(path.join(destination, "river-build-info.json"), JSON.stringify(manifest, null, 2) + "\n");
   return manifest;
 }
@@ -58,12 +72,12 @@ if (require.main === module) {
   const root = path.resolve(__dirname, "../..");
   if (process.argv.includes("--check")) {
     const plan = releasePlan(root);
-    console.log(`Release ${plan.version}: ${plan.targets.length} Minecraft targets plus bootstrap.`);
+    console.log(`Release ${plan.version}: ${plan.targets.length} Minecraft targets plus bootstrap; ${plan.bundledMinecraft} ships in the app.`);
   } else {
     const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
     if (process.env.GITHUB_SHA && head !== process.env.GITHUB_SHA) throw new Error("Source commit mismatch.");
     const manifest = stageRelease(root, head);
-    console.log(`Staged ${manifest.files.length} runtime JARs from ${head}.`);
+    console.log(`Staged ${manifest.files.length} runtime JARs from ${head}; ${manifest.bundledMinecraft} and the bootstrap in the app.`);
   }
 }
 

@@ -57,7 +57,8 @@ test("preparation preserves original signed bytes and produces a client-compatib
   assert.equal(manifest.files.package.sha256, hash(fs.readFileSync(path.join(f.artifactDirectory, "River-Client-App.zip"))));
   assert.equal(manifest.files.linux.sha256, hash(fs.readFileSync(path.join(f.linuxArtifactDirectory, "River-Client-Linux.tar.gz"))));
   assert.match(manifest.linuxUrl, /\/releases\/0\.3\.1-cccccccccccc\/River-Client-Linux-0\.3\.1\.tar\.gz$/);
-  assert.equal(manifest.mods.length, 1);
+  assert.deepEqual(manifest.mods.map((mod) => mod.minecraft), ["26.3", "1.21.11"]);
+  for (const mod of manifest.mods) assert.equal(mod.sha256, f.info.runtime.files.find((file) => file.name === mod.name).sha256);
   assert.ok(manifest.installerUrl.includes("/releases/0.3.1-cccccccccccc/"));
   assert.ok(fileManifest.files.find((file) => file.path === "resources/app.asar").blockmapUrl);
   const installed = path.join(f.root, "installed");
@@ -86,6 +87,17 @@ test("artifact checks reject changed installers, wrong source/version and missin
   await assert.rejects(verifyArtifact(f.artifactDirectory, f.options.expectedCommit), /Windows check/);
   f.write("River-Client-Setup.exe", "tampered");
   await assert.rejects(verifyArtifact(f.artifactDirectory, f.options.expectedCommit), /checksum mismatch/);
+});
+
+test("only the default Minecraft version may ship inside the app", async (t) => {
+  const f = fixture(t);
+  // A build that put every version back into the installer must not publish.
+  f.info.runtime.bundledMinecraft = "26.3"; f.write("WINDOWS-BUILD-INFO.json", JSON.stringify(f.info)); f.checksums();
+  await assert.rejects(verifyArtifact(f.artifactDirectory, f.options.expectedCommit), /differs from staged build|not be inside the app/);
+  f.info.runtime.bundledMinecraft = "1.21.11"; f.write("WINDOWS-BUILD-INFO.json", JSON.stringify(f.info));
+  f.write("River-Client-Mods.zip", zip([{ name: "clientcore-0.3.1+26.3.jar", bytes: "tampered" }])); f.checksums();
+  await assert.rejects(prepareSignedUpdate(f.options), /ZIP/);
+  assert.equal(fs.existsSync(f.outputDirectory), false);
 });
 
 test("preparation refuses unapproved notes, unsafe minimums and an existing output directory", async (t) => {

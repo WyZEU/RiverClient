@@ -55,6 +55,8 @@ async function prepareSignedUpdate({ artifactDirectory, linuxArtifactDirectory, 
     await extractZip(path.join(artifactDirectory, "River-Client-App.zip"), path.join(outputDirectory, "app"), artifact.files);
     const runtime = json(path.join(outputDirectory, "app/resources/bundled/river-build-info.json"));
     assert(canonicalize(runtime) === canonicalize(artifact.info.runtime), "Packaged runtime provenance differs from build evidence.");
+    // The Minecraft versions not bundled in the app; extractZip checks each one's size and hash.
+    await extractZip(path.join(artifactDirectory, "River-Client-Mods.zip"), path.join(outputDirectory, "mods"), artifact.mods);
     const objects = [];
     async function addObject(key, file, contentType = "application/octet-stream") {
       const location = regularFile(outputDirectory, file);
@@ -108,7 +110,8 @@ async function prepareSignedUpdate({ artifactDirectory, linuxArtifactDirectory, 
     })) {
       const name = `clientcore-${version}+${minecraft}.jar`;
       const key = `${releaseKey}/mod/${name}`;
-      const object = await addObject(key, `app/resources/bundled/${name}`, "application/java-archive");
+      const source = artifact.mods.has(name) ? `mods/${name}` : `app/resources/bundled/${name}`;
+      const object = await addObject(key, source, "application/java-archive");
       mods.push({ minecraft, name, size: object.size, sha256: object.sha256, url: objectUrl(key) });
     }
     const fileManifest = { version, generatedAt: publishedAt, files };

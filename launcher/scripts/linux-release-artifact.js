@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { assert, assertCommit, regularFile, json, digestFile, isHash } = require("./release-artifact");
+const { assert, assertCommit, regularFile, json, digestFile, isHash, runtimeFileBundled } = require("./release-artifact");
 const { releasePlan } = require("./prepare-windows-release");
 
 const LINUX_ARTIFACT_FILES = ["River-Client-Linux.tar.gz", "LINUX-BUILD-INFO.json"];
@@ -56,6 +56,11 @@ async function stageLinuxRelease(root, expectedCommit) {
     assert(runtime.sourceCommit === expectedCommit && runtime.version === plan.version &&
       JSON.stringify(runtime.minecraftVersions) === JSON.stringify(plan.targets), "Linux packaged runtime provenance mismatch.");
     for (const file of runtime.files) {
+      // The other Minecraft versions are not in the archive; Linux downloads them like Windows.
+      if (!runtimeFileBundled(runtime, file.name)) {
+        assert(!fs.existsSync(path.join(app, "resources/bundled", file.name)), `Linux archive carries a non-default Minecraft version: ${file.name}`);
+        continue;
+      }
       const actual = await digestFile(regularFile(app, `resources/bundled/${file.name}`));
       assert(actual.size === file.size && actual.sha256 === file.sha256, `Linux packaged JAR changed: ${file.name}`);
     }

@@ -97,6 +97,12 @@ project and is not part of this release. Staging refuses missing target JARs,
 version disagreement and unrelated bundled JARs, and records source commit and
 SHA-256 hashes. Both Java versions are explicitly discoverable by Gradle.
 
+Only the launcher's `DEFAULT_MC_VERSION` JAR and the bootstrap go inside the app.
+The other targets are staged in `launcher/release-mods/`, shipped in the artifact as
+`River-Client-Mods.zip`, published next to the installer and downloaded by the
+launcher the first time an instance needs them. Bundling every target made 0.3.1's
+installer about 1 GB.
+
 `npm run dist:windows:signed` uses `electron-builder.windows.cjs`. It requires
 `RIVER_RELEASE_BUILD=1`, `GITHUB_SHA`, staged runtime metadata and
 `RIVER_SIGNING_LOG`. In release mode the Windows media helper must compile from
