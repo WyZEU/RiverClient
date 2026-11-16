@@ -114,7 +114,7 @@ jobs:
           name: river-macos-${{ matrix.arch }}-${{ github.sha }}
           path: |
             launcher/dist/macos/*.dmg
-            launcher/dist/macos/build-result.json
+            launcher/dist/macos/build-result*.json
             launcher/dist/macos/SHA256SUMS
             launcher/dist/macos/notarization-*.json
           if-no-files-found: error

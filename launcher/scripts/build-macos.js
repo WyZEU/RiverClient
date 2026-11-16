@@ -48,6 +48,9 @@ for (const size of [16, 32, 128, 256, 512]) {
 }
 run("iconutil", ["--convert", "icns", "--output", path.join(root, "build/icon.icns"), iconset]);
 const architectures = args.filter((arg) => ["--arm64", "--x64"].includes(arg));
+// An explicit --mac dmg target makes electron-builder default to the host arch,
+// even when mac.target lists both. Always pass the requested architectures.
+if (!architectures.length) architectures.push("--arm64", "--x64");
 run(process.execPath, [require.resolve("electron-builder/cli.js"), "--config", "electron-builder.macos.cjs", "--mac", "dmg", ...architectures, "--publish", "never"]);
 const output = path.join(root, "dist/macos");
 const builtArchitectures = architectures.length ? architectures.map((arg) => arg.slice(2)) : ["arm64", "x64"];
@@ -79,6 +82,10 @@ for (const arch of builtArchitectures) {
   artifacts.push({ file: path.basename(dmg), arch, size: bytes.length,
     sha256: crypto.createHash("sha256").update(bytes).digest("hex"), signed, notarized: notarize,
     notarizationId: submission?.id || null });
+  fs.writeFileSync(path.join(output, `build-result-${arch}.json`), JSON.stringify({
+    version: runtime.version, sourceCommit, sourceDirty, builtAt: new Date().toISOString(),
+    artifacts: [artifacts[artifacts.length - 1]]
+  }, null, 2) + "\n");
 }
 fs.writeFileSync(path.join(output, "build-result.json"), JSON.stringify({
   version: runtime.version, sourceCommit, sourceDirty, builtAt: new Date().toISOString(), artifacts
