@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { finished } = require("node:stream/promises");
 const { stageLinuxRelease, verifyLinuxArtifact } = require("../scripts/linux-release-artifact");
 const { hash } = require("./fixtures/signed-release");
 
@@ -34,7 +35,9 @@ test("Linux staging verifies the actual archive, executable modes, packaged vers
   write("asar/app/config/build-version.json", JSON.stringify({ version, sourceCommit }));
   const asar = await import("@electron/asar");
   const pack = async () => {
-    await asar.createPackage(path.join(root, "asar"), path.join(root, base, "resources/app.asar"));
+    const output = await asar.createPackage(path.join(root, "asar"), path.join(root, base, "resources/app.asar"));
+    // This ASAR version returns its write stream before the final bytes are flushed.
+    await finished(output);
     fs.mkdirSync(path.join(root, "launcher/dist"), { recursive: true });
     execFileSync("tar", ["-czf", path.join(root, "launcher/dist/River-Client-Linux.tar.gz"), "-C", path.join(root, "payload"), "River-Client-Linux"]);
   };
