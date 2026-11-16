@@ -1,0 +1,141 @@
+name: Signed macOS release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: river-macos-release-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'WyZEU/RiverClient' && github.ref == 'refs/heads/master'
+    environment: river-macos-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Verify clean source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+
+      - name: Set up Java 21
+        id: java21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Java 25
+        id: java25
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install dependencies and run tests
+        run: |
+          npm ci --prefix launcher
+          node --test launcher/tests/*.test.js cloudflare-updates/tests/*.test.mjs
+          node launcher/scripts/prepare-windows-release.js --check
+
+      - name: Build all Minecraft targets and bootstrap
+        env:
+          RIVER_JDK21: ${{ steps.java21.outputs.path }}
+          RIVER_JDK25: ${{ steps.java25.outputs.path }}
+        run: ./gradlew build --no-daemon "-Dorg.gradle.java.installations.paths=$RIVER_JDK21,$RIVER_JDK25"
+
+      - name: Build, sign, notarize and verify DMG
+        working-directory: launcher
+        env:
+          CSC_NAME: Supro Nivelo s.r.o. (A2A543D72R)
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          RIVER_MAC_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            if [ -z "${!name}" ]; then
+              echo "Missing signing secret: $name" >&2
+              exit 1
+            fi
+          done
+          umask 077
+          notary_key="$RUNNER_TEMP/river-notary.p8"
+          export APPLE_KEYCHAIN="$RUNNER_TEMP/river-notary.keychain-db"
+          export APPLE_KEYCHAIN_PROFILE=river-macos-ci
+          cleanup() {
+            rm -f "$notary_key"
+            security delete-keychain "$APPLE_KEYCHAIN" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          printenv APPLE_API_KEY_P8 > "$notary_key"
+          notary_password="$(openssl rand -hex 32)"
+          security create-keychain -p "$notary_password" "$APPLE_KEYCHAIN"
+          security unlock-keychain -p "$notary_password" "$APPLE_KEYCHAIN"
+          security set-keychain-settings -lut 10800 "$APPLE_KEYCHAIN"
+          xcrun notarytool store-credentials "$APPLE_KEYCHAIN_PROFILE" --key "$notary_key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --keychain "$APPLE_KEYCHAIN"
+          rm -f "$notary_key"
+          unset APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER notary_password
+          npm run dist:mac:release -- "--$RIVER_MAC_ARCH"
+
+      - name: Upload verified Mac build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: river-macos-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            launcher/dist/macos/*.dmg
+            launcher/dist/macos/build-result.json
+            launcher/dist/macos/SHA256SUMS
+            launcher/dist/macos/notarization-*.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Show download details
+        env:
+          RIVER_MAC_ARCH: ${{ matrix.arch }}
+        run: |
+          node <<'NODE'
+          const r = require("./launcher/dist/macos/build-result.json");
+          require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            `## Signed macOS ${r.version} (${process.env.RIVER_MAC_ARCH})\n\nSource: ${r.sourceCommit}\n\nDownload the DMG and checksums from this run. The app and DMG passed Apple notarization, stapling and Gatekeeper verification. Artifacts are retained for 14 days. Website/update publication is separate.\n`);
+          NODE
+
+      - name: Upload notarization diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: river-macos-diagnostics-${{ matrix.arch }}-${{ github.sha }}
+          path: launcher/dist/macos/notarization-*.json
+          if-no-files-found: ignore
+          retention-days: 14

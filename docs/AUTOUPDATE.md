@@ -43,8 +43,10 @@ its whole-file SHA-256; otherwise the code falls back to downloading that file.
 Windows runs a separate updater process/window. A generated VBS/CMD/PowerShell
 handoff waits for the launcher to close, copies the staged files, removes obsolete
 resources/locales, and relaunches `RiverClient.exe`. A per-user installation should
-not need elevation; a non-writable install location triggers UAC. Linux instead
-opens the download URL; this Windows updater is not used there.
+not need elevation; a non-writable install location triggers UAC. Linux and macOS
+instead open their platform's download URL; this Windows updater is not used there.
+Mac downloads use `macUrls.arm64` / `macUrls.x64` or `macUrl`, with the River
+website as fallback. See [macOS builds](MACOS_RELEASE.md).
 
 The delta path backs up replaced files and attempts to restore them after a copy
 failure. This is not a complete transactional rollback: removed files are not

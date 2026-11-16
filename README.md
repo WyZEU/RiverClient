@@ -1,6 +1,6 @@
 # River Client
 
-A Fabric client for Minecraft Java, and the Windows launcher that installs and runs it.
+A Fabric client for Minecraft Java, and the desktop launcher that installs and runs it.
 Written by WyZ_EU.
 
 Downloads are at **https://riverclient.xyz**.
@@ -39,6 +39,13 @@ See [signed Windows builds](docs/WINDOWS_RELEASE.md) for the Supro Nivelo signin
 workflow and first-run setup, [automatic updates](docs/AUTOUPDATE.md) for the
 current update protocol, and [signed update publication](docs/UPDATE_PUBLICATION.md)
 for the separate review/publish workflow and GitHub environment secrets.
+
+## macOS builds
+
+See [macOS builds](docs/MACOS_RELEASE.md) for Apple Silicon and Intel DMGs,
+local builds, Developer ID signing and Apple notarization. The macOS workflow
+also builds automatically on pushes to `master`, after the owner configures its
+protected signing environment.
 
 ## Something's broken
 

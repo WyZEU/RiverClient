@@ -6,6 +6,7 @@ const { planRvrRestore } = require("./rvr-restore.js");
 const { pickRiverModEntry, fileMatchesSha256 } = require("./river-mod-cache.js");
 const { verifyManifest } = require("./update-signature.js");
 const { normalizeUpdateFilePath, buildDifferentialUpdatePlan, downloadFileViaBlockmap } = require("./update-files.js");
+const { nativeClassifierKey, matchesOsRule, isMacNativeLibraryAllowed, macJavaCandidates, javaArchitectureMatches, manualUpdateTarget } = require("./runtime-platform.js");
 // Never bundle River's CurseForge credential into a distributed launcher.
 function effectiveCurseForgeKey(settings) { return String(settings?.curseForgeApiKey || ""); }
 const { app, BrowserWindow, ipcMain, shell, dialog, screen, nativeImage, globalShortcut, clipboard, Notification } = require("electron");
@@ -154,6 +155,7 @@ function createUpdaterWindow() {
     }
   });
 
+  if (IS_MAC) mainWindow.setWindowButtonVisibility(false);
   mainWindow.loadFile(path.join(__dirname, "renderer", "updater.html"));
 }
 
@@ -196,16 +198,14 @@ function launchDedicatedUpdaterProcess(update) {
   // launched, it would only patch a temp folder that is deleted on exit. Send the user
   // to the new portable download instead.
   if (portableExecutableFile() || !IS_WINDOWS) {
-    const target = IS_WINDOWS
-      ? (update?.portableUrl || update?.installerUrl || RIVER_WEBSITE_URL)
-      : (update?.linuxUrl || RIVER_WEBSITE_URL);
+    const target = manualUpdateTarget(update, RIVER_WEBSITE_URL);
     shell.openExternal(target).catch(() => {});
     const message = (IS_WINDOWS
       ? `River Client ${update?.latestVersion || ""} is ready. The portable build can't update itself, so the download has been opened in your browser - replace your current River Client.exe with it.`
-      : `River Client ${update?.latestVersion || ""} is ready. River on Linux can't update itself yet, so the download has been opened in your browser - replace your current copy with it.`
+      : `River Client ${update?.latestVersion || ""} is ready. River on ${IS_MAC ? "macOS" : "Linux"} can't update itself yet, so the download has been opened in your browser - replace your current copy with it.`
     ).replace(/\s+/g, " ").trim();
-    emit("launcher:log", `[update] Portable build detected; opened ${target} instead of self-updating.`);
-    emitActivity({ title: "Download the new portable", detail: message, current: 1, total: 1, done: true });
+    emit("launcher:log", `[update] Manual update required; opened ${target}.`);
+    emitActivity({ title: "Download the new version", detail: message, current: 1, total: 1, done: true });
     return { ok: false, message, portable: true };
   }
 
@@ -1148,6 +1148,7 @@ let launcherUpdateState = {
   installerUrl: "",
   portableUrl: "",
   linuxUrl: "",
+  macUrl: "",
   packageUrl: "",
   packageParts: [],
   fileManifestUrl: "",
@@ -1259,6 +1260,7 @@ const defaults = {
 
 const IS_WINDOWS = process.platform === "win32";
 const IS_LINUX = process.platform === "linux";
+const IS_MAC = process.platform === "darwin";
 // An AppImage or an unpacked tar.gz cannot give Chromium's setuid sandbox helper the root
 // ownership it insists on, and without it the launcher does not start at all on many
 // distros. The window only ever loads River's own bundled pages, so run without it.
@@ -1453,6 +1455,9 @@ function createWindow() {
       sandbox: false
     }
   });
+  // River supplies its own title-bar controls; native traffic lights would
+  // overlap the logo and navigation in the modern layout.
+  if (IS_MAC) mainWindow.setWindowButtonVisibility(false);
   if (devPlacement) mainWindow.showInactive();
   // Started at sign-in: straight to the taskbar, so a window does not pop up over the desktop.
   if (startedAtLogin && !devPlacement) mainWindow.minimize();
@@ -3474,6 +3479,7 @@ function openLogWindow({ focus = false } = {}) {
     }
   });
 
+  if (IS_MAC) logWindow.setWindowButtonVisibility(false);
   if (saved?.maximized) logWindow.maximize();
   logWindow.loadFile(path.join(__dirname, "renderer", "logs.html"));
   logWindow.once("ready-to-show", () => {
@@ -3676,7 +3682,7 @@ function detectExternalMinecraftInstances() {
   const dataRoot = IS_LINUX ? path.join(home, ".local", "share") : appData;
   const mcRoot = IS_LINUX ? home : appData;
   const candidates = [
-    { name: "Vanilla Minecraft", gameDir: path.join(mcRoot, ".minecraft"), launcher: "Minecraft Launcher" },
+    { name: "Vanilla Minecraft", gameDir: path.join(mcRoot, IS_MAC ? "minecraft" : ".minecraft"), launcher: "Minecraft Launcher" },
     ...(IS_LINUX ? [
       { name: "Vanilla Minecraft (Flatpak)", gameDir: path.join(home, ".var", "app", "com.mojang.Minecraft", ".minecraft"), launcher: "Minecraft Launcher" },
       { name: "Modrinth profile", gameDir: path.join(dataRoot, "com.modrinth.theseus", "profiles"), launcher: "Modrinth App" },
@@ -7735,8 +7741,10 @@ ipcMain.handle("launcher:install-java", async (_event, majorVersion = 21) => ins
 function javaMajorVersion(javaPath) {
   try {
     const { spawnSync } = require("node:child_process");
-    const result = spawnSync(javaPath, ["-version"], { encoding: "utf8", timeout: 6000 });
+    const result = spawnSync(javaPath, IS_MAC ? ["-XshowSettings:properties", "-version"] : ["-version"], { encoding: "utf8", timeout: 6000 });
     const text = `${result.stderr || ""}${result.stdout || ""}`;
+    // An Intel JVM can run under Rosetta but cannot load ARM64 LWJGL libraries.
+    if (result.status !== 0 || (IS_MAC && !javaArchitectureMatches(text))) return 0;
     const m = text.match(/version "(\d+)(?:\.(\d+))?/);
     if (!m) return 0;
     const major = Number(m[1]);
@@ -7781,7 +7789,7 @@ function resolveUsableJava(settings, minMajor = 21, options = {}) {
   const bundledJre = path.join(app.getPath("userData"), "java-runtimes");
   if (fs.existsSync(bundledJre)) {
     const walk = (dir, depth = 0) => {
-      if (depth > 4) return;
+      if (depth > 6) return;
       let entries = [];
       try { entries = fs.readdirSync(dir); } catch { return; }
       for (const e of entries) {
@@ -7804,7 +7812,7 @@ function resolveUsableJava(settings, minMajor = 21, options = {}) {
     "C:\\Program Files\\Amazon Corretto",
     "C:\\Program Files (x86)\\Eclipse Adoptium",
     "C:\\Program Files (x86)\\Java"
-  ] : [
+  ] : IS_MAC ? macJavaCandidates(app.getPath("home")) : [
     "/usr/lib/jvm",
     "/usr/lib64/jvm",
     "/usr/java",
@@ -7817,7 +7825,8 @@ function resolveUsableJava(settings, minMajor = 21, options = {}) {
     if (!fs.existsSync(root)) continue;
     try {
       for (const dir of fs.readdirSync(root)) {
-        const jexe = path.join(root, dir, "bin", javaName);
+        const jexe = IS_MAC ? path.join(root, dir, "Contents", "Home", "bin", javaName)
+          : path.join(root, dir, "bin", javaName);
         if (fs.existsSync(jexe)) candidates.push(jexe);
       }
     } catch {}
@@ -7935,7 +7944,7 @@ async function installJavaRuntime(majorVersion = 21, options = {}) {
   // Find the java binary inside the extracted dir
   const javaBinaryName = IS_WINDOWS ? "java.exe" : "java";
   const findJava = (dir, depth = 0) => {
-    if (depth > 4) return null;
+    if (depth > 6) return null;
     for (const entry of fs.readdirSync(dir)) {
       const full = path.join(dir, entry);
       const isDir = fs.statSync(full).isDirectory();
@@ -9352,6 +9361,7 @@ async function checkLauncherUpdates() {
       installerUrl: "",
       portableUrl: "",
       linuxUrl: "",
+      macUrl: "",
       packageUrl: "",
       packageParts: [],
       fileManifestUrl: "",
@@ -9386,6 +9396,7 @@ async function checkLauncherUpdates() {
     const installerUrl = resolveUpdateUrl(payload.installerUrl || payload.url || "", updateManifestUrl);
     const portableUrl = resolveUpdateUrl(payload.portableUrl || "", updateManifestUrl);
     const linuxUrl = resolveUpdateUrl(payload.linuxUrl || "", updateManifestUrl);
+    const macUrl = resolveUpdateUrl(payload.macUrls?.[process.arch] || payload.macUrl || "", updateManifestUrl);
     const packageUrl = resolveUpdateUrl(payload.packageUrl || payload.appPackageUrl || "", updateManifestUrl);
     // A package too big for a single upload is published as numbered parts instead.
     const packageParts = (Array.isArray(payload.packageParts) ? payload.packageParts : [])
@@ -9413,6 +9424,7 @@ async function checkLauncherUpdates() {
       installerUrl,
       portableUrl,
       linuxUrl,
+      macUrl,
       packageUrl,
       packageParts,
       fileManifestUrl,
@@ -9448,6 +9460,7 @@ async function checkLauncherUpdates() {
       installerUrl: "",
       portableUrl: "",
       linuxUrl: "",
+      macUrl: "",
       packageUrl: "",
       packageParts: [],
       fileManifestUrl: "",
@@ -11388,13 +11401,8 @@ function mavenArtifact(library) {
   return { path: artifactPath, url: `${baseUrl}${artifactPath}` };
 }
 
-function nativeClassifierKey() {
-  if (process.platform === "win32") return "natives-windows";
-  if (process.platform === "darwin") return "natives-macos";
-  return "natives-linux";
-}
-
 function isLibraryAllowed(library) {
+  if (!isMacNativeLibraryAllowed(library)) return false;
   if (!Array.isArray(library.rules)) return true;
   let allowed = false;
   for (const rule of library.rules) {
@@ -11405,11 +11413,7 @@ function isLibraryAllowed(library) {
 }
 
 function ruleMatches(rule) {
-  if (rule.os) {
-    const wanted = rule.os.name;
-    const current = process.platform === "win32" ? "windows" : process.platform === "darwin" ? "osx" : "linux";
-    if (wanted && wanted !== current) return false;
-  }
+  if (!matchesOsRule(rule.os)) return false;
   if (rule.features) {
     const features = {
       is_demo_user: false,
@@ -11425,12 +11429,7 @@ function ruleMatches(rule) {
 }
 
 async function expandNativeJar(jarFile, nativesDir) {
-  await runPowerShell([
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-Command",
-    `Expand-Archive -LiteralPath '${escapePowerShell(jarFile)}' -DestinationPath '${escapePowerShell(nativesDir)}' -Force`
-  ]);
+  extractNativesJar(jarFile, nativesDir);
 }
 
 async function prepareAssets(assetIndex, assetsDir) {
