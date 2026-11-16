@@ -69,12 +69,19 @@ shows the saved payout method. Personal verification details and bank account nu
 are not stored in this repository.
 
 The account profile separately reports **Identity Verification: APPROVED**. Tebex
-onboarding now shows **100% complete / 0 of 4 steps pending**, and **Submit for Review**
-is enabled. The new payout method is subject to Tebex's five-day withdrawal hold.
+onboarding shows **100% complete / 0 of 4 steps pending**. The new payout method is
+subject to Tebex's five-day withdrawal hold.
+
+## Project review — submitted 2026-11-16
+
+River Client was submitted for review with **Headless API** confirmed as the integration
+method. Tebex displays **Pending Review** and confirms that its Content and Safety team
+is reviewing the project. Approval and permission to go live are still pending.
 
 ## Remaining launch steps
 
-1. Submit the project for Tebex review and enable live payments after approval.
+1. Wait for Tebex project approval, address any requested changes, and enable live
+   payments after approval.
 2. Turn on `LAUNCHED` in `src/client/kotlin/dev/wyz/clientcore/cosmetic/RiverPlus.kt` and
    `PLUS_LAUNCHED` in `launcher/src/renderer-react/components/river-cosmetics.jsx`.
 3. Prepare the 0.3.1 release: update the version and `release-draft.json`, build all 14
