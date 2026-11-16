@@ -10,7 +10,7 @@ const { pipeline } = require("node:stream/promises");
 const { spawnSync } = require("node:child_process");
 const asar = require("@electron/asar");
 const { release, publicSource, loadFunctions, seedLegacy, hash } = require("./fixtures/public-0.3.0.js");
-const { apply, powershell } = require("./fixtures/update-apply.js");
+const { apply, powershell, shellEnv } = require("./fixtures/update-apply.js");
 const { digestFile } = require("../scripts/release-artifact.js");
 
 function run(executable, args, options = {}) {
@@ -34,7 +34,7 @@ async function main() {
     }
     assert.deepEqual(await digestFile(archive), { size: release.size, sha256: release.sha256 });
     const original = path.join(root, "public-installation");
-    run(powershell, ["-NoProfile", "-NonInteractive", "-Command", `Expand-Archive -LiteralPath '${quote(archive)}' -DestinationPath '${quote(original)}'`]);
+    run(powershell, ["-NoProfile", "-NonInteractive", "-Command", `Expand-Archive -LiteralPath '${quote(archive)}' -DestinationPath '${quote(original)}'`], { env: shellEnv });
     const oldAsar = path.join(original, "resources/app.asar");
     const source = publicSource(oldAsar);
     const old = loadFunctions(source, ["verifyJsonSha256", "normalizeUpdateFilePath", "hashFileStreaming", "listRelativeFiles", "buildDifferentialUpdatePlan", "buildApplyUpdateScript"], {

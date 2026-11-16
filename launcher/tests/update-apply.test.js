@@ -36,6 +36,8 @@ for (const mode of ["delta", "package"]) {
       const f = fixture(t, mode);
       const result = apply(f.root, { ...f, faults });
       assert.equal(result.status, 1, result.stderr + result.log);
+      const expectedFailure = { backup: /Injected backup failure/, apply: /Injected apply failure/, remove: /Injected removal failure/, corrupt: /Copy verification failed/ };
+      assert.match(result.log, expectedFailure[Object.keys(faults)[0]], result.log);
       assert.deepEqual(snapshot(f.installDir), f.old, result.log);
       assert.match(result.log, /Previous launcher files preserved/);
       assert.match(result.launches, /--river-update-failed=/);

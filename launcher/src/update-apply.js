@@ -36,6 +36,14 @@ function Copy-WithRetry([string]$from, [string]$to) {
   }
   throw $lastError
 }
+function File-Hash([string]$file) {
+  $stream = $null
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [IO.File]::OpenRead($file)
+    return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '')
+  } finally { if ($null -ne $stream) { $stream.Dispose() }; $sha.Dispose() }
+}
 function Checked-Path([string]$root, [string]$relative) {
   $parts = $relative -split '/'
   if ([string]::IsNullOrWhiteSpace($relative) -or $relative -match '[\\:*?"<>|]' -or
@@ -111,9 +119,9 @@ try {
     if (-not $operation.existed) { continue }
     $saved = Checked-Path (Join-Path $backup 'files') $operation.relative
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $saved) | Out-Null
-    $operation.hash = (Get-FileHash -LiteralPath $operation.target -Algorithm SHA256).Hash
+    $operation.hash = File-Hash $operation.target
     Copy-WithRetry $operation.target $saved
-    if ((Get-FileHash -LiteralPath $saved -Algorithm SHA256).Hash -ne $operation.hash) { throw "Backup verification failed: $($operation.relative)" }
+    if ((File-Hash $saved) -ne $operation.hash) { throw "Backup verification failed: $($operation.relative)" }
   }
   Write-Journal 'prepared'
   foreach ($operation in $operations) {
@@ -123,7 +131,7 @@ try {
     if ($operation.source) {
       New-Item -ItemType Directory -Force -Path (Split-Path -Parent $operation.target) | Out-Null
       Copy-WithRetry $operation.source $operation.target
-      if ((Get-FileHash -LiteralPath $operation.source -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $operation.target -Algorithm SHA256).Hash) {
+      if ((File-Hash $operation.source) -ne (File-Hash $operation.target)) {
         throw "Copy verification failed: $($operation.relative)"
       }
     } else { Remove-Item -LiteralPath $operation.target -Force -ErrorAction Stop }
@@ -142,7 +150,7 @@ try {
       if ($operation.existed) {
         $saved = Checked-Path (Join-Path $backup 'files') $operation.relative
         Copy-WithRetry $saved $operation.target
-        if ((Get-FileHash -LiteralPath $operation.target -Algorithm SHA256).Hash -ne $operation.hash) { throw 'Restored file hash mismatch.' }
+        if ((File-Hash $operation.target) -ne $operation.hash) { throw 'Restored file hash mismatch.' }
       } elseif (Test-Path -LiteralPath $operation.target) { Remove-Item -LiteralPath $operation.target -Force -ErrorAction Stop }
     } catch {
       $rollbackFailed = $true

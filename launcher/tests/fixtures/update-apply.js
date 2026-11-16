@@ -4,7 +4,13 @@ const { spawnSync } = require("node:child_process");
 const { buildApplyUpdateScript } = require("../../src/update-apply.js");
 
 const powershell = process.env.RIVER_TEST_POWERSHELL || (process.platform === "win32" ? "powershell.exe" : "pwsh");
-const hasPowerShell = !spawnSync(powershell, ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"], { windowsHide: true }).error;
+const shellEnv = { ...process.env };
+// A pwsh-based CI step can export module paths for PowerShell 7. Let Windows
+// PowerShell 5.1 initialize its own standard modules, as it does from Explorer.
+if (process.platform === "win32" && /(^|[\\/])powershell(?:\.exe)?$/i.test(powershell)) {
+  for (const key of Object.keys(shellEnv)) if (key.toLowerCase() === "psmodulepath") delete shellEnv[key];
+}
+const hasPowerShell = !spawnSync(powershell, ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"], { windowsHide: true, env: shellEnv }).error;
 const quote = (value) => String(value || "").replace(/'/g, "''");
 const ps = (value) => `'${quote(value)}'`;
 
@@ -60,11 +66,11 @@ function Remove-Item {
 `;
   const file = write(root, "apply.ps1", wrapper + "\n" + script);
   const result = spawnSync(powershell, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", file], {
-    encoding: "utf8", windowsHide: true, timeout: 120_000
+    encoding: "utf8", windowsHide: true, timeout: 120_000, env: shellEnv
   });
   if (result.error) throw result.error;
   return { ...result, log: fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "",
     launches: fs.existsSync(launches) ? fs.readFileSync(launches, "utf8") : "", updateRoot };
 }
 
-module.exports = { apply, write, snapshot, powershell, hasPowerShell };
+module.exports = { apply, write, snapshot, powershell, shellEnv, hasPowerShell };
