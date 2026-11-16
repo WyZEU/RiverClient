@@ -51,13 +51,20 @@ function fixture(t, platform = "darwin") {
       launchProcess: null, launchState: "idle", clientModVersion: "0.3.1", lastLaunchFailure: null, setupRunning: false,
       readBuildVersion: () => "0.3.1", networkState: {}, getVersions: () => [], getInstalledMods: () => [],
       getInstalledContent: () => [], getLocalFiles: () => [], getCrashInfo: () => null, getLauncherUpdateState: () => ({}),
-      getChangelog: () => ({}), getSkinHistory: () => [], readTotalPlaytimeMs: () => 0, discordRpcState: {}
+      getChangelog: () => ({}), getSkinHistory: () => [], readTotalPlaytimeMs: () => 0, discordRpcState: {},
+      // River Plus state getStatus reports. The network is never reached here: the
+      // status call must answer from the cache, so a failing fetch is the honest stub.
+      riverPlusState: { uuid: "", active: false, checkedAt: 0 }, riverPlusChecking: false,
+      RIVER_PLUS_REFRESH_MS: 10 * 60 * 1000, launcherUserAgent: "river-test",
+      fetch: async () => { throw new Error("no network in tests"); },
+      // No dev override: these tests check the real entitlement path.
+      process: { env: {} }
     });
     // Execute the production functions and IPC registrations, not copies of their logic.
     for (const name of ["authPath", "readAuth", "isStoredAuth", "normalizeAuth", "normalizeCapeEntry", "writeAuth", "clearAuth",
       "hasUsableMinecraftToken", "withAuthRefreshError", "profilesPath", "readProfiles", "isStoredProfiles", "writeProfiles", "updateSavedAuth",
       "riverSessionFile", "readStoredRiverSession", "isStoredRiverSession", "storeRiverSession", "forgetRiverSession", "failRiverSignIn", "riverSignIn",
-      "getStatus", "emitStatus", "signInWithMicrosoft", "refreshMicrosoftSession", "ensureFreshAuth"]) {
+      "riverPlusActive", "getStatus", "emitStatus", "signInWithMicrosoft", "refreshMicrosoftSession", "ensureFreshAuth"]) {
       const match = new RegExp(`(?:async )?function ${name}\\(`).exec(source);
       assert.ok(match, name);
       const firstLineEnd = source.indexOf("\n", match.index);
