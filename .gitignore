@@ -82,3 +82,6 @@ versions/*/src/
 
 # Launch video renders
 brag-output/
+
+# Rust launcher build output
+launcher-rs/target/
