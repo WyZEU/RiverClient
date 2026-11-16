@@ -25,22 +25,27 @@ profile means the two products share its signing quota and revocation boundary.
 If the repository owner/name or release branch changes, update both federation
 and the workflow guard deliberately.
 
-## First run after GitHub access
+GitHub write access was verified on 2026-11-16. The repository secrets
+`AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` have been configured
+and their metadata read back. The Azure federation and certificate-profile signer
+role were checked again before setting them. No client secret was created.
+
+## First signed build
 
 1. Resolve/check the repository owner's GitHub billing lock. When inspected on
    2026-11-16, the latest CI run `43709926791` (from November 15) reported that it
    had been rejected before any runner started for that reason.
-2. From a machine authenticated to Azure and GitHub, run:
+2. The repository secrets are already configured. To check Azure federation,
+   certificate-profile access and GitHub access again, run:
 
    ```sh
-   python3 launcher/scripts/configure-github-signing.py --apply
+   python3 launcher/scripts/configure-github-signing.py
    ```
 
-   This discovers the existing River application and configures/reads back the
-   repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
-   These are identifiers; no Azure client secret is created. Without `--apply` the
-   command only checks federation and GitHub access.
-3. Commit the reviewed changes and publish them to `master`, then dispatch:
+   Use `--apply` only when configuring or deliberately refreshing the three
+   identifier secrets. Their values cannot be read back from GitHub; this command
+   verifies their names after uploading them.
+3. Merge the reviewed PR into `master`, then dispatch:
 
    ```sh
    gh workflow run windows-release.yml --repo WyZEU/RiverClient --ref master
@@ -49,6 +54,12 @@ and the workflow guard deliberately.
 The workflow only starts manually on that repository's `master`. It uploads
 GitHub Actions artifacts with 14-day retention; it does not create a public
 GitHub Release, upload to Cloudflare, or change the update channel.
+
+If new upstream code arrives before review is complete, merge the updated
+`origin/master` into the same PR branch and rerun CI and the release version check.
+Confirm that any new Minecraft targets are included in runtime staging. Branch
+and PR CI do not have an Azure federation subject and cannot perform this signed
+release. Keep the release workflow and federation restricted to `master`.
 
 ## Build and signing contract
 
@@ -121,8 +132,9 @@ References: [electron-builder v26 signing hooks](https://www.electron.build/v26/
 On 2026-11-16, the full Gradle build completed in **9m 25s** with **192 executed
 tasks**. All 14 client JARs and the bootstrap were staged; ZIP integrity, mod
 metadata and compiled entrypoint classes were independently checked for all 15.
-The launcher JS/CSS bundle built with those runtimes. All **77 JavaScript tests**
-passed, including four release-preparation tests. Actionlint, electron-builder's
+The launcher JS/CSS bundle built with those runtimes. All **90 JavaScript tests**
+passed after both updater fixes, including four release-preparation tests.
+Actionlint, electron-builder's
 configuration schema and PowerShell parser checks passed. Both documented
 autoupdate defects were reproduced locally without changing production state.
 

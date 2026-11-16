@@ -68,18 +68,27 @@ Run these regressions together with the existing suites:
 node --test launcher/tests/*.test.js cloudflare-updates/tests/*.test.mjs
 ```
 
+## Connectivity investigation on 2026-11-16
+
+The earlier certificate failure on the inspected network was traced to DNS
+filtering: River hostnames resolved to `159.100.251.128`, which presented a
+self-signed Whalebone certificate for `sad.certificate.that.cannot.be.valid.com`.
+Its HTTP blocking page returned the Nette/Tracy 500 error seen in the browser.
+
+Cloudflare's actual endpoints presented valid certificates. Encrypted DNS restored
+ordinary system lookups, Chrome access and Node.js HTTPS requests: the root and
+`www` returned 200, `/latest.json` on `updates` returned 200, and `discord` returned
+the expected 302. TLS verification remained enabled. This verifies connectivity;
+it does not validate the manifest signature or an installed client's full update.
+Whalebone accepted a domain/subdomain classification review; its exact reason for
+blocking and global removal remain pending. No Cloudflare configuration was changed.
+
 ## Remaining publishing work
 
-1. **Endpoint TLS could not be validated here.** Requests to the update/website
-   domains on this machine failed certificate validation; the update hostname
-   presented `sad.certificate.that.cannot.be.valid.com`. Local and public DNS
-   resolved it to `159.100.251.128`. This is an observed reachability failure, not
-   proof of its cause or behavior on every user's connection. No TLS verification
-   was disabled and no live manifest was accepted.
-2. **Immutable signed publication is not connected.** The old publisher may
-   rebuild an unsigned app. Integrate the signed artifact before publishing;
-   compute file hashes/blockmaps after Authenticode signing and retain the
-   existing Ed25519 key. See [WINDOWS_RELEASE.md](WINDOWS_RELEASE.md).
+**Immutable signed publication is not connected.** The old publisher may rebuild
+an unsigned app. Integrate the signed artifact before publishing; compute file
+hashes/blockmaps after Authenticode signing and retain the existing Ed25519 key.
+See [WINDOWS_RELEASE.md](WINDOWS_RELEASE.md).
 
 The two updater fixes are local source changes. The Worker fix must be deployed and
 the launcher fix included in a release before users receive them. No production Worker,
