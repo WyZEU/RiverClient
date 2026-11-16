@@ -57,7 +57,7 @@ test("Java detection accepts native Temurin and rejects the other Mac architectu
   assert.equal(javaArchitectureMatches("    os.arch = x86_64\n", "x64"), true);
   assert.equal(javaArchitectureMatches("    os.arch = x86_64\n", "arm64"), false);
   assert.equal(javaArchitectureMatches("Unable to locate a Java Runtime.", "arm64"), false);
-  assert.deepEqual(macJavaCandidates("/Users/test"), ["/Library/Java/JavaVirtualMachines", "/Users/test/Library/Java/JavaVirtualMachines"]);
+  assert.deepEqual(macJavaCandidates("/Users/test"), ["/Library/Java/JavaVirtualMachines", path.join("/Users/test", "Library/Java/JavaVirtualMachines")]);
 });
 
 test("Mac updates never open a Windows installer or a Linux archive", () => {
