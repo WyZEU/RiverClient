@@ -40,6 +40,45 @@ jobs:
       - name: Release configuration check
         run: node launcher/scripts/prepare-windows-release.js --check
 
+  windows-upgrade:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+      - name: Install launcher dependencies
+        run: |
+          npm ci --prefix launcher
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
+      - name: Test authentication and PowerShell 5.1 update recovery
+        run: |
+          node --test launcher/tests/auth-session.test.js launcher/tests/credential-store.test.js launcher/tests/update-apply.test.js
+          if ($LASTEXITCODE -ne 0) { throw 'Authentication or update recovery tests failed.' }
+      - name: Build unsigned upgrade candidate
+        working-directory: launcher
+        run: |
+          npm run build:app
+          if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed.' }
+          npx --no-install electron-builder --win dir --x64 --publish never -c.win.signAndEditExecutable=false "-c.directories.output=$env:RUNNER_TEMP\river-upgrade-candidate"
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate packaging failed.' }
+      - name: Upgrade the public 0.3.0 client and verify login across restart
+        run: |
+          node launcher/tests/upgrade-0.3.0.cjs "$env:RUNNER_TEMP\river-upgrade-candidate\win-unpacked"
+          if ($LASTEXITCODE -ne 0) { throw 'Public-client upgrade test failed.' }
+
   mod-build:
     runs-on: ubuntu-latest
     steps:

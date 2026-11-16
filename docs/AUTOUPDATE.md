@@ -2,7 +2,7 @@
 
 Inspected at upstream commit `9b90535c74a690c0352257acb433691549579e24` on 2026-11-16.
 This is River's own updater in `launcher/src/main.js`, with file planning and blockmap
-downloads in `launcher/src/update-files.js`, not electron-updater.
+downloads in `launcher/src/update-files.js` and the apply script in `launcher/src/update-apply.js`.
 
 ## Discovery and policy
 
@@ -48,10 +48,22 @@ instead open their platform's download URL; this Windows updater is not used the
 Mac downloads use `macUrls.arm64` / `macUrls.x64` or `macUrl`, with the River
 website as fallback. See [macOS builds](MACOS_RELEASE.md).
 
-The delta path backs up replaced files and attempts to restore them after a copy
-failure. This is not a complete transactional rollback: removed files are not
-backed up, the full-ZIP path does not restore a full prior installation, and there
-is no post-launch health check that automatically rolls back a bad new release.
+Both delta and full-package paths plan replacements and obsolete resources/locales,
+then copy and SHA-256 verify every existing affected file into a unique recovery
+directory before changing the installation. A journal records each operation before
+it starts. Failure restores only those operations, including partially overwritten
+files and removed resources; untouched files are never removed as rollback.
+Failure to restore one file does not stop the remaining restores. Recovery files
+are retained and an incompletely restored launcher is not automatically started.
+Only completed backups and old version staging directories are cleaned up. There
+is no post-launch health check or automatic recovery after a power loss/process kill.
+
+The first hop from public 0.3.0 still executes the updater already installed in
+0.3.0. Its successful delta and full-package paths are tested against the candidate,
+but its old rollback defects cannot be repaired by code that only arrives inside
+the new app. If that first copy fails, reinstall from the approved installer while
+keeping user data. The new rollback protection applies to updates initiated by the
+corrected launcher.
 
 ## Fixes verified locally
 
@@ -70,6 +82,20 @@ Run these regressions together with the existing suites:
 ```sh
 node --test launcher/tests/*.test.js cloudflare-updates/tests/*.test.mjs
 ```
+
+`update-apply.test.js` executes the generated script with actual PowerShell filesystem
+operations and injected backup, partial-copy, corruption, deletion and restoration
+failures. It uses Windows PowerShell 5.1 on Windows; elsewhere set
+`RIVER_TEST_POWERSHELL` to a PowerShell executable. Without PowerShell these tests skip.
+
+The `windows-upgrade` CI job builds an unsigned candidate without publishing. It
+downloads the pinned public 0.3.0 ZIP (SHA-256 verified), executes that ASAR's own
+planner/apply script for delta and package upgrades, verifies every candidate file
+and starts the installed Electron executable in Node mode. The test also verifies
+login migration/refresh/restart through the updated main process and renderer IPC
+with real Windows DPAPI and simulated Microsoft responses. Process wait/relaunch
+commands in apply-script tests are intercepted; VBS/UAC, code signing and a live
+Microsoft authorization still require release acceptance.
 
 ## Connectivity investigation on 2026-11-16
 

@@ -7,8 +7,10 @@ const { compressPathsToRiverArchive, extractRiverArchive, archivePathParts } = r
 const { installContentFile } = require("./content-install.js");
 const { sameInstalledContent, mergeMissingMetadata } = require("./content-metadata.js");
 const { createCredentialStore, publicAuth, publicSavedProfile } = require("./credential-store.js");
+const { createAuthSession } = require("./auth-session.js");
 const { pickRiverModEntry, fileMatchesSha256 } = require("./river-mod-cache.js");
 const { verifyManifest } = require("./update-signature.js");
+const { buildApplyUpdateScript } = require("./update-apply.js");
 const { normalizeUpdateFilePath, buildDifferentialUpdatePlan, downloadFileViaBlockmap } = require("./update-files.js");
 const { nativeClassifierKey, matchesOsRule, isMacNativeLibraryAllowed, macJavaCandidates, javaArchitectureMatches, manualUpdateTarget } = require("./runtime-platform.js");
 // Never bundle River's CurseForge credential into a distributed launcher.
@@ -32,6 +34,7 @@ const zlib = require("node:zlib");
 const os = require("node:os");
 const semver = require("semver");
 const credentialStore = createCredentialStore({ safeStorage });
+const authSession = createAuthSession();
 
 // Last-resort guard: a stray uncaught error or rejected promise in the main process
 // otherwise pops Electron's fatal "A JavaScript error occurred" dialog and quits the
@@ -2312,13 +2315,13 @@ function readAuth() {
   try {
     auth = credentialStore.read(authPath(), {}, isStoredAuth);
   } catch (error) {
-    return { ...normalizeAuth({}), storageUnavailable: true, refreshError: error.message };
+    return authSession.tag({ ...normalizeAuth({}), storageUnavailable: true, refreshError: error.message });
   }
   const normalized = normalizeAuth(auth);
   if (!auth.sessionExpiresAt && normalized.signedIn && normalized.microsoftRefreshToken) {
     try { credentialStore.write(authPath(), normalized, {}, isStoredAuth); } catch {}
   }
-  return normalized;
+  return authSession.tag(normalized);
 }
 
 function isStoredAuth(auth) {
@@ -2365,18 +2368,23 @@ function normalizeCapeEntry(entry) {
   };
 }
 
-function writeAuth(auth) {
+function writeAuth(auth, { replaceSession = false } = {}) {
+  if (authSession.isTracked(auth)) authSession.assertCurrent(auth);
   const normalized = normalizeAuth(auth);
   const previous = credentialStore.read(authPath(), {}, isStoredAuth);
   credentialStore.write(authPath(), normalized, {}, isStoredAuth);
-  if (previous.profile?.id !== normalized.profile?.id) forgetRiverSession();
-  return normalized;
+  if (replaceSession || previous.profile?.id !== normalized.profile?.id) {
+    authSession.invalidate();
+    forgetRiverSession();
+  }
+  return authSession.tag(normalized);
 }
 
 function clearAuth() {
   credentialStore.remove(authPath());
+  authSession.invalidate();
   forgetRiverSession();
-  return normalizeAuth({});
+  return authSession.tag(normalizeAuth({}));
 }
 
 function hasUsableMinecraftToken(auth) {
@@ -8016,8 +8024,9 @@ ipcMain.handle("launcher:switch-profile", async (_event, profileId) => {
     const profiles = readProfiles();
     const profile = profiles.find(p => p.id === profileId);
     if (!profile) return { ok: false, message: "Profile not found." };
-    const auth = writeAuth({ ...profile.auth, profileId: profileId });
+    const auth = writeAuth({ ...profile.auth, profileId: profileId }, { replaceSession: true });
     await ensureAccountSkinSeeded(auth);
+    authSession.assertCurrent(auth);
     emitStatus();
     refreshKeptSeasons();
     return { ok: true, message: `Switched to ${profile.name}.` };
@@ -8104,6 +8113,9 @@ function storeRiverSession(uuid, session) {
 }
 function forgetRiverSession() {
   riverSessionCache = { token: "", expiresAt: 0 };
+  riverSignInError = "";
+  riverSignInRetryAt = 0;
+  riverSignInBackoffMs = 0;
   try { credentialStore.remove(riverSessionFile()); } catch {}
 }
 function failRiverSignIn(message) {
@@ -8121,10 +8133,11 @@ function failRiverSignIn(message) {
  * one-time nonce. Used here to prove tester status when fetching beta builds.
  */
 async function riverSignIn() {
+  const known = readAuth();
+  if (!known.signedIn) return "";
   if (riverSessionCache.token && riverSessionCache.expiresAt > Date.now() + 60_000) {
     return riverSessionCache.token;
   }
-  const known = readAuth();
   if (known?.profile?.id) {
     const stored = readStoredRiverSession(known.profile.id);
     if (stored) {
@@ -8145,6 +8158,7 @@ async function riverSignIn() {
       method: "POST",
       headers: { Authorization: `Bearer ${auth.minecraftAccessToken}` }
     });
+    if (!authSession.isCurrent(auth)) return "";
     if (!certRes.ok) {
       return failRiverSignIn(certRes.status === 429
         ? "Mojang is limiting account checks right now. River will try again in a few minutes."
@@ -8155,6 +8169,7 @@ async function riverSignIn() {
     const begin = await (await fetch(`${riverSocialBase}/auth/begin`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
     })).json();
+    if (!authSession.isCurrent(auth)) return "";
     if (!begin?.nonce) return failRiverSignIn("River did not answer the sign-in request.");
 
     const privateKey = crypto.createPrivateKey({
@@ -8178,6 +8193,7 @@ async function riverSignIn() {
       })
     })).json();
 
+    if (!authSession.isCurrent(auth)) return "";
     if (!complete?.ok || !complete.token) return failRiverSignIn(String(complete?.message || "River refused the sign-in."));
     riverSessionCache = { token: complete.token, expiresAt: Number(complete.expiresAt) || 0 };
     riverSignInError = "";
@@ -8186,6 +8202,7 @@ async function riverSignIn() {
     storeRiverSession(auth.profile.id, riverSessionCache);
     return complete.token;
   } catch {
+    if (!authSession.isCurrent(auth)) return "";
     return failRiverSignIn("Could not reach Mojang or River.");
   }
 }
@@ -8910,17 +8927,22 @@ async function signInWithMicrosoft() {
     return { ok: false, message: "River Client login is not configured yet. Add your app client id in launcher/src/config/riv3r-auth.json before shipping." };
   }
 
+  let attempt;
   try {
     credentialStore.assertWritable(authPath(), {}, isStoredAuth);
+    authSession.invalidate();
+    attempt = authSession.tag({});
     emit("launcher:log", "[auth] Starting Microsoft device-code sign-in...");
     emit("launcher:auth", { type: "stage", title: "Microsoft sign-in", detail: "Requesting a device code..." });
     const device = await requestMicrosoftDeviceCode(clientId);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", {
       type: "device-code",
       userCode: device.user_code,
       verificationUri: device.verification_uri
     });
     if (device.verification_uri) await shell.openExternal(device.verification_uri);
+    authSession.assertCurrent(attempt);
 
     emit("launcher:auth", {
       type: "stage",
@@ -8930,29 +8952,38 @@ async function signInWithMicrosoft() {
       verificationUri: device.verification_uri
     });
     const microsoft = await pollMicrosoftToken(clientId, device);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Xbox Live", detail: "Microsoft login accepted. Connecting Xbox Live..." });
     const xbl = await authenticateXboxLive(microsoft.access_token);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Xbox Security", detail: "Authorizing Minecraft services..." });
     const xsts = await authorizeXsts(xbl.Token);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Minecraft", detail: "Getting a Minecraft access token..." });
     const minecraft = await authenticateMinecraft(xsts);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Minecraft ownership", detail: "Checking Java Edition ownership..." });
     await assertMinecraftOwnership(minecraft.access_token);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Minecraft profile", detail: "Loading player profile..." });
     const profile = await fetchMinecraftProfile(minecraft.access_token);
     const auth = writeAuth({
+      ...attempt,
       microsoftRefreshToken: microsoft.refresh_token,
       minecraftAccessToken: minecraft.access_token,
       expiresAt: Date.now() + (Number(minecraft.expires_in || 0) * 1000),
       sessionExpiresAt: Date.now() + AUTH_SESSION_MS,
       profile
-    });
+    }, { replaceSession: true });
+    attempt = auth;
     await ensureAccountSkinSeeded(auth);
+    authSession.assertCurrent(auth);
 
     emit("launcher:log", `[auth] Signed in as ${profile.name}.`);
     emit("launcher:auth", { type: "done", title: "Signed in", detail: `Signed in as ${profile.name}.` });
     return { ok: true, message: `Signed in as ${profile.name}.`, auth };
   } catch (error) {
+    if (attempt && !authSession.isCurrent(attempt)) return { ok: false, message: "Account changed. Try again." };
     emit("launcher:log", `[auth] Sign-in failed: ${error.message}`);
     emit("launcher:auth", { type: "error", title: "Login failed", detail: error.message });
     return { ok: false, message: error.message };
@@ -8960,33 +8991,35 @@ async function signInWithMicrosoft() {
 }
 
 async function refreshMicrosoftSession(auth = readAuth()) {
-  const clientId = getMicrosoftClientId();
-  if (!clientId) throw new Error("River Client login is not configured.");
-  if (!auth.microsoftRefreshToken) throw new Error("Microsoft session expired. Sign in again.");
-  if (auth.sessionExpiresAt && Number(auth.sessionExpiresAt) <= Date.now()) {
-    clearAuth();
-    throw new Error("Microsoft session expired. Sign in again.");
-  }
+  return authSession.refresh(auth, async () => {
+    const clientId = getMicrosoftClientId();
+    if (!clientId) throw new Error("River Client login is not configured.");
+    if (!auth.microsoftRefreshToken) throw new Error("Microsoft session expired. Sign in again.");
+    if (auth.sessionExpiresAt && Number(auth.sessionExpiresAt) <= Date.now()) {
+      clearAuth();
+      throw new Error("Microsoft session expired. Sign in again.");
+    }
 
-  credentialStore.assertWritable(authPath(), {}, isStoredAuth);
-  emit("launcher:log", "[auth] Refreshing Microsoft session...");
-  const microsoft = await refreshMicrosoftToken(clientId, auth.microsoftRefreshToken);
-  const xbl = await authenticateXboxLive(microsoft.access_token);
-  const xsts = await authorizeXsts(xbl.Token);
-  const minecraft = await authenticateMinecraft(xsts);
-  await assertMinecraftOwnership(minecraft.access_token);
-  const profile = await fetchMinecraftProfile(minecraft.access_token);
-  const refreshed = writeAuth({
-    ...auth,
-    microsoftRefreshToken: microsoft.refresh_token || auth.microsoftRefreshToken,
-    minecraftAccessToken: minecraft.access_token,
-    expiresAt: Date.now() + (Number(minecraft.expires_in || 0) * 1000),
-    sessionExpiresAt: Date.now() + AUTH_SESSION_MS,
-    profile
+    credentialStore.assertWritable(authPath(), {}, isStoredAuth);
+    emit("launcher:log", "[auth] Refreshing Microsoft session...");
+    const microsoft = await refreshMicrosoftToken(clientId, auth.microsoftRefreshToken);
+    const xbl = await authenticateXboxLive(microsoft.access_token);
+    const xsts = await authorizeXsts(xbl.Token);
+    const minecraft = await authenticateMinecraft(xsts);
+    await assertMinecraftOwnership(minecraft.access_token);
+    const profile = await fetchMinecraftProfile(minecraft.access_token);
+    const refreshed = writeAuth({
+      ...auth,
+      microsoftRefreshToken: microsoft.refresh_token || auth.microsoftRefreshToken,
+      minecraftAccessToken: minecraft.access_token,
+      expiresAt: Date.now() + (Number(minecraft.expires_in || 0) * 1000),
+      sessionExpiresAt: Date.now() + AUTH_SESSION_MS,
+      profile
+    });
+    try { updateSavedAuth(refreshed); }
+    catch { emit("launcher:log", "[auth] Could not update the saved account; the refreshed active sign-in is preserved."); }
+    return refreshed;
   });
-  try { updateSavedAuth(refreshed); }
-  catch { emit("launcher:log", "[auth] Could not update the saved account; the refreshed active sign-in is preserved."); }
-  return refreshed;
 }
 
 async function ensureFreshAuth(minLifeMs = AUTH_REFRESH_SKEW_MS) {
@@ -8995,9 +9028,11 @@ async function ensureFreshAuth(minLifeMs = AUTH_REFRESH_SKEW_MS) {
   if (auth.minecraftAccessToken && auth.expiresAt > Date.now() + minLifeMs) return auth;
   try {
     const refreshed = await refreshMicrosoftSession(auth);
+    authSession.assertCurrent(refreshed);
     emitStatus();
     return refreshed;
   } catch (error) {
+    if (!authSession.isCurrent(auth)) return authSession.tag({ ...normalizeAuth({}), refreshError: "Account changed. Try again." });
     emit("launcher:log", `[auth] Session refresh failed: ${error.message}`);
     emitStatus();
     return withAuthRefreshError(auth, error);
@@ -10308,131 +10343,6 @@ function verifyFileSha256(file, expected) {
     ofs.rmSync(file, { force: true });
     throw new Error("Update package checksum did not match. The download was deleted.");
   }
-}
-
-function buildApplyUpdateScript({ pid, sourceDir, installDir, relaunchExe, relaunchFallbackExe, logPath, updateRoot, mode = "package", manifestPath = "" }) {
-  return [
-    "$ErrorActionPreference = 'Stop'",
-    `$host.SetShouldExit(0)`,
-    "Start-Sleep -Seconds 2",
-    `Wait-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue`,
-    "$deadline = (Get-Date).AddSeconds(30)",
-    "while ((Get-Process -Name 'RiverClient' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }",
-    "Start-Sleep -Seconds 1",
-    `$source = '${escapePowerShell(sourceDir)}'`,
-    `$target = '${escapePowerShell(installDir)}'`,
-    `$log = '${escapePowerShell(logPath)}'`,
-    `$mode = '${escapePowerShell(mode)}'`,
-    `$manifestPath = '${escapePowerShell(manifestPath)}'`,
-    `$primary = '${escapePowerShell(relaunchExe)}'`,
-    `$fallback = '${escapePowerShell(relaunchFallbackExe)}'`,
-    `$backup = Join-Path '${escapePowerShell(updateRoot)}' 'rollback'`,
-    "New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null",
-    "Set-Content -Path $log -Value ('Update script started: ' + (Get-Date).ToString('s')) -Encoding utf8",
-    "function Copy-WithRetry([string]$from, [string]$to) {",
-    "  $lastError = $null",
-    "  for ($attempt = 1; $attempt -le 10; $attempt++) {",
-    "    try { Copy-Item -LiteralPath $from -Destination $to -Force -ErrorAction Stop; return }",
-    "    catch { $lastError = $_; Start-Sleep -Milliseconds ([Math]::Min(2500, 250 * $attempt)) }",
-    "  }",
-    "  throw $lastError",
-    "}",
-    // If the zip extracted into a single subdirectory, use that as the source
-    // so files land directly in the install dir rather than in a subfolder.
-    "$children = @(Get-ChildItem -LiteralPath $source -Force)",
-    "if ($children.Count -eq 1 -and $children[0].PSIsContainer) { $source = $children[0].FullName }",
-    "Add-Content -Path $log -Value \"Source: $source\"",
-    "Add-Content -Path $log -Value \"Target: $target\"",
-    "Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue",
-    "New-Item -ItemType Directory -Force -Path $backup | Out-Null",
-    "try {",
-    "if ($mode -eq 'delta' -and (Test-Path -LiteralPath $manifestPath)) {",
-    "  Add-Content -Path $log -Value \"Applying smart differential update...\"",
-    "  $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json",
-    "  foreach ($entry in @($manifest.changedFiles)) {",
-    "    $relative = [string]$entry",
-    "    if ([string]::IsNullOrWhiteSpace($relative)) { continue }",
-    "    $parts = $relative -split '/'",
-    "    $sourceFile = Join-Path $source ([System.IO.Path]::Combine($parts))",
-    "    $targetFile = Join-Path $target ([System.IO.Path]::Combine($parts))",
-    "    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $targetFile) | Out-Null",
-    "    if (Test-Path -LiteralPath $targetFile) {",
-    "      $backupFile = Join-Path $backup ([System.IO.Path]::Combine($parts))",
-    "      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $backupFile) | Out-Null",
-    "      Copy-WithRetry $targetFile $backupFile",
-    "    }",
-    "    Copy-WithRetry $sourceFile $targetFile",
-    "    Add-Content -Path $log -Value (\"Copied changed file: \" + $relative)",
-    "  }",
-    "  $resourceAllowed = @(@($manifest.files | ForEach-Object { [string]$_.path }) | Where-Object { $_ -like 'resources/*' })",
-    "  $localeAllowed = @(@($manifest.files | ForEach-Object { [string]$_.path }) | Where-Object { $_ -like 'locales/*' })",
-    "  foreach ($scope in @(@{ Root = 'resources'; Allowed = $resourceAllowed }, @{ Root = 'locales'; Allowed = $localeAllowed })) {",
-    "    $scopeRoot = Join-Path $target $scope.Root",
-    "    if (-not (Test-Path -LiteralPath $scopeRoot)) { continue }",
-    "    Get-ChildItem -LiteralPath $scopeRoot -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object {",
-    "      $relative = ($_.FullName.Substring($target.Length).TrimStart('\\') -replace '\\\\','/')",
-    "      if ($scope.Allowed -notcontains $relative) {",
-    "        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue",
-    "        Add-Content -Path $log -Value (\"Removed old file: \" + $relative)",
-    "      }",
-    "    }",
-    "    Get-ChildItem -LiteralPath $scopeRoot -Directory -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | ForEach-Object {",
-    "      if (-not (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue | Select-Object -First 1)) {",
-    "        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue",
-    "      }",
-    "    }",
-    "  }",
-    "} else {",
-    "  $resourcesSource = Join-Path $source 'resources'",
-    "  $resourcesTarget = Join-Path $target 'resources'",
-    "  if (Test-Path -LiteralPath $resourcesSource) {",
-    "    Add-Content -Path $log -Value \"Mirroring resources directory...\"",
-    "    robocopy $resourcesSource $resourcesTarget /MIR /R:8 /W:2 /NFL /NDL /NJH /NJS /NP | Add-Content -Path $log",
-    "    $code = $LASTEXITCODE",
-    "    if ($code -gt 7) { Add-Content -Path $log -Value \"resources robocopy exit code: $code\"; throw \"resources copy failed with code $code\" }",
-    "  }",
-    "  $localesSource = Join-Path $source 'locales'",
-    "  $localesTarget = Join-Path $target 'locales'",
-    "  if (Test-Path -LiteralPath $localesSource) {",
-    "    Add-Content -Path $log -Value \"Mirroring locales directory...\"",
-    "    robocopy $localesSource $localesTarget /MIR /R:8 /W:2 /NFL /NDL /NJH /NJS /NP | Add-Content -Path $log",
-    "    $code = $LASTEXITCODE",
-    "    if ($code -gt 7) { Add-Content -Path $log -Value \"locales robocopy exit code: $code\"; throw \"locales copy failed with code $code\" }",
-    "  }",
-    "  Add-Content -Path $log -Value \"Copying top-level launcher files...\"",
-    "  Get-ChildItem -LiteralPath $source -Force | Where-Object { -not $_.PSIsContainer } | ForEach-Object {",
-    "    $dest = Join-Path $target $_.Name",
-    "    Copy-Item -LiteralPath $_.FullName -Destination $dest -Force",
-    "    Add-Content -Path $log -Value (\"Copied file: \" + $_.Name)",
-    "  }",
-    "}",
-    "} catch {",
-    "  $failure = $_.Exception.Message",
-    "  Add-Content -Path $log -Value (\"Update failed: \" + $failure)",
-    "  if ($mode -eq 'delta' -and (Test-Path -LiteralPath $manifestPath)) {",
-    "    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json",
-    "    foreach ($entry in @($manifest.changedFiles)) {",
-    "      $relative = [string]$entry",
-    "      if ([string]::IsNullOrWhiteSpace($relative)) { continue }",
-    "      $parts = $relative -split '/'",
-    "      $backupFile = Join-Path $backup ([System.IO.Path]::Combine($parts))",
-    "      $targetFile = Join-Path $target ([System.IO.Path]::Combine($parts))",
-    "      if (Test-Path -LiteralPath $backupFile) { Copy-WithRetry $backupFile $targetFile } else { Remove-Item -LiteralPath $targetFile -Force -ErrorAction SilentlyContinue }",
-    "    }",
-    "    Add-Content -Path $log -Value 'Previous launcher files restored.'",
-    "  }",
-    "  $restart = if (Test-Path -LiteralPath $primary) { $primary } else { $fallback }",
-    "  if (Test-Path -LiteralPath $restart) { Start-Process -FilePath $restart -ArgumentList @('--river-update-failed=' + $log) -WorkingDirectory $target -WindowStyle Normal }",
-    "  exit 1",
-    "}",
-    "$start = if (Test-Path -LiteralPath $primary) { $primary } elseif (Test-Path -LiteralPath $fallback) { $fallback } else { throw \"No executable found after update. Expected $primary or $fallback.\" }",
-    "Add-Content -Path $log -Value \"Relaunch: $start\"",
-    "Start-Sleep -Seconds 1",
-    "Start-Process -FilePath $start -WorkingDirectory $target -WindowStyle Normal",
-    "Add-Content -Path $log -Value 'Relaunch started.'",
-    "Start-Sleep -Seconds 3",
-    `Get-ChildItem -LiteralPath '${escapePowerShell(updateRoot)}' -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -Skip 2 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue`
-  ].join("\r\n");
 }
 
 // Launch the update bootstrap with zero visible window. Node's windowsHide is

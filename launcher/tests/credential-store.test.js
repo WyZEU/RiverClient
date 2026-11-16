@@ -62,9 +62,45 @@ test("Linux basic_text and unknown backends never count as secure storage", (t) 
     assert.deepEqual(f.store.read(f.file, {}), f.auth);
     assert.equal(f.store.status().state, "legacy");
     assert.equal(fs.readFileSync(f.file, "utf8"), f.raw);
-    assert.throws(() => f.store.write(path.join(f.root, "new.json"), f.auth, {}), /Secure system storage/);
+    assert.deepEqual(f.store.write(path.join(f.root, "new.json"), f.auth, {}), f.auth);
+    assert.equal(f.store.status().state, "temporary");
     assert.equal(fs.existsSync(path.join(f.root, "new.json")), false);
   }
+});
+
+test("temporary sessions work without new plaintext files and persist securely when storage returns", (t) => {
+  let clock = 0;
+  const f = fixture(t, { now: () => clock });
+  f.store.remove(f.file);
+  f.safeStorage.available = false;
+  f.store.assertWritable(f.file, {});
+  f.store.write(f.file, f.auth, {});
+  const rotated = { ...f.auth, microsoftRefreshToken: "test-rotated-in-memory" };
+  f.store.write(f.file, rotated, {});
+  assert.deepEqual(f.store.read(f.file, {}), rotated);
+  assert.equal(f.store.status().state, "temporary");
+  assert.match(f.store.status().message, /ends when the launcher closes/);
+  assert.deepEqual(fs.readdirSync(f.root), []);
+  assert.deepEqual(createCredentialStore({ safeStorage: f.safeStorage }).read(f.file, {}), {});
+  f.safeStorage.available = true;
+  clock += 30_001;
+  assert.deepEqual(f.store.read(f.file, {}), rotated);
+  assert.equal(f.store.status().state, "encrypted");
+  assert.doesNotMatch(fs.readFileSync(f.file, "utf8"), /test-/);
+  assert.deepEqual(createCredentialStore({ safeStorage: f.safeStorage }).read(f.file, {}), rotated);
+});
+
+test("logout removes temporary credentials and a late disk file is not overwritten by them", (t) => {
+  const f = fixture(t);
+  f.store.remove(f.file);
+  f.safeStorage.available = false;
+  f.store.write(f.file, f.auth, {});
+  f.store.remove(f.file);
+  assert.deepEqual(f.store.read(f.file, {}), {});
+  f.store.write(f.file, f.auth, {});
+  fs.writeFileSync(f.file, "unreadable-existing-credentials");
+  assert.throws(() => f.store.read(f.file, {}), /preserved/);
+  assert.equal(fs.readFileSync(f.file, "utf8"), "unreadable-existing-credentials");
 });
 
 test("supported Linux and Windows provider paths encrypt normally", (t) => {

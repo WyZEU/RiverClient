@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const FORMAT = "river-safe-storage";
 const UNAVAILABLE = "Secure system storage is unavailable. Unlock your keychain and try again; saved accounts have not been deleted.";
 const PENDING = "Account encryption is pending. Existing sign-ins still work, but their files remain unencrypted until secure system storage is available.";
+const TEMPORARY = "Temporary sign-in. Secure storage is unavailable; this session ends when the launcher closes.";
 const UNREADABLE = "Saved accounts could not be read. Their files have been preserved; restore access before changing accounts.";
 const WRITE_FAILED = "Could not safely save the account. The previous sign-in file has been preserved.";
 
@@ -14,6 +15,7 @@ function createCredentialStore({ safeStorage, platform = process.platform, fileS
   const cache = new Map();
   const states = new Map();
   const retryAt = new Map();
+  const temporary = new Map();
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const failure = (message, code) => Object.assign(new Error(message), { code });
 
@@ -72,6 +74,20 @@ function createCredentialStore({ safeStorage, platform = process.platform, fileS
     try { raw = fileSystem.readFileSync(file, "utf8"); }
     catch (error) {
       if (error.code === "ENOENT") {
+        if (temporary.has(file)) {
+          const value = temporary.get(file);
+          if (now() >= (retryAt.get(file) || 0)) {
+            try {
+              const plaintext = JSON.stringify(value);
+              const encrypted = encrypt(plaintext);
+              replace(file, encrypted, plaintext, true);
+              temporary.delete(file);
+              retryAt.delete(file);
+              remember(file, encrypted, value, "encrypted");
+            } catch { retryAt.set(file, now() + 30_000); }
+          }
+          return clone(value);
+        }
         cache.delete(file);
         states.set(file, { state: "empty", message: "" });
         return clone(empty);
@@ -79,6 +95,8 @@ function createCredentialStore({ safeStorage, platform = process.platform, fileS
       states.set(file, { state: "unavailable", message: UNREADABLE });
       throw failure(UNREADABLE, "CREDENTIAL_STORAGE_UNREADABLE");
     }
+    // An existing file is authoritative. Never overwrite it with a temporary login.
+    temporary.delete(file);
     const cached = cache.get(file);
     const state = states.get(file)?.state;
     if (cached?.raw === raw && (state === "encrypted" || (state === "legacy" && now() < (retryAt.get(file) || 0)))) return clone(cached.value);
@@ -114,7 +132,7 @@ function createCredentialStore({ safeStorage, platform = process.platform, fileS
     read(file, empty, validate); // Reject unreadable/locked files instead of treating them as an empty account.
     try { encrypt("river-storage-check"); }
     catch (error) {
-      if (states.get(file)?.state !== "legacy") throw error;
+      if (!["legacy", "empty", "temporary"].includes(states.get(file)?.state)) throw error;
     }
   }
 
@@ -125,6 +143,12 @@ function createCredentialStore({ safeStorage, platform = process.platform, fileS
     let serialized;
     try { serialized = encrypt(plaintext); }
     catch (error) {
+      if (["empty", "temporary"].includes(states.get(file)?.state)) {
+        temporary.set(file, clone(value));
+        states.set(file, { state: "temporary", message: TEMPORARY });
+        retryAt.set(file, now() + 30_000);
+        return clone(value);
+      }
       if (states.get(file)?.state !== "legacy") throw error;
       // Preserve refresh-token rotation for users whose *existing* legacy storage cannot
       // migrate yet. New files and previously encrypted files never fall back to plaintext.
@@ -134,6 +158,7 @@ function createCredentialStore({ safeStorage, platform = process.platform, fileS
       return clone(value);
     }
     replace(file, serialized, plaintext, true);
+    temporary.delete(file);
     remember(file, serialized, value, "encrypted");
     retryAt.delete(file);
     return clone(value);
@@ -142,13 +167,14 @@ function createCredentialStore({ safeStorage, platform = process.platform, fileS
   function remove(file) {
     fileSystem.rmSync(file, { force: true });
     cache.delete(file);
+    temporary.delete(file);
     states.delete(file);
     retryAt.delete(file);
   }
 
   function status() {
     const all = [...states.values()];
-    return all.find((entry) => entry.state === "unavailable") || all.find((entry) => entry.state === "legacy") || { state: "encrypted", message: "" };
+    return all.find((entry) => entry.state === "unavailable") || all.find((entry) => entry.state === "temporary") || all.find((entry) => entry.state === "legacy") || { state: "encrypted", message: "" };
   }
 
   return { read, write, remove, assertWritable, status };
