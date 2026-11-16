@@ -9406,8 +9406,10 @@ function startLauncherUpdateWatcher() {
 async function checkLauncherUpdates() {
   const currentVersion = readBuildVersion();
   try {
-    const bundledManifest = readBundledUpdateManifest();
-    const remoteManifest = await fetchRemoteUpdateManifest();
+    const bundledManifest = process.platform === "darwin" ? null : readBundledUpdateManifest();
+    const remoteManifest = process.platform === "darwin"
+      ? await require("./macos-updates").fetchMacUpdateManifest(metricsHeaders({ "Accept": "application/json" }))
+      : await fetchRemoteUpdateManifest();
     const manifest = selectLauncherUpdateManifest(currentVersion, bundledManifest, remoteManifest);
     if (!manifest) {
       launcherUpdateState = {

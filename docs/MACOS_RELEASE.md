@@ -58,7 +58,7 @@ notarizes and staples each final DMG, then verifies signatures, disk integrity,
 stapled tickets and Gatekeeper acceptance. `build-result.json`,
 `notarization-<arch>.json` and `SHA256SUMS` record the resulting artifacts.
 For an explicitly unnotarized signed preview, use `dist:mac:signed` instead.
-No command uploads a release to River's website or update channel.
+Build commands never upload a release to River's website or update channel.
 
 ## Runtime and updates
 
@@ -73,13 +73,78 @@ River `.rvr` instance exports and imports use streamed ZIP operations inside the
 launcher on Windows, macOS and Linux. They preserve the existing archive format
 and read older Windows ZIP paths without requiring PowerShell or a system archiver.
 
-Mac updates currently open a download in the browser for manual replacement.
-The signed manifest can supply `macUrls.arm64` / `macUrls.x64`, or a universal
-`macUrl`; without one the button opens the River website. It never applies the
-Windows updater or selects a Linux download. The shared minimum/required policy
-still applies: do not require a release until a usable Mac artifact is available.
-The existing Windows publication workflow does not publish Mac downloads.
+Mac updates open the architecture-specific DMG in the browser for manual
+replacement. The launcher reads the independently signed `/macos.json` manifest;
+a Windows/Linux release cannot offer a Mac build that has not been published.
+Both architectures are published together. The Mac publication is optional and
+does not change a forced-update minimum. A missing, unreachable or invalidly
+signed Mac manifest reports an unavailable update check, with no Windows fallback.
+Quit River Client before dragging the replacement app into Applications;
+accounts and instances remain in the existing application-data directory.
 Windows media-session integration is not available on macOS.
+
+## Manual R2 publication
+
+`.github/workflows/publish-macos.yml` (**Publish signed macOS downloads**) only
+runs through `workflow_dispatch` on `master`. Its default `publish=false` prepares
+a review artifact. Live publication requires WyZEU to dispatch (or retry) it with
+`publish=true`, after approving the exact build and notes. Merging, building,
+opening a PR, or completing CI never publishes a Mac release.
+
+The job uses the existing **river-update-production** environment and its original
+`RIVER_UPDATE_SIGNING_KEY_PEM`, `RIVER_R2_ACCESS_KEY_ID` and
+`RIVER_R2_SECRET_ACCESS_KEY`. It does not need Apple private keys and never rebuilds
+or resigns the DMGs. Do not replace the original River update signing key.
+
+1. After merge, wait for **Signed macOS release** to finish successfully for both
+   ARM64 and Intel. The two artifacts expire after 14 days; publish within that
+   window or create and review a new build.
+2. Run **Publish signed macOS downloads** with `publish=false`. Supply its build
+   run ID, full source commit, the current Mac version (`none` for the first
+   publication), and reviewed `release_notes` JSON containing `version`,
+   `approved: true`, `title`, `summary` and `items`.
+3. Review `river-macos-plan-<run>-<attempt>`: exact Actions archive digests,
+   source commit, Apple verification results, both DMG hashes, publication plan,
+   notes and unsigned manifest. The workflow checks master ancestry, clean source,
+   accepted notarization receipts, embedded runtime/JAR provenance, architecture,
+   app and container signatures for Apple team `A2A543D72R`, stapled tickets and
+   Gatekeeper acceptance. Both builds must have the same version and commit.
+4. With WyZ approval, deploy the reviewed Worker. Its
+   `/release-capabilities.json` must include `macosPublicationProtocol: 1`.
+   The initial `/macos.json` and rolling DMG links return 404 until publication.
+   Deploy the separately reviewed website through its manual **Deploy** workflow;
+   its Mac links remain unavailable until a complete release exists.
+   The website change is in [river-website PR #1](https://github.com/WyZEU/river-website/pull/1).
+5. WyZEU dispatches the publisher again with the **same build and notes**,
+   `publish=true`, and the reviewed previous Mac version. The artifact timestamps
+   make repeated preparation deterministic. No version bump occurs here.
+
+Objects are uploaded create-only under
+`releases/<version>-<commit12>/macos/`. Every object is read back from R2 and hashed;
+the public checksum file and both DMG routes are verified before a conditional
+ETag write activates `macos.json`. The signed manifest contains `macUrls.arm64`,
+`macUrls.x64`, sizes, SHA-256 hashes, notes and the source commit. The website reads
+it once per page load and only offers a complete pair of matching downloads.
+
+Stable browser links, redirected by the same manifest:
+
+- `https://updates.riverclient.xyz/downloads/River-Client-macOS-arm64.dmg`
+- `https://updates.riverclient.xyz/downloads/River-Client-macOS-x64.dmg`
+
+The publisher leaves `latest.json`, `beta.json`, Windows/Linux downloads and
+standalone-mod release history unchanged. There is no Mac beta publication in
+this workflow. Versioned release objects are public once staged; they must already
+have WyZ approval before a live run, even if promotion later fails.
+
+Review `river-macos-result-<run>-<attempt>` on failure as well as success.
+`publication-result.json` records whether promotion committed or is uncertain.
+A failure after promotion does not undo the release. Check live state and retry
+the **same build and inputs** to finish readback; do not replace an existing
+version, downgrade, delete objects or rebuild as a blind retry.
+
+No production publication or Worker/website deployment was performed while
+preparing this workflow. Native GitHub artifact retrieval and end-to-end live
+publication remain checks for the first approved release.
 
 ## Automatic GitHub builds
 

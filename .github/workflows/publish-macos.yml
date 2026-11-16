@@ -1,0 +1,132 @@
+name: Publish signed macOS downloads
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful Signed macOS release run ID (both architectures)
+        required: true
+        type: string
+      source_commit:
+        description: Full 40-character source commit of that build
+        required: true
+        type: string
+      expected_previous_version:
+        description: Current published Mac version, or none for the first publication
+        required: true
+        type: string
+      release_notes:
+        description: JSON with version, approved=true, title, summary and items
+        required: true
+        type: string
+      publish:
+        description: Publish after WyZ approval (only WyZEU can run this with true)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: river-macos-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'WyZEU/RiverClient' && github.ref == 'refs/heads/master'
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: river-update-production
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      EXPECTED_PREVIOUS_VERSION: ${{ inputs.expected_previous_version }}
+      RELEASE_NOTES_JSON: ${{ inputs.release_notes }}
+    steps:
+      - name: Require owner approval for live publication
+        if: inputs.publish && (github.actor != 'WyZEU' || github.triggering_actor != 'WyZEU')
+        run: |
+          echo 'WyZEU must dispatch or retry the live publication after reviewing the plan.' >&2
+          exit 1
+
+      - name: Check out reviewed publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Install publisher dependencies
+        run: npm ci --prefix launcher --ignore-scripts
+
+      - name: Check production environment policy
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node launcher/scripts/configure-update-publishing.js --policy-only
+
+      - name: Download exact successful signed build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node launcher/scripts/download-signed-build.js --platform macos --run-id "$BUILD_RUN_ID" --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/river-mac-build" --record "$RUNNER_TEMP/river-mac-source.json"
+
+      - name: Verify both Apple signatures and notarization tickets
+        run: |
+          node launcher/scripts/verify-macos-publication.js --artifact "$RUNNER_TEMP/river-mac-build" --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/river-mac-verification.json"
+
+      - name: Prepare publication without rebuilding
+        run: |
+          printf '%s' "$RELEASE_NOTES_JSON" > "$RUNNER_TEMP/river-mac-notes.json"
+          published_at="$(node -p 'require(process.env.RUNNER_TEMP + "/river-mac-source.json").publishedAt')"
+          node launcher/scripts/prepare-macos-publication.js --artifact "$RUNNER_TEMP/river-mac-build" --output "$RUNNER_TEMP/river-mac-publication" --commit "$SOURCE_COMMIT" --notes "$RUNNER_TEMP/river-mac-notes.json" --published-at "$published_at"
+          node launcher/scripts/publish-macos.js --prepared "$RUNNER_TEMP/river-mac-publication"
+
+      - name: Retain review plan
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: river-macos-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/river-mac-source.json
+            ${{ runner.temp }}/river-mac-verification.json
+            ${{ runner.temp }}/river-mac-publication/publication-plan.json
+            ${{ runner.temp }}/river-mac-publication/manifest.unsigned.json
+            ${{ runner.temp }}/river-mac-publication/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Sign and publish approved Mac downloads
+        if: inputs.publish
+        env:
+          UPDATE_PRIVATE_KEY_PEM: ${{ secrets.RIVER_UPDATE_SIGNING_KEY_PEM }}
+          RIVER_R2_ACCESS_KEY_ID: ${{ secrets.RIVER_R2_ACCESS_KEY_ID }}
+          RIVER_R2_SECRET_ACCESS_KEY: ${{ secrets.RIVER_R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export RIVER_UPDATE_SIGNING_KEY="$RUNNER_TEMP/river-mac-update-key.pem"
+          trap 'rm -f "$RIVER_UPDATE_SIGNING_KEY"' EXIT
+          test -n "$UPDATE_PRIVATE_KEY_PEM"
+          printf '%s' "$UPDATE_PRIVATE_KEY_PEM" > "$RIVER_UPDATE_SIGNING_KEY"
+          unset UPDATE_PRIVATE_KEY_PEM
+          node launcher/scripts/prepare-macos-publication.js --sign "$RUNNER_TEMP/river-mac-publication"
+          node launcher/scripts/publish-macos.js --prepared "$RUNNER_TEMP/river-mac-publication" --publish --expect-current-version "$EXPECTED_PREVIOUS_VERSION"
+
+      - name: Retain publication result
+        if: always() && inputs.publish
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: river-macos-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/river-mac-publication/publication-result.json
+            ${{ runner.temp }}/river-mac-publication/manifest.json
+          if-no-files-found: ignore
+          retention-days: 14
