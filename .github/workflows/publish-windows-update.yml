@@ -64,14 +64,15 @@ jobs:
       REQUIRED_UPDATE: ${{ inputs.required_update }}
     steps:
       - name: Check out reviewed publisher code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Node 22
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+          package-manager-cache: false
           cache: npm
           cache-dependency-path: launcher/package-lock.json
 
@@ -107,7 +108,7 @@ jobs:
           ./launcher/scripts/verify-publish-signatures.ps1 -ArtifactDirectory "$env:RUNNER_TEMP\river-signed-build" -PublicationDirectory "$env:RUNNER_TEMP\river-publication"
 
       - name: Retain the reviewable publication plan
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: river-update-plan-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -142,7 +143,7 @@ jobs:
 
       - name: Retain publication result
         if: always() && inputs.publish
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: river-update-result-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
