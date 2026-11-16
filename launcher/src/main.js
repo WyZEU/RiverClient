@@ -6,13 +6,14 @@ const { planRvrRestore } = require("./rvr-restore.js");
 const { compressPathsToRiverArchive, extractRiverArchive, archivePathParts } = require("./river-archive.js");
 const { installContentFile } = require("./content-install.js");
 const { sameInstalledContent, mergeMissingMetadata } = require("./content-metadata.js");
+const { createCredentialStore, publicAuth, publicSavedProfile } = require("./credential-store.js");
 const { pickRiverModEntry, fileMatchesSha256 } = require("./river-mod-cache.js");
 const { verifyManifest } = require("./update-signature.js");
 const { normalizeUpdateFilePath, buildDifferentialUpdatePlan, downloadFileViaBlockmap } = require("./update-files.js");
 const { nativeClassifierKey, matchesOsRule, isMacNativeLibraryAllowed, macJavaCandidates, javaArchitectureMatches, manualUpdateTarget } = require("./runtime-platform.js");
 // Never bundle River's CurseForge credential into a distributed launcher.
 function effectiveCurseForgeKey(settings) { return String(settings?.curseForgeApiKey || ""); }
-const { app, BrowserWindow, ipcMain, shell, dialog, screen, nativeImage, globalShortcut, clipboard, Notification } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, screen, nativeImage, globalShortcut, clipboard, Notification, safeStorage } = require("electron");
 const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
 const { pingMinecraftServer } = require("./server-ping.js");
@@ -30,6 +31,7 @@ const { pathToFileURL } = require("node:url");
 const zlib = require("node:zlib");
 const os = require("node:os");
 const semver = require("semver");
+const credentialStore = createCredentialStore({ safeStorage });
 
 // Last-resort guard: a stray uncaught error or rejected promise in the main process
 // otherwise pops Electron's fatal "A JavaScript error occurred" dialog and quits the
@@ -2306,17 +2308,22 @@ function normalizeInstance(instance) {
 }
 
 function readAuth() {
+  let auth;
   try {
-    const auth = JSON.parse(fs.readFileSync(authPath(), "utf8"));
-    const normalized = normalizeAuth(auth);
-    if (!auth.sessionExpiresAt && normalized.signedIn && normalized.microsoftRefreshToken) {
-      fs.mkdirSync(path.dirname(authPath()), { recursive: true });
-      fs.writeFileSync(authPath(), JSON.stringify(normalized, null, 2));
-    }
-    return normalized;
-  } catch {
-    return normalizeAuth({});
+    auth = credentialStore.read(authPath(), {}, isStoredAuth);
+  } catch (error) {
+    return { ...normalizeAuth({}), storageUnavailable: true, refreshError: error.message };
   }
+  const normalized = normalizeAuth(auth);
+  if (!auth.sessionExpiresAt && normalized.signedIn && normalized.microsoftRefreshToken) {
+    try { credentialStore.write(authPath(), normalized, {}, isStoredAuth); } catch {}
+  }
+  return normalized;
+}
+
+function isStoredAuth(auth) {
+  return Boolean(auth && typeof auth === "object" && !Array.isArray(auth) && !Object.hasOwn(auth, "format")
+    && (!auth.profile || (typeof auth.profile.id === "string" && typeof auth.profile.name === "string")));
 }
 
 function normalizeAuth(auth) {
@@ -2360,13 +2367,15 @@ function normalizeCapeEntry(entry) {
 
 function writeAuth(auth) {
   const normalized = normalizeAuth(auth);
-  fs.mkdirSync(path.dirname(authPath()), { recursive: true });
-  fs.writeFileSync(authPath(), JSON.stringify(normalized, null, 2));
+  const previous = credentialStore.read(authPath(), {}, isStoredAuth);
+  credentialStore.write(authPath(), normalized, {}, isStoredAuth);
+  if (previous.profile?.id !== normalized.profile?.id) forgetRiverSession();
   return normalized;
 }
 
 function clearAuth() {
-  fs.rmSync(authPath(), { force: true });
+  credentialStore.remove(authPath());
+  forgetRiverSession();
   return normalizeAuth({});
 }
 
@@ -2782,7 +2791,8 @@ function getStatus() {
     appVersion: clientModVersion,
     lastLaunchFailure,
     setupRunning,
-    auth,
+    auth: publicAuth(auth),
+    credentialStorage: credentialStore.status(),
     authReady: auth.signedIn,
     mode: selectedInstance && !instanceRunsRiver(selectedInstance)
       ? `${loaderLabel(selectedInstance.loader)} ${selectedInstance.version}`
@@ -3609,9 +3619,9 @@ ipcMain.handle("launcher:refresh-auth", async () => {
   const auth = await ensureFreshAuth();
   emitStatus();
   if (!hasUsableMinecraftToken(auth) && auth.refreshError) {
-    return { ok: false, message: auth.refreshError, auth };
+    return { ok: false, message: auth.refreshError, auth: publicAuth(auth) };
   }
-  return { ok: true, message: auth.signedIn ? "Microsoft session refreshed." : "Not signed in.", auth };
+  return { ok: true, message: auth.signedIn ? "Microsoft session refreshed." : "Not signed in.", auth: publicAuth(auth) };
 });
 
 ipcMain.handle("launcher:update-settings", (_event, patch) => {
@@ -4759,13 +4769,13 @@ ipcMain.handle("launcher:microsoft-login", async () => {
   if (offline) return offline;
   const result = await signInWithMicrosoft();
   emitStatus();
-  return result;
+  return { ...result, ...(result.auth ? { auth: publicAuth(result.auth) } : {}) };
 });
 
 ipcMain.handle("launcher:microsoft-logout", () => {
   const auth = clearAuth();
   emitStatus();
-  return { ok: true, message: "Signed out.", auth };
+  return { ok: true, message: "Signed out.", auth: publicAuth(auth) };
 });
 
 ipcMain.handle("launcher:choose-skin", async (_event, variant) => {
@@ -5647,7 +5657,7 @@ function attachLaunchProcess(status) {
 ipcMain.handle("launcher:microsoft-status", () => ({
   available: true,
   clientConfigured: Boolean(getMicrosoftClientId()),
-  auth: readAuth(),
+  auth: publicAuth(readAuth()),
   message: getMicrosoftClientId()
     ? "Microsoft sign-in is ready."
     : "River Client login is not configured in the launcher build yet."
@@ -7949,51 +7959,77 @@ async function installJavaRuntime(majorVersion = 21, options = {}) {
 // Profile switcher (multiple Microsoft accounts)
 function profilesPath() { return path.join(app.getPath("userData"), "profiles.json"); }
 function readProfiles() {
-  try { return JSON.parse(fs.readFileSync(profilesPath(), "utf8")); } catch { return []; }
+  return credentialStore.read(profilesPath(), [], isStoredProfiles);
+}
+function isStoredProfiles(profiles) {
+  return Array.isArray(profiles) && profiles.every((profile) => profile && typeof profile.id === "string" && typeof profile.name === "string" && isStoredAuth(profile.auth));
 }
 function writeProfiles(profiles) {
-  fs.writeFileSync(profilesPath(), JSON.stringify(profiles, null, 2));
+  credentialStore.write(profilesPath(), profiles, [], isStoredProfiles);
+}
+
+function updateSavedAuth(auth) {
+  if (!auth.profile?.id) return;
+  const profiles = readProfiles();
+  const existing = profiles.find((profile) => profile.id === auth.profile.id);
+  if (!existing) return;
+  existing.auth = auth;
+  existing.name = auth.profile.name;
+  writeProfiles(profiles);
 }
 
 ipcMain.handle("launcher:get-profiles", () => {
   const auth = readAuth();
-  return { profiles: readProfiles(), activeId: auth.profileId || null };
+  try { return { profiles: readProfiles().map(publicSavedProfile), activeId: auth.profileId || null }; }
+  catch (error) { return { ok: false, profiles: [], activeId: auth.profileId || null, message: error.message }; }
 });
 
 ipcMain.handle("launcher:save-profile", async () => {
-  const auth = readAuth();
-  if (!auth.profile?.id) return { ok: false, message: "Not signed in." };
-  const profiles = readProfiles();
-  const existing = profiles.findIndex(p => p.id === auth.profile.id);
-  const entry = {
-    id: auth.profile.id,
-    name: auth.profile.name,
-    savedAt: new Date().toISOString(),
-    auth
-  };
-  if (existing >= 0) profiles[existing] = entry;
-  else profiles.push(entry);
-  writeProfiles(profiles);
-  writeAuth({ ...auth, profileId: auth.profile.id });
-  emitStatus();
-  return { ok: true, message: `Saved profile for ${auth.profile.name}.` };
+  try {
+    const auth = readAuth();
+    if (auth.storageUnavailable) return { ok: false, message: auth.refreshError };
+    if (!auth.profile?.id) return { ok: false, message: "Not signed in." };
+    credentialStore.assertWritable(authPath(), {}, isStoredAuth);
+    const profiles = readProfiles();
+    const existing = profiles.findIndex(p => p.id === auth.profile.id);
+    const entry = {
+      id: auth.profile.id,
+      name: auth.profile.name,
+      savedAt: new Date().toISOString(),
+      auth
+    };
+    if (existing >= 0) profiles[existing] = entry;
+    else profiles.push(entry);
+    writeProfiles(profiles);
+    writeAuth({ ...auth, profileId: auth.profile.id });
+    emitStatus();
+    return { ok: true, message: `Saved profile for ${auth.profile.name}.` };
+  } catch (error) { return { ok: false, message: error.message }; }
 });
 
 ipcMain.handle("launcher:switch-profile", async (_event, profileId) => {
-  const profiles = readProfiles();
-  const profile = profiles.find(p => p.id === profileId);
-  if (!profile) return { ok: false, message: "Profile not found." };
-  const auth = writeAuth({ ...profile.auth, profileId: profileId });
-  await ensureAccountSkinSeeded(auth);
-  emitStatus();
-  refreshKeptSeasons();
-  return { ok: true, message: `Switched to ${profile.name}.` };
+  try {
+    const current = readAuth();
+    if (current.storageUnavailable) return { ok: false, message: current.refreshError };
+    // Persist the latest refresh token before leaving the active saved account.
+    updateSavedAuth(current);
+    const profiles = readProfiles();
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return { ok: false, message: "Profile not found." };
+    const auth = writeAuth({ ...profile.auth, profileId: profileId });
+    await ensureAccountSkinSeeded(auth);
+    emitStatus();
+    refreshKeptSeasons();
+    return { ok: true, message: `Switched to ${profile.name}.` };
+  } catch (error) { return { ok: false, message: error.message }; }
 });
 
 ipcMain.handle("launcher:remove-profile", (_event, profileId) => {
-  const profiles = readProfiles().filter(p => p.id !== profileId);
-  writeProfiles(profiles);
-  return { ok: true, message: "Profile removed." };
+  try {
+    const profiles = readProfiles().filter(p => p.id !== profileId);
+    writeProfiles(profiles);
+    return { ok: true, message: "Profile removed." };
+  } catch (error) { return { ok: false, message: error.message }; }
 });
 
 // Quick launch
@@ -8053,19 +8089,22 @@ let riverSignInBackoffMs = 0;
 function riverSessionFile() { return path.join(app.getPath("userData"), "river-session.json"); }
 function readStoredRiverSession(uuid) {
   try {
-    const stored = JSON.parse(fs.readFileSync(riverSessionFile(), "utf8"));
+    const stored = credentialStore.read(riverSessionFile(), {}, isStoredRiverSession);
     if (stored.uuid === uuid && stored.token && Number(stored.expiresAt) > Date.now() + 60_000) {
       return { token: String(stored.token), expiresAt: Number(stored.expiresAt) };
     }
   } catch {}
   return null;
 }
+function isStoredRiverSession(session) {
+  return Boolean(session && typeof session === "object" && !Array.isArray(session) && !Object.hasOwn(session, "format"));
+}
 function storeRiverSession(uuid, session) {
-  try { fs.writeFileSync(riverSessionFile(), JSON.stringify({ uuid, token: session.token, expiresAt: session.expiresAt })); } catch {}
+  try { credentialStore.write(riverSessionFile(), { uuid, token: session.token, expiresAt: session.expiresAt }, {}, isStoredRiverSession); } catch {}
 }
 function forgetRiverSession() {
   riverSessionCache = { token: "", expiresAt: 0 };
-  try { fs.rmSync(riverSessionFile(), { force: true }); } catch {}
+  try { credentialStore.remove(riverSessionFile()); } catch {}
 }
 function failRiverSignIn(message) {
   riverSignInError = message;
@@ -8872,6 +8911,7 @@ async function signInWithMicrosoft() {
   }
 
   try {
+    credentialStore.assertWritable(authPath(), {}, isStoredAuth);
     emit("launcher:log", "[auth] Starting Microsoft device-code sign-in...");
     emit("launcher:auth", { type: "stage", title: "Microsoft sign-in", detail: "Requesting a device code..." });
     const device = await requestMicrosoftDeviceCode(clientId);
@@ -8928,6 +8968,7 @@ async function refreshMicrosoftSession(auth = readAuth()) {
     throw new Error("Microsoft session expired. Sign in again.");
   }
 
+  credentialStore.assertWritable(authPath(), {}, isStoredAuth);
   emit("launcher:log", "[auth] Refreshing Microsoft session...");
   const microsoft = await refreshMicrosoftToken(clientId, auth.microsoftRefreshToken);
   const xbl = await authenticateXboxLive(microsoft.access_token);
@@ -8935,7 +8976,7 @@ async function refreshMicrosoftSession(auth = readAuth()) {
   const minecraft = await authenticateMinecraft(xsts);
   await assertMinecraftOwnership(minecraft.access_token);
   const profile = await fetchMinecraftProfile(minecraft.access_token);
-  return writeAuth({
+  const refreshed = writeAuth({
     ...auth,
     microsoftRefreshToken: microsoft.refresh_token || auth.microsoftRefreshToken,
     minecraftAccessToken: minecraft.access_token,
@@ -8943,6 +8984,9 @@ async function refreshMicrosoftSession(auth = readAuth()) {
     sessionExpiresAt: Date.now() + AUTH_SESSION_MS,
     profile
   });
+  try { updateSavedAuth(refreshed); }
+  catch { emit("launcher:log", "[auth] Could not update the saved account; the refreshed active sign-in is preserved."); }
+  return refreshed;
 }
 
 async function ensureFreshAuth(minLifeMs = AUTH_REFRESH_SKEW_MS) {
@@ -13243,6 +13287,11 @@ if (singleInstanceLock) {
       else runUpdaterMode();
       return;
     }
+    // Migrate all saved accounts on startup, including ones not currently selected.
+    // Locked or unavailable storage must not prevent the launcher from opening.
+    readAuth();
+    try { readProfiles(); } catch {}
+    readStoredRiverSession("");
     if (!discordRpcRefreshTimer) {
       discordRpcRefreshTimer = setInterval(() => scheduleDiscordPresenceRefresh(), 15000);
     }
