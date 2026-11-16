@@ -72,7 +72,7 @@ jobs:
         run: |
           npm run build:app
           if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed.' }
-          npx --no-install electron-builder --win dir --x64 --publish never -c.win.signAndEditExecutable=false "-c.directories.output=$env:RUNNER_TEMP\river-upgrade-candidate"
+          npx --no-install electron-builder --win dir --x64 --publish never --config.win.signAndEditExecutable=false "--config.directories.output=$env:RUNNER_TEMP\river-upgrade-candidate"
           if ($LASTEXITCODE -ne 0) { throw 'Candidate packaging failed.' }
       - name: Upgrade the public 0.3.0 client and verify login across restart
         run: |
