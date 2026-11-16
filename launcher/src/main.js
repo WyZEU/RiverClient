@@ -3,7 +3,9 @@ const nowPlaying = require("./now-playing.js");
 const curseforge = require("./curseforge.js");
 const { migrationPlan, migrationVersion } = require("./migration-plan.js");
 const { planRvrRestore } = require("./rvr-restore.js");
+const { compressPathsToRiverArchive, extractRiverArchive, archivePathParts } = require("./river-archive.js");
 const { installContentFile } = require("./content-install.js");
+const { sameInstalledContent, mergeMissingMetadata } = require("./content-metadata.js");
 const { pickRiverModEntry, fileMatchesSha256 } = require("./river-mod-cache.js");
 const { verifyManifest } = require("./update-signature.js");
 const { normalizeUpdateFilePath, buildDifferentialUpdatePlan, downloadFileViaBlockmap } = require("./update-files.js");
@@ -2990,28 +2992,39 @@ async function backfillInstalledIcons(instancePath) {
     for (const [file, metadata] of Object.entries(section)) {
       if (!metadata || (metadata.iconUrl && metadata.author)) continue;
       if (metadata.iconCheckedAt && Date.now() - Date.parse(metadata.iconCheckedAt) < 24 * 60 * 60 * 1000) continue;
+      const contentPath = path.join(folder, file);
+      if (!fs.existsSync(contentPath)) continue;
+      const before = fs.statSync(contentPath);
       const project = await resolveInstalledProject(instancePath, contentType, file, metadata);
-      metadata.iconCheckedAt = new Date().toISOString();
-      if (!project) {
-        changed = true;
-        continue;
+      const patch = { iconCheckedAt: new Date().toISOString() };
+      if (project) {
+        if (!metadata.iconUrl && project.icon_url) {
+          const cachedIcon = await cacheProjectIcon(project.id || metadata.projectId || metadata.slug || file, project.icon_url);
+          patch.iconUrl = cachedIcon || project.icon_url;
+          patch.remoteIconUrl = project.icon_url;
+        }
+        patch.projectId = project.id || "";
+        patch.slug = project.slug || "";
+        patch.title = project.title || path.basename(file);
+        patch.author = metadata.author || await getModrinthProjectAuthor(project);
       }
 
-      if (!metadata.iconUrl && project.icon_url) {
-        const cachedIcon = await cacheProjectIcon(project.id || metadata.projectId || metadata.slug || file, project.icon_url);
-        metadata.iconUrl = cachedIcon || project.icon_url;
-        metadata.remoteIconUrl = project.icon_url;
-      }
-      metadata.projectId = metadata.projectId || project.id || "";
-      metadata.slug = metadata.slug || project.slug || "";
-      metadata.title = metadata.title || project.title || path.basename(file);
-      metadata.author = metadata.author || await getModrinthProjectAuthor(project);
+      // All network work is finished. Read, merge and write without yielding so an
+      // install, removal, enable/disable or update scan cannot lose its newer state.
+      const latest = readModManifest(instancePath);
+      const latestSection = manifestSection(latest, contentType);
+      const current = latestSection[file];
+      if (!sameInstalledContent(metadata, current) || !fs.existsSync(contentPath)) continue;
+      const after = fs.statSync(contentPath);
+      if (before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs) continue;
+      if (current.iconCheckedAt !== metadata.iconCheckedAt) continue;
+      latestSection[file] = mergeMissingMetadata(current, patch);
+      writeModManifest(instancePath, latest);
       changed = true;
-      emit("launcher:log", `[mods] Updated metadata for ${metadata.title}.`);
+      if (project) emit("launcher:log", `[mods] Updated metadata for ${latestSection[file].title}.`);
     }
   }
 
-  if (changed) writeModManifest(instancePath, manifest);
   return changed;
 }
 
@@ -3497,50 +3510,6 @@ function openLogWindow({ focus = false } = {}) {
   logWindow.on("close", saveLogWindowState);
   logWindow.on("closed", () => { logWindow = null; });
   return logWindow;
-}
-
-async function compressPathsToRiverArchive(sourcePaths, destinationRvrPath) {
-  const tempZip = path.join(os.tmpdir(), `river-archive-${Date.now()}.zip`);
-  try {
-    const literalPaths = sourcePaths.map((entry) => `'${escapePowerShell(entry)}'`).join(",");
-    await runPowerShell([
-      "-NoProfile",
-      "-ExecutionPolicy", "Bypass",
-      "-Command",
-      `Compress-Archive -LiteralPath @(${literalPaths}) -DestinationPath '${escapePowerShell(tempZip)}' -CompressionLevel Fastest -Force`
-    ]);
-    if (!fs.existsSync(tempZip)) {
-      throw new Error("Archive creation failed.");
-    }
-    if (fs.existsSync(destinationRvrPath)) {
-      fs.rmSync(destinationRvrPath, { force: true });
-    }
-    fs.copyFileSync(tempZip, destinationRvrPath);
-  } finally {
-    try { fs.rmSync(tempZip, { force: true }); } catch {}
-  }
-}
-
-async function extractRiverArchive(archivePath, destinationDir) {
-  const needsTempCopy = archivePath.toLowerCase().endsWith(".rvr");
-  const extractSource = needsTempCopy
-    ? path.join(os.tmpdir(), `river-import-${Date.now()}.zip`)
-    : archivePath;
-  try {
-    if (needsTempCopy) {
-      fs.copyFileSync(archivePath, extractSource);
-    }
-    await runPowerShell([
-      "-NoProfile",
-      "-ExecutionPolicy", "Bypass",
-      "-Command",
-      `Expand-Archive -LiteralPath '${escapePowerShell(extractSource)}' -DestinationPath '${escapePowerShell(destinationDir)}' -Force`
-    ]);
-  } finally {
-    if (needsTempCopy) {
-      try { fs.rmSync(extractSource, { force: true }); } catch {}
-    }
-  }
 }
 
 function emitBoot(step, detail, done = false, error = false) {
@@ -6759,8 +6728,7 @@ function buildCompactContentIndex(instancePath, manifest, known = new Map(), bun
  * an export has to bring the instance back whole, not just the part that is easy to fetch.
  */
 async function buildRvrStagingDir(instance, progress = () => {}) {
-  const stagingDir = path.join(os.tmpdir(), `river-export-${instance.id}-${Date.now()}`);
-  fs.mkdirSync(stagingDir, { recursive: true });
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "river-export-"));
 
   const manifest = readModManifest(instance.path);
   const files = listRvrContentFiles(instance.path);
@@ -6946,7 +6914,7 @@ function importRvrArchive(rootPath, manifest, fallbackName) {
       const snapshot = JSON.parse(fs.readFileSync(settingsSnapshotPath, "utf8"));
       for (const [relativePath, content] of Object.entries(snapshot || {})) {
         if (typeof content !== "string") continue;
-        const targetPath = path.join(destPath, relativePath);
+        const targetPath = path.join(destPath, ...archivePathParts(relativePath));
         fs.mkdirSync(path.dirname(targetPath), { recursive: true });
         fs.writeFileSync(targetPath, content, "utf8");
       }
@@ -7679,9 +7647,7 @@ async function importRvrArchiveFromFile(archivePath) {
     return { ok: false, message: "That file is not a valid River .rvr export." };
   }
   const baseName = path.basename(archivePath, path.extname(archivePath));
-  const extractRoot = path.join(os.tmpdir(), `river-import-${Date.now()}`);
-
-  fs.mkdirSync(extractRoot, { recursive: true });
+  const extractRoot = fs.mkdtempSync(path.join(os.tmpdir(), "river-import-"));
   emitActivity({ title: "Importing instance", detail: "Unpacking River archive...", current: 0, total: 1 });
   try {
     await extractRiverArchive(archivePath, extractRoot);
@@ -12954,10 +12920,23 @@ async function checkModUpdates(instancePath) {
     }
   });
   await Promise.all(workers);
-  manifest.updates = updates;
-  manifest.checkedAt = new Date().toISOString();
-  writeModManifest(instancePath, manifest);
-  const count = Object.values(updates).filter((update) => update.available).length;
+  const current = readModManifest(instancePath);
+  for (const contentType of ["mod", "resourcepack", "shader"]) {
+    for (const [file, item] of Object.entries(manifestSection(manifest, contentType))) {
+      const latestItem = manifestSection(current, contentType)[file];
+      if (!sameInstalledContent(item, latestItem) || Boolean(item.pinned) !== Boolean(latestItem.pinned)) continue;
+      const key = updateKey(contentType, file);
+      // Another scan or a user action may have updated this cache while we waited.
+      if (JSON.stringify(current.updates[key]) !== JSON.stringify(manifest.updates[key])) continue;
+      if (contentType === "mod" && JSON.stringify(current.updates[file]) !== JSON.stringify(manifest.updates[file])) continue;
+      delete current.updates[key];
+      if (contentType === "mod") delete current.updates[file];
+      if (updates[key]) current.updates[key] = updates[key];
+    }
+  }
+  current.checkedAt = new Date().toISOString();
+  writeModManifest(instancePath, current);
+  const count = Object.values(current.updates).filter((update) => update.available).length;
   return { ok: true, message: `${count} content update${count === 1 ? "" : "s"} available.`, count };
 }
 

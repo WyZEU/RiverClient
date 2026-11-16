@@ -69,6 +69,10 @@ Mojang's `-XstartOnFirstThread` argument is preserved. Native JAR extraction
 does not require PowerShell. The mod uses `~/Library/Application Support` for
 its desktop bridge, and imports recognize the Mac `minecraft` directory.
 
+River `.rvr` instance exports and imports use streamed ZIP operations inside the
+launcher on Windows, macOS and Linux. They preserve the existing archive format
+and read older Windows ZIP paths without requiring PowerShell or a system archiver.
+
 Mac updates currently open a download in the browser for manual replacement.
 The signed manifest can supply `macUrls.arm64` / `macUrls.x64`, or a universal
 `macUrl`; without one the button opens the River website. It never applies the
