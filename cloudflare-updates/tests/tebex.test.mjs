@@ -64,3 +64,34 @@ test("the account River put on the order is the one that gets Plus", () => {
   const a = tebexAction({ type: "payment.completed", subject: { custom: { uuid: DASHED }, products: [{ name: "River Plus (1 Month)" }] } });
   assert.equal(a.uuid, UUID);
 });
+
+test("three-month renewals retain the full period from Tebex payment subjects", async () => {
+  const payment = { custom: { uuid: DASHED }, products: [{ name: "River Plus (3 Months)", quantity: 1 }] };
+  for (const subject of [
+    { initial_payment: payment },
+    { last_payment: payment },
+    { products: [], initial_payment: payment },
+    { recurring_payment: { initial_payment: payment } },
+    { recurring_payment: { last_payment: payment } }
+  ]) {
+    const action = tebexAction({ type: "recurring-payment.renewed", subject });
+    assert.deepEqual(action, { action: "grant", uuid: UUID, days: 94 });
+  }
+  const { cosmetics, values } = store();
+  const action = tebexAction({ type: "recurring-payment.renewed", subject: { initial_payment: payment, last_payment: payment } });
+  assert.deepEqual(action, { action: "grant", uuid: UUID, days: 94 });
+  const before = Date.now();
+  await post(cosmetics, "/plus/tebex", { eventId: "renewal-3-months", ...action });
+  assert.ok(values.get(`plus:${UUID}`).until >= before + 94 * DAY_MS);
+  assert.ok(values.get(`plus:${UUID}`).until <= Date.now() + 94 * DAY_MS);
+});
+
+test("renewals use the latest package after a subscription changes", () => {
+  for (const [initialMonths, currentMonths, expectedDays] of [[1, 3, 94], [3, 1, 32]]) {
+    const subject = {
+      initial_payment: { custom: { uuid: UUID }, products: [{ name: `River Plus (${initialMonths} Months)` }] },
+      last_payment: { custom: { uuid: UUID }, products: [{ name: `River Plus (${currentMonths} Months)` }] }
+    };
+    assert.equal(tebexAction({ type: "recurring-payment.renewed", subject }).days, expectedDays);
+  }
+});

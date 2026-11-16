@@ -89,4 +89,4 @@ custom_domain = true
 
 # The Tebex store's public token (not a secret: it only reads the store and starts orders).
 [vars]
-TEBEX_PUBLIC_TOKEN = "15ad5-79673ffbb6f84a6846b42136b65d99db9767dc5a"
+TEBEX_PUBLIC_TOKEN = "15bxs-f81bebde2233dfb85006db00e8968f2c825ee865"
