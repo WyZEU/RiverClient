@@ -32,9 +32,9 @@ role were checked again before setting them. No client secret was created.
 
 ## First signed build
 
-1. Resolve/check the repository owner's GitHub billing lock. When inspected on
-   2026-11-16, the latest CI run `43709926791` (from November 15) reported that it
-   had been rejected before any runner started for that reason.
+1. Confirm that GitHub Actions can start. On 2026-11-16 the owner updated the
+   failed payment method, and PR CI started successfully afterward. The earlier
+   account billing lock no longer prevents runners from starting.
 2. The repository secrets are already configured. To check Azure federation,
    certificate-profile access and GitHub access again, run:
 

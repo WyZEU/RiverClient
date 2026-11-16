@@ -109,14 +109,32 @@ only after tests and compilation. electron-builder creates a temporary signing
 Keychain; the workflow creates a separate temporary notarization Keychain, removes
 the plaintext API key immediately after importing it, and removes that Keychain
 on exit. No persistent runner is installed on a developer's Mac. The company
-certificate/profile may be shared with other products, so their revocation boundary
-is shared; this environment limits which branch can obtain the credentials.
+certificate is shared with other products, so revoking that certificate affects
+them too. River uses a separate notarization API key, which can be revoked
+independently; this environment limits which branch can obtain the credentials.
 
-On 2026-11-16, creating the environment was rejected with HTTP 403 because the
-connected account has repository write access but not administrator access. No
-Apple private key was uploaded. Owner setup and the first native Actions run
-remain pending. The repository's previously observed Actions billing lock must
-also be resolved by its owner before jobs can start.
+### Owner setup completed on 2026-11-16
+
+- `river-macos-release` exists with exactly one deployment rule: **branch `master`**.
+- All five environment secrets above are configured. The encrypted P12 contains
+  only the Supro Nivelo Developer ID Application identity, with a random export
+  password; its certificate fingerprint was verified after an in-memory import.
+- The Supro Nivelo App Store Connect team has a dedicated **RiverClient GitHub
+  Actions** key with the **Developer** role. Apple validated its notarization
+  credentials before they were uploaded. An encrypted local recovery profile is
+  stored in Keychain as `river-macos-github`; the downloaded plaintext P8 was removed.
+- The owner updated the failed payment method. GitHub-hosted PR CI then started
+  successfully, confirming that the previous account billing lock no longer
+  prevents runners from starting.
+
+The release workflows are still in PR #1. After review and merge into `master`,
+the push starts both native Mac builds automatically. The first GitHub-hosted
+signing/notarization run remains a required check; local credential validation
+and PR CI do not substitute for it. To retry a release after merge:
+
+```sh
+gh workflow run macos-release.yml --repo WyZEU/RiverClient --ref master
+```
 
 Run regression tests with:
 
