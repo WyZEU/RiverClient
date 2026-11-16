@@ -33,12 +33,17 @@ function apply(root, { sourceDir, installDir, mode = "delta", manifestPath, faul
   const updateRoot = path.join(root, "updates");
   const logPath = path.join(updateRoot, "apply.log");
   const launches = path.join(root, "launches.txt");
+  const trace = path.join(root, "filesystem-trace.txt");
   fs.rmSync(launches, { force: true });
+  fs.rmSync(trace, { force: true });
   const script = buildScript({ pid: 0, sourceDir, installDir, relaunchExe: path.join(installDir, "RiverClient.exe"),
     relaunchFallbackExe: path.join(installDir, "RiverClient.exe"), logPath, updateRoot, mode, manifestPath });
   // Run the actual generated script with real filesystem cmdlets. Process control and
   // retry delays are suppressed; failures are injected at the filesystem boundary.
   const wrapper = String.raw`
+function Matches-Suffix([string]$file, [string]$suffix) {
+  return $suffix -ne '' -and $file.Replace('\', '/').EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)
+}
 function Start-Sleep { param($Seconds, $Milliseconds) }
 function Wait-Process { param($Id, $ErrorAction) }
 function Get-Process { param($Name, $ErrorAction) }
@@ -47,20 +52,21 @@ function Start-Process { param($FilePath, $ArgumentList, $WorkingDirectory, $Win
 }
 function Copy-Item {
   [CmdletBinding()] param([string]$LiteralPath, [string]$Destination, [switch]$Force)
-  if ($LiteralPath -eq ${ps(faults.backup && path.join(installDir, faults.backup))} -and $Destination.Contains('transactions')) { throw 'Injected backup failure' }
-  if ($LiteralPath -eq ${ps(faults.apply && path.join(sourceDir, faults.apply))}) {
+  Add-Content -LiteralPath ${ps(trace)} -Value ("Copy: $LiteralPath -> $Destination")
+  if ((Matches-Suffix $LiteralPath ${ps(faults.backup && '/' + faults.backup)}) -and $Destination.Contains('transactions')) { throw 'Injected backup failure' }
+  if (Matches-Suffix $LiteralPath ${ps(faults.apply && '/' + path.basename(sourceDir) + '/' + faults.apply)}) {
     Set-Content -LiteralPath $Destination -Value 'partial copy'
     throw 'Injected apply failure'
   }
-  if ($Destination -eq ${ps(faults.restore && path.join(installDir, faults.restore))} -and $LiteralPath.Contains('transactions')) { throw 'Injected restore failure' }
+  if ((Matches-Suffix $Destination ${ps(faults.restore && '/' + faults.restore)}) -and $LiteralPath.Contains('transactions')) { throw 'Injected restore failure' }
   Microsoft.PowerShell.Management\Copy-Item @PSBoundParameters
-  if ($LiteralPath -eq ${ps(faults.corrupt && path.join(sourceDir, faults.corrupt))}) { Set-Content -LiteralPath $Destination -Value 'corrupt copy' }
+  if (Matches-Suffix $LiteralPath ${ps(faults.corrupt && '/' + path.basename(sourceDir) + '/' + faults.corrupt)}) { Set-Content -LiteralPath $Destination -Value 'corrupt copy' }
 }
 function Remove-Item {
   [CmdletBinding()] param([Parameter(ValueFromPipelineByPropertyName=$true)][Alias('PSPath')][string]$LiteralPath, [switch]$Force, [switch]$Recurse)
   process {
     Microsoft.PowerShell.Management\Remove-Item @PSBoundParameters
-    if ($LiteralPath -eq ${ps(faults.remove && path.join(installDir, faults.remove))}) { throw 'Injected removal failure after deletion' }
+    if (Matches-Suffix $LiteralPath ${ps(faults.remove && '/' + path.basename(installDir) + '/' + faults.remove)}) { throw 'Injected removal failure after deletion' }
   }
 }
 `;
@@ -69,7 +75,7 @@ function Remove-Item {
     encoding: "utf8", windowsHide: true, timeout: 120_000, env: shellEnv
   });
   if (result.error) throw result.error;
-  return { ...result, log: fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "",
+  return { ...result, log: (fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "") + (fs.existsSync(trace) ? fs.readFileSync(trace, "utf8") : ""),
     launches: fs.existsSync(launches) ? fs.readFileSync(launches, "utf8") : "", updateRoot };
 }
 
