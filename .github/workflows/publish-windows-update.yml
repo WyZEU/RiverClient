@@ -107,8 +107,12 @@ jobs:
         run: |
           $notesFile = "$env:RUNNER_TEMP\river-release-notes.json"
           [IO.File]::WriteAllText($notesFile, $env:RELEASE_NOTES_JSON)
-          $source = Get-Content -Raw "$env:RUNNER_TEMP\river-build-source.json" | ConvertFrom-Json
-          $params = @('launcher/scripts/prepare-signed-update.js', '--artifact', "$env:RUNNER_TEMP\river-signed-build", '--linux-artifact', "$env:RUNNER_TEMP\river-linux-build", '--output', "$env:RUNNER_TEMP\river-publication", '--commit', $env:SOURCE_COMMIT, '--notes', $notesFile, '--minimum-version', $env:MINIMUM_VERSION, '--channel', $env:UPDATE_CHANNEL, '--published-at', $source.publishedAt)
+          # Read the timestamp with node, as the macOS workflow does. ConvertFrom-Json turns
+          # an ISO 8601 string into a DateTime, which then reaches the script in the runner's
+          # local format and is refused as not canonical UTC.
+          $publishedAt = node -p "JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8')).publishedAt" "$env:RUNNER_TEMP\river-build-source.json"
+          if ($LASTEXITCODE -ne 0 -or -not $publishedAt) { throw 'The signed build record has no publication timestamp.' }
+          $params = @('launcher/scripts/prepare-signed-update.js', '--artifact', "$env:RUNNER_TEMP\river-signed-build", '--linux-artifact', "$env:RUNNER_TEMP\river-linux-build", '--output', "$env:RUNNER_TEMP\river-publication", '--commit', $env:SOURCE_COMMIT, '--notes', $notesFile, '--minimum-version', $env:MINIMUM_VERSION, '--channel', $env:UPDATE_CHANNEL, '--published-at', $publishedAt)
           if ($env:REQUIRED_UPDATE -eq 'true') { $params += '--required' }
           node @params
           if ($LASTEXITCODE -ne 0) { throw 'Publication preparation failed.' }
