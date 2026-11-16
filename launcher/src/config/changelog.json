@@ -4,6 +4,7 @@
   "summary": "A much smaller download.",
   "items": [
     "Improved: The Windows installer is back to about 230 MB instead of 1 GB. It carries River for Minecraft 1.21.11; other versions download the first time you play them.",
-    "Improved: The Mac and Linux downloads are smaller for the same reason."
+    "Improved: The Mac and Linux downloads are smaller for the same reason.",
+    "Fixed: With FancyMenu installed, River's main menu no longer covers FancyMenu's custom menus."
   ]
 }

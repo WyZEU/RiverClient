@@ -50,8 +50,16 @@ object RiverMainMenu {
 
     private data class MenuButton(val label: String, val action: (TitleScreen) -> Unit)
 
-    /** False when the player chose vanilla's main menu in River's settings. */
-    val enabled: Boolean get() = dev.wyz.clientcore.RiverRuntime.configOrNull()?.riverMainMenu != false
+    /**
+     * FancyMenu builds its own title screens. River's menu drawn on top of them hid the custom
+     * layout (reported on 1.21.1), so with FancyMenu installed River steps aside and its menu stays off.
+     */
+    private val fancyMenuInstalled: Boolean by lazy {
+        runCatching { net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("fancymenu") }.getOrDefault(false)
+    }
+
+    /** False when the player chose vanilla's main menu in River's settings, or FancyMenu is installed. */
+    val enabled: Boolean get() = !fancyMenuInstalled && dev.wyz.clientcore.RiverRuntime.configOrNull()?.riverMainMenu != false
 
     /** Column order. Quit is last, and River's icon row is drawn under it. */
     /*
