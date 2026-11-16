@@ -128,11 +128,18 @@ export function ModernRail({ view, setView, status }) {
       {profile ? (
         <button
           onClick={() => setView("wardrobe")}
-          title={`${profile.name} · ${t("Wardrobe")}`}
+          title={`${profile.name}${status?.plus ? " · River Plus" : ""} · ${t("Wardrobe")}`}
           aria-label={t("Wardrobe")}
           className="no-drag relative mt-1.5 rounded-lg outline-offset-2 transition-opacity hover:opacity-85"
         >
-          <PlayerHead skinUrl={resolveSkinTexture(status)} name={profile.name} size={36} className="rounded-lg" />
+          {/* With Plus the head wears the same gold the badge uses in game, so the two
+              match. Nothing moves and nothing is added to the rail. */}
+          <PlayerHead
+            skinUrl={resolveSkinTexture(status)}
+            name={profile.name}
+            size={36}
+            className={cn("rounded-lg", status?.plus && "ring-2 ring-plus ring-offset-2 ring-offset-card")}
+          />
           <span
             className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card"
             style={{ background: PRESENCE_COLOR[presence] || PRESENCE_COLOR.online }}

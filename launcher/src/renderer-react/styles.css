@@ -35,6 +35,7 @@
   --destructive-foreground: #0b0c10;
   --success: #72f1b8;               /* ClientUi.POSITIVE */
   --warning: #ffd46b;               /* ClientUi.WARNING */
+  --plus: #e7b84f;                  /* River Plus, the gold of the in-game badge */
   --border: #2f333d;                /* ClientUi.BORDER */
   --input: #2f333d;
   --ring: #2f6fe6;
@@ -65,6 +66,7 @@
   --destructive-foreground: #ffffff;
   --success: #1a9e63;
   --warning: #b9781a;
+  --plus: #a9781f;
   --border: #d8dbe1;
   --input: #d8dbe1;
   --ring: #2f6fe6;
@@ -89,6 +91,7 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-plus: var(--plus);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

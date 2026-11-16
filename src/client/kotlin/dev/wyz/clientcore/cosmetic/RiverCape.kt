@@ -35,13 +35,13 @@ object RiverCape {
     private val BUILTIN_STYLES = listOf(
         "river", "axie", "hardcore", "eclipse", "eightball", "halloween", "casaeullo", "plus", "gilded",
         "ember", "forest", "sunset", "storm", "galaxy",
-        "royal", "prism", "custom", "galaxysdc"
+        "royal", "prism", "custom", "fox"
     )
 
     private val BUILTIN_LABELS = listOf(
         "River", "Axie", "Hardcore", "Eclipse", "8-Ball", "Halloween", "Casaeullo", "Plus", "Gilded",
         "Ember", "Forest", "Sunset", "Storm", "Galaxy",
-        "Royal", "Prism", "My Cape", "Galaxysdc"
+        "Royal", "Prism", "My Cape", "Fox"
     )
 
     /**

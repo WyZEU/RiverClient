@@ -2762,6 +2762,48 @@ function lastSessionStartByInstance() {
   return map;
 }
 
+/*
+  Whether the signed-in player has River Plus. getStatus runs on every refresh, so the
+  answer is cached and the server is asked at most every ten minutes, in the background:
+  the status call itself never waits on the network. The last answer is kept while
+  offline rather than flickering the badge off.
+*/
+let riverPlusState = { uuid: "", active: false, checkedAt: 0 };
+let riverPlusChecking = false;
+const RIVER_PLUS_REFRESH_MS = 10 * 60 * 1000;
+
+function riverPlusActive(auth = readAuth()) {
+  // Same switch as the game's -Driver.dev.plus: look at the Plus treatment without a
+  // record on the server. A packaged launcher ignores it.
+  if (!app.isPackaged && process.env.RIVER_DEV_PLUS === "1") return true;
+  const uuid = String(auth?.profile?.id || "");
+  if (!uuid) {
+    riverPlusState = { uuid: "", active: false, checkedAt: 0 };
+    return false;
+  }
+  if (uuid !== riverPlusState.uuid) riverPlusState = { uuid, active: false, checkedAt: 0 };
+  const stale = Date.now() - riverPlusState.checkedAt > RIVER_PLUS_REFRESH_MS;
+  if (stale && !riverPlusChecking) {
+    riverPlusChecking = true;
+    fetch(`https://updates.riverclient.xyz/plus/status?uuid=${encodeURIComponent(uuid)}`, {
+      headers: { "User-Agent": launcherUserAgent }
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (body?.ok !== true || riverPlusState.uuid !== uuid) return;
+        const active = body.plus === true;
+        const changed = active !== riverPlusState.active;
+        riverPlusState = { uuid, active, checkedAt: Date.now() };
+        if (changed) emitStatus();
+      })
+      .catch(() => {})
+      .finally(() => {
+        riverPlusChecking = false;
+      });
+  }
+  return riverPlusState.active;
+}
+
 function getStatus() {
   const settings = readSettings();
   const auth = readAuth();
@@ -2817,6 +2859,7 @@ function getStatus() {
     packs: getLocalFiles(settings.instancePath, "resourcepacks", [".zip"]),
     shaders: getLocalFiles(settings.instancePath, "shaderpacks", [".zip"]),
     crashInfo: getCrashInfo(settings.instancePath),
+    plus: riverPlusActive(auth),
     launcherUpdate: getLauncherUpdateState(),
     changelog: getChangelog(),
     skinHistory: getSkinHistory(),
@@ -7237,7 +7280,7 @@ const RIVER_CAPES = [
   { id: "prism", label: "Prism", plus: true },
   // "My Cape" is a picture on the player's own PC; it is picked in game, not here.
   { id: "custom", label: "My Cape", local: true },
-  { id: "galaxysdc", label: "Galaxysdc" }
+  { id: "fox", label: "Fox" }
 ];
 
 function riverProfilePath(instancePath) {
@@ -7274,7 +7317,7 @@ ipcMain.handle("launcher:get-river-cosmetics", async () => {
 
   const base = "https://updates.riverclient.xyz/cosmetics";
   const uuid = String(readAuth()?.profile?.id || "");
-  const gated = [...((await fetchCosmeticList(`${base}/gated`, "gated")) || []), "axie", "casaeullo", "galaxysdc"];
+  const gated = [...((await fetchCosmeticList(`${base}/gated`, "gated")) || []), "axie", "casaeullo", "galaxy"];
   const owned = (uuid && await fetchCosmeticList(`${base}/owned?uuid=${encodeURIComponent(uuid)}`, "owned")) || [];
   const october = new Date().getMonth() === 9;
   const plus = Boolean(uuid && await fetch(`https://updates.riverclient.xyz/plus/status?uuid=${encodeURIComponent(uuid)}`).then((r) => r.json()).then((b) => b?.plus === true).catch(() => false));

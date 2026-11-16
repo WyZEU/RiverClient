@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Ban, Check, Loader2 } from "lucide-react";
+import { Ban, Check, Loader2, Sparkles } from "lucide-react";
 import { api } from "../lib/useStatus";
 import { cn } from "../lib/utils";
 import { Switch } from "./ui/switch";
@@ -10,7 +10,7 @@ import { useT } from "../i18n/context.jsx";
 const PLUS_LAUNCHED = false;
 
 // Painted 1024x512 capes: scaled smoothly, the pixel-art ones stay crisp.
-const HD_CAPES = new Set(["river", "ember", "forest", "sunset", "storm", "galaxy", "plus", "gilded", "royal", "prism"]);
+const HD_CAPES = new Set(["river", "ember", "forest", "sunset", "storm", "galaxy", "plus", "gilded", "royal", "prism", "fox"]);
 
 function CapeCard({ label, active, disabled, onClick, children }) {
   return (
@@ -73,6 +73,14 @@ export function RiverCosmetics({ notify }) {
 
   return (
     <div className="space-y-4">
+      {/* With Plus the extra capes below are simply there; this says where they came
+          from, in one line, without a panel or a picture. */}
+      {state.plus ? (
+        <div className="flex items-center gap-2 text-[11px] font-semibold text-plus">
+          <Sparkles className="size-3.5" />
+          {t("River Plus is active on this account.")}
+        </div>
+      ) : null}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
         <CapeCard label={t("No cape")} active={!state.capeStyle} disabled={busy} onClick={() => save({ capeStyle: "" })}>
           <Ban className="size-8 text-muted-foreground" />
