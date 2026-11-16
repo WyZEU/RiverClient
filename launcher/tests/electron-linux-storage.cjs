@@ -5,8 +5,14 @@ const os = require("node:os");
 const assert = require("node:assert/strict");
 const { createCredentialStore } = require("../src/credential-store");
 
-const directory = path.resolve(process.argv[2] || "");
-const phase = process.argv[3];
+// Electron keeps switches before the script in argv. Never let an early assertion
+// open an invisible error dialog and leave the headless runner waiting forever.
+process.on("uncaughtException", (error) => { console.error(error); app.exit(1); });
+const timeout = setTimeout(() => { console.error("Linux storage smoke timed out"); app.exit(1); }, 30_000);
+const scriptIndex = process.argv.findIndex((argument) => path.resolve(argument) === __filename);
+assert.ok(scriptIndex > 0, "Missing storage test script argument");
+const directory = path.resolve(process.argv[scriptIndex + 1] || "");
+const phase = process.argv[scriptIndex + 2];
 assert.equal(process.platform, "linux");
 assert.ok(fs.realpathSync(directory).startsWith(fs.realpathSync(os.tmpdir()) + path.sep));
 assert.ok(path.basename(directory).startsWith("river-linux-storage-"));
@@ -16,7 +22,6 @@ app.setPath("userData", directory);
 app.setPath("sessionData", directory);
 app.commandLine.appendSwitch("password-store", "basic");
 app.disableHardwareAcceleration();
-const timeout = setTimeout(() => app.exit(1), 30_000);
 app.whenReady().then(() => {
   assert.equal(safeStorage.getSelectedStorageBackend(), "basic_text");
   const store = createCredentialStore({ safeStorage });

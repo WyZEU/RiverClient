@@ -50,8 +50,8 @@ jobs:
         run: |
           storage_test_dir=$(mktemp -d /tmp/river-linux-storage-XXXXXX)
           trap 'rm -rf "$storage_test_dir"' EXIT
-          xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" write
-          xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" restart
+          timeout --kill-after=10s 60s xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" write
+          timeout --kill-after=10s 60s xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" restart
       - name: Retain the verified Linux build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
