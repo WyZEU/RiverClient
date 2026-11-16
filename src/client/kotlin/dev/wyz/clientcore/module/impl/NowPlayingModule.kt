@@ -64,6 +64,11 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
 
     override val hudStack: HudStack = HudStack.TOP_RIGHT
 
+    // Text color is the song title, the label color its times, the accent the progress bar.
+    override val styleOpts = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.LABEL, StyleOpt.ACCENT, StyleOpt.SHADOW)
+    override val labelColorName: String = "Times color"
+    override val labelColorHint: String? = null
+
     private data class Track(
         val playing: Boolean = false,
         val status: String = "",
@@ -299,11 +304,6 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
         return "${s / 60}:${(s % 60).toString().padStart(2, '0')}"
     }
 
-    override fun editorApproximateSize(client: Minecraft): Pair<Int, Int> {
-        val scale = scaleFactor()
-        return Pair((150 * scale).toInt(), ((6 + COVER) * scale).toInt())
-    }
-
     override fun render(client: Minecraft, graphics: GuiGraphics, tickDelta: Float) {
         poll()
         val t = track ?: return
@@ -330,30 +330,45 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
 
         val art = if (showArt) cover(t.artFile) else null
         val coverW2 = if (showArt) COVER else 0
-        val tx = x + coverW2 + (if (showArt) 6 else 0)
         val barW = font.width(t.title).coerceIn(70, 150)
+
+        // The panel behind it all, in this module's style like every other HUD module.
+        val st = effectiveStyle()
+        val pad = st.padding.coerceAtLeast(3)
+        val textH = font.lineHeight + 2 +
+            (if (showBar) BAR_H + 2 + (if (showTimes) font.lineHeight + 1 else 0) else 0) +
+            (if (showControls) BTN + 1 else 0)
+        val contentW = coverW2 + (if (showArt) 6 else 0) + barW
+        val contentH = maxOf(if (showArt) COVER else 0, textH)
+        drawPillBackground(graphics, contentW + pad * 2, contentH + pad * 2)
+        val ox = x + pad
+        val oy = y + pad
+        val tx = ox + coverW2 + (if (showArt) 6 else 0)
+        val shadow = st.textShadow
+        val times = labelColor
+        val bar = if (st.accentColor >= 0) panelAccentColor() else SPOTIFY_GREEN
 
         // Album cover - the song icon. Falls back to the Spotify mark until art arrives.
         if (showArt) {
             if (art != null) {
 //? if >=1.21.6 {
-                graphics.riverBlit(art, x, y, 0f, 0f, COVER, COVER, coverW, coverH, coverW, coverH)
+                graphics.riverBlit(art, ox, oy, 0f, 0f, COVER, COVER, coverW, coverH, coverW, coverH)
 //?} else {
-/*                graphics.riverBlit(art, x, y, 0f, 0f, COVER, COVER, coverW, coverH, coverW, coverH)
+/*                graphics.riverBlit(art, ox, oy, 0f, 0f, COVER, COVER, coverW, coverH, coverW, coverH)
 *///?}
             } else {
-                ClientUi.fillRounded(graphics, x, y, COVER, COVER, ClientUi.RADIUS_CARD, ClientUi.PANEL_ALT)
+                ClientUi.fillRounded(graphics, ox, oy, COVER, COVER, ClientUi.RADIUS_CARD, ClientUi.PANEL_ALT)
 //? if >=1.21.6 {
-                logo()?.let { graphics.riverBlit(it, x + 6, y + 6, 0f, 0f, COVER - 12, COVER - 12, 64, 64, 64, 64) }
+                logo()?.let { graphics.riverBlit(it, ox + 6, oy + 6, 0f, 0f, COVER - 12, COVER - 12, 64, 64, 64, 64) }
 //?} else {
-/*                logo()?.let { graphics.riverBlit(it, x + 6, y + 6, 0f, 0f, COVER - 12, COVER - 12, 64, 64, 64, 64) }
+/*                logo()?.let { graphics.riverBlit(it, ox + 6, oy + 6, 0f, 0f, COVER - 12, COVER - 12, 64, 64, 64, 64) }
 *///?}
             }
         }
 
         // Track name (no app branding), then progress + times, then controls in a menu.
-        var ty = y
-        graphics.drawString(font, trim(font, t.title, barW), tx, ty, ClientUi.TEXT, true)
+        var ty = oy
+        graphics.drawString(font, trim(font, t.title, barW), tx, ty, panelTextColor(), shadow)
         ty += font.lineHeight + 2
 
         if (showBar) {
@@ -362,12 +377,12 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
             val ratio = (done.toFloat() / t.duration.toFloat()).coerceIn(0f, 1f)
             val fill = (barW * ratio).toInt().coerceAtLeast(1)
             ClientUi.fillRounded(graphics, tx, barY, barW, BAR_H, 1, 0x66000000)
-            ClientUi.fillRounded(graphics, tx, barY, fill, BAR_H, 1, if (t.playing) SPOTIFY_GREEN else ClientUi.DIM)
+            ClientUi.fillRounded(graphics, tx, barY, fill, BAR_H, 1, if (t.playing) bar else ClientUi.DIM)
             ty = barY + BAR_H + 2
             if (showTimes) {
-                graphics.drawString(font, clock(done), tx, ty, ClientUi.DIM, true)
+                graphics.drawString(font, clock(done), tx, ty, times, shadow)
                 val right = clock(t.duration)
-                graphics.drawString(font, right, tx + barW - font.width(right), ty, ClientUi.DIM, true)
+                graphics.drawString(font, right, tx + barW - font.width(right), ty, times, shadow)
                 ty += font.lineHeight + 1
             }
         }

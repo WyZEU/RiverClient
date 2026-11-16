@@ -23,6 +23,8 @@ import net.minecraft.world.level.LightLayer
  * before the merge.
  */
 class CoordinatesModule : Module("coordinates", "Coordinates", "Position, facing, biome and speed", ModuleCategory.HUD, "item:minecraft:compass", 8, 26) {
+    // Axis and row labels have their own colours, so there is no label colour to set.
+    override val styleOpts = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.ACCENT, StyleOpt.SHADOW)
 
     private companion object {
         // Per-axis label tint, like the reference HUD: X/Y/Z read at a glance.

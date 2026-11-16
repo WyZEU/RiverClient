@@ -30,7 +30,7 @@ class TimeModule : Module("time", "Time", "Clock and session length", ModuleCate
     private fun showSession() = flag("session", true)
 
     override val multiLine: Boolean
-        get() = showClock() && showSession()
+        get() = showClock() && showSession() && !effectiveStyle().layoutHorizontal
 
     override fun addModuleSettings(list: MutableList<Setting>) {
         list.add(SectionSetting("Readouts"))

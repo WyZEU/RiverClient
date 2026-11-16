@@ -11,6 +11,7 @@ import net.minecraft.client.gui.GuiGraphics
 //?}
 
 class EnabledModulesModule : Module("enabled_modules", "Module List", "List of active modules", ModuleCategory.HUD, "list", 8, 322, false) {
+    override val styleOpts = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.SHADOW)
 
     override val multiLine: Boolean = true
     /** Rebuilt at the configured HUD update rate; rendering every frame reuses the cache. */

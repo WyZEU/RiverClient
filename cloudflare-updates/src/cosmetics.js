@@ -24,7 +24,7 @@
 import { HALLOWEEN_EVENT } from "./events.js";
 
 /** Cosmetics that require a redemption. Anything not listed is free to everyone. */
-export const GATED_COSMETICS = new Set(["axie", "casaeullo"]);
+export const GATED_COSMETICS = new Set(["axie", "casaeullo", "galaxysdc"]);
 
 /*
   River Plus: an optional monthly subscription. It only ever adds cosmetics and early

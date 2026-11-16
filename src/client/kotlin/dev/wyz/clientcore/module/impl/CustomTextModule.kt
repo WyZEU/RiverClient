@@ -17,6 +17,7 @@ import net.minecraft.client.Minecraft
  * "FPS: {fps}" shows as "FPS: 240".
  */
 class CustomTextModule : RowsHudModule("custom_text", "Custom Text", "Your own lines with live values", "edit", 8, 380) {
+    override val styleOpts = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.SHADOW)
 
     private companion object {
         const val MAX_LINES = 12

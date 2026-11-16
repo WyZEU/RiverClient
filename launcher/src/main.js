@@ -7229,12 +7229,24 @@ ipcMain.handle("launcher:get-instance-cards", () => {
 */
 const RIVER_CAPES = [
   { id: "river", label: "River" },
-  { id: "axie", label: "Axie" },
+  { id: "axie", label: "Axie", retired: true },
   { id: "hardcore", label: "Hardcore" },
   { id: "eclipse", label: "Eclipse" },
   { id: "eightball", label: "8-Ball" },
   { id: "halloween", label: "Halloween" },
-  { id: "casaeullo", label: "Casaeullo" }
+  { id: "casaeullo", label: "Casaeullo" },
+  { id: "plus", label: "Plus", plus: true },
+  { id: "gilded", label: "Gilded", plus: true },
+  { id: "ember", label: "Ember" },
+  { id: "forest", label: "Forest" },
+  { id: "sunset", label: "Sunset" },
+  { id: "storm", label: "Storm" },
+  { id: "galaxy", label: "Galaxy" },
+  { id: "royal", label: "Royal", plus: true },
+  { id: "prism", label: "Prism", plus: true },
+  // "My Cape" is a picture on the player's own PC; it is picked in game, not here.
+  { id: "custom", label: "My Cape", local: true },
+  { id: "galaxysdc", label: "Galaxysdc" }
 ];
 
 function riverProfilePath(instancePath) {
@@ -7271,10 +7283,13 @@ ipcMain.handle("launcher:get-river-cosmetics", async () => {
 
   const base = "https://updates.riverclient.xyz/cosmetics";
   const uuid = String(readAuth()?.profile?.id || "");
-  const gated = [...((await fetchCosmeticList(`${base}/gated`, "gated")) || []), "axie", "casaeullo"];
+  const gated = [...((await fetchCosmeticList(`${base}/gated`, "gated")) || []), "axie", "casaeullo", "galaxysdc"];
   const owned = (uuid && await fetchCosmeticList(`${base}/owned?uuid=${encodeURIComponent(uuid)}`, "owned")) || [];
   const october = new Date().getMonth() === 9;
+  const plus = Boolean(uuid && await fetch(`https://updates.riverclient.xyz/plus/status?uuid=${encodeURIComponent(uuid)}`).then((r) => r.json()).then((b) => b?.plus === true).catch(() => false));
   const capes = RIVER_CAPES.filter((cape) => {
+    if (cape.local || cape.retired) return false;
+    if (cape.plus) return plus;
     if (gated.includes(cape.id) && !owned.includes(cape.id)) return false;
     return cape.id !== "halloween" || october || owned.includes(cape.id);
   });
@@ -7289,7 +7304,7 @@ ipcMain.handle("launcher:get-river-cosmetics", async () => {
     capeStyle: cape?.enabled ? (RIVER_CAPES[styleIndex]?.id || "river") : "",
     badge: Boolean(badge?.enabled && badge?.nameTag?.showRiverBadge !== false),
     playerName: String(readAuth()?.profile?.name || ""),
-    plus: Boolean(uuid && await fetch(`https://updates.riverclient.xyz/plus/status?uuid=${encodeURIComponent(uuid)}`).then((r) => r.json()).then((b) => b?.plus === true).catch(() => false))
+    plus
   };
 });
 

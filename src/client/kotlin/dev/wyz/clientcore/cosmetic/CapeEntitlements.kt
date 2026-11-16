@@ -36,7 +36,7 @@ object CapeEntitlements {
       starting empty meant a gated cape was on the list, ungreyed, for as long as the fetch
       took. Since the mod ships the texture anyway, it can ship the fact that it is locked.
     */
-    private val DEFAULT_GATED = setOf("axie", "casaeullo") + RiverCape.PLUS
+    private val DEFAULT_GATED = setOf("axie", "casaeullo", "galaxysdc") + RiverCape.PLUS
 
     @Volatile
     private var gated: Set<String> = DEFAULT_GATED

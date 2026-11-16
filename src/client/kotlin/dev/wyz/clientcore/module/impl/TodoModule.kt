@@ -18,6 +18,8 @@ import net.minecraft.client.gui.GuiGraphics
 
 /** A task list on the screen. Lines are ticked off in its manager, which its key opens. */
 class TodoModule : Module("todo", "To-Do", "Your own task list on screen", ModuleCategory.HUD, "item:minecraft:writable_book", 8, 420, false) {
+    override val labelColorName: String = "Finished task color"
+    override val labelColorHint: String? = null
     override val multiLine: Boolean = true
     override val keybindLabel: String = "Open list"
 

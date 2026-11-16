@@ -267,6 +267,19 @@ abstract class Module(
      *  so single-line readouts don't show a setting that does nothing. */
     open val multiLine: Boolean = false
 
+    /** The shared style controls this module's drawing really reads. Background, glass,
+     *  colour, opacity, corners, bold and small caps always apply; the rest only where listed,
+     *  so no module shows a setting that does nothing. */
+    enum class StyleOpt { PADDING, BORDER, TEXT, LABEL, ACCENT, SHADOW }
+
+    protected open val styleOpts: Set<StyleOpt>
+        get() = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.LABEL, StyleOpt.SHADOW)
+
+    /** What the label colour is for in this module, and what the spacing slider spaces. */
+    protected open val labelColorName: String = "Label color"
+    protected open val labelColorHint: String? = "The name next to a value, like FPS in FPS 240."
+    protected open val spacingName: String = "Line spacing"
+
     private fun addPanelStyleSettings(list: MutableList<Setting>) {
         val st = { mutableStyle() }
 
@@ -282,24 +295,42 @@ abstract class Module(
         list.add(ColorSetting("Color", false, { colorOr(st().backgroundColor, ClientUi.PANEL_SOFT) }, { st().backgroundColor = it and 0xFFFFFF }))
         list.add(IntSetting("Opacity", 0, 255, { st().backgroundOpacity }, { st().backgroundOpacity = it }))
         list.add(IntSetting("Rounded corners", 0, 8, { st().cornerRadius }, { st().cornerRadius = it }, "px"))
-        list.add(IntSetting("Padding", 2, 20, { st().padding }, { st().padding = it }, "px"))
+        val opts = styleOpts
+        if (StyleOpt.PADDING in opts) {
+            list.add(IntSetting("Padding", 2, 20, { st().padding }, { st().padding = it }, "px"))
+        }
 
-        list.add(SectionSetting("Border"))
-        list.add(BoolSetting("Border", { st().showBorder }, { st().showBorder = it }))
-        list.add(IntSetting("Border opacity", 0, 255, { st().borderOpacity }, { st().borderOpacity = it }))
+        if (StyleOpt.BORDER in opts) {
+            list.add(SectionSetting("Border"))
+            list.add(BoolSetting("Border", { st().showBorder }, { st().showBorder = it }))
+            list.add(IntSetting("Border opacity", 0, 255, { st().borderOpacity }, { st().borderOpacity = it }))
+            // Without an accent of its own, the accent colour is only the border's colour.
+            if (StyleOpt.ACCENT !in opts) {
+                list.add(ColorSetting("Border color", false, { colorOr(st().accentColor, ClientUi.BORDER) }, { st().accentColor = it and 0xFFFFFF }))
+            }
+        }
 
         list.add(SectionSetting("Text"))
-        list.add(ColorSetting("Text color", false, { colorOr(st().textColor, 0xF2F4FA) }, { st().textColor = it and 0xFFFFFF }))
-        list.add(ColorSetting("Label color", false, { colorOr(st().labelColor, 0x97A0B5) }, { st().labelColor = it and 0xFFFFFF })
-            .hint("The name next to a value, like FPS in FPS 240."))
-        list.add(ColorSetting("Accent color", false, { colorOr(st().accentColor, dev.wyz.clientcore.ui.RiverTheme.current.hudAccent) }, { st().accentColor = it and 0xFFFFFF }))
+        if (StyleOpt.TEXT in opts) {
+            list.add(ColorSetting("Text color", false, { colorOr(st().textColor, 0xF2F4FA) }, { st().textColor = it and 0xFFFFFF }))
+        }
+        if (StyleOpt.LABEL in opts) {
+            val label = ColorSetting(labelColorName, false, { colorOr(st().labelColor, 0x97A0B5) }, { st().labelColor = it and 0xFFFFFF })
+            labelColorHint?.let { label.hint(it) }
+            list.add(label)
+        }
+        if (StyleOpt.ACCENT in opts) {
+            list.add(ColorSetting("Accent color", false, { colorOr(st().accentColor, dev.wyz.clientcore.ui.RiverTheme.current.hudAccent) }, { st().accentColor = it and 0xFFFFFF }))
+        }
 //? if >=1.21.6 {
         list.add(BoolSetting("Bold", { st().boldText }, { st().boldText = it }))
         list.add(BoolSetting("Small caps", { st().smallCaps }, { st().smallCaps = it }))
 //?}
-        list.add(BoolSetting("Text shadow", { st().textShadow }, { st().textShadow = it }))
+        if (StyleOpt.SHADOW in opts) {
+            list.add(BoolSetting("Text shadow", { st().textShadow }, { st().textShadow = it }))
+        }
         if (multiLine) {
-            list.add(IntSetting("Line spacing", 0, 16, { st().spacing }, { st().spacing = it }, "px"))
+            list.add(IntSetting(spacingName, 0, 16, { st().spacing }, { st().spacing = it }, "px"))
         }
         if (rowsCanBeHorizontal) {
             list.add(BoolSetting("Horizontal layout", { st().layoutHorizontal }, { st().layoutHorizontal = it }))
@@ -646,10 +677,13 @@ abstract class Module(
         if (border && st.showBorder) {
             val bo = st.borderOpacity.coerceIn(0, 255)
             // Neutral 1px border; a custom accent colour tints it.
-            val borderRgb = if (st.accentColor >= 0) panelAccentColor() and 0xFFFFFF else ClientUi.BORDER and 0xFFFFFF
-            ClientUi.drawRoundedBorder(graphics, bx, by, w, h, radius, (bo shl 24) or borderRgb)
+            ClientUi.drawRoundedBorder(graphics, bx, by, w, h, radius, (bo shl 24) or panelBorderRgb())
         }
     }
+
+    /** The border's colour: neutral, or the module's accent / border colour when one is set. */
+    protected fun panelBorderRgb(): Int =
+        if (effectiveStyle().accentColor >= 0) panelAccentColor() and 0xFFFFFF else ClientUi.BORDER and 0xFFFFFF
 
     /** Draws [body] with this module's bold / small-caps text style on. */
     fun <T> withTextStyle(body: () -> T): T {

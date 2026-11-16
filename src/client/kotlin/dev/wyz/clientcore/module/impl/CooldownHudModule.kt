@@ -26,6 +26,7 @@ import kotlin.math.roundToInt
  * drawn while nothing is cooling down.
  */
 class CooldownHudModule : Module("cooldowns", "Cooldowns", "Item cooldowns with the seconds left", ModuleCategory.HUD, "item:minecraft:ender_pearl", 8, 300, false) {
+    override val styleOpts = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.ACCENT, StyleOpt.SHADOW)
 
     private fun horizontal() = scalar("layout", 0) == 1
     private fun decimals() = flag("decimals", true)

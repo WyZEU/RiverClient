@@ -19,6 +19,7 @@ import net.minecraft.client.gui.GuiGraphics
  * every server allows it.
  */
 class ToggleSprintModule : Module("toggle_sprint", "Toggle Sprint", "Sprint and sneak without holding keys", ModuleCategory.GAMEPLAY, "run", 8, 370, false) {
+    override val styleOpts = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.SHADOW)
     private var sprintOn = true
     private var sneakOn = false
     private var heldSprint = false

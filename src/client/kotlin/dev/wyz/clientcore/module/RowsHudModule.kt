@@ -23,7 +23,13 @@ abstract class RowsHudModule(
     defaultY: Int,
     defaultEnabled: Boolean = false
 ) : Module(id, displayName, description, ModuleCategory.HUD, icon, defaultX, defaultY, defaultEnabled) {
-    override val rowsCanBeHorizontal: Boolean = true
+    // Line layout, line spacing and label colour only where this module has more than one row / labels.
+    override val rowsCanBeHorizontal: Boolean
+        get() = previewRows().size > 1
+    override val multiLine: Boolean
+        get() = previewRows().size > 1 && !effectiveStyle().layoutHorizontal
+    override val styleOpts: Set<StyleOpt>
+        get() = if (previewRows().any { it.first.isNotEmpty() }) super.styleOpts else super.styleOpts - StyleOpt.LABEL
 
     /** What to show right now, or an empty list to draw nothing. */
     protected abstract fun rows(client: Minecraft): List<Pair<String, String>>
