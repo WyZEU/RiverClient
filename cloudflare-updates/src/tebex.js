@@ -36,6 +36,8 @@ export function tebexUuid(subject) {
     subject?.custom?.uuid,
     subject?.recurring_payment?.initial_payment?.custom?.uuid,
     subject?.initial_payment?.custom?.uuid,
+    subject?.last_payment?.custom?.uuid,
+    subject?.recurring_payment?.last_payment?.custom?.uuid,
     subject?.customer?.username?.id,
     subject?.recurring_payment?.customer?.username?.id,
     ...(Array.isArray(subject?.products) ? subject.products.map((p) => p?.username?.id) : []),
@@ -54,9 +56,15 @@ export function tebexUuid(subject) {
  * One month is 31 days plus one spare day, so a renewal a day late never drops Plus.
  */
 export function tebexDays(subject) {
-  const products = Array.isArray(subject?.products) ? subject.products
-    : Array.isArray(subject?.recurring_payment?.initial_payment?.products) ? subject.recurring_payment.initial_payment.products
-    : [];
+  // Renewal webhooks put their payments directly on the subject. Prefer the most
+  // recent payment, so a changed subscription uses its current package duration.
+  const products = [
+    subject?.products,
+    subject?.last_payment?.products,
+    subject?.initial_payment?.products,
+    subject?.recurring_payment?.last_payment?.products,
+    subject?.recurring_payment?.initial_payment?.products
+  ].find((items) => Array.isArray(items) && items.length > 0) || [];
   let days = 0;
   for (const product of products) {
     const months = Number(/(\d+)\s*month/i.exec(String(product?.name || ""))?.[1]) || 1;
@@ -91,7 +99,7 @@ export function tebexAction(event) {
 }
 
 /** The River Plus packages on the Tebex store, by how many months they are for. */
-export const PLUS_PACKAGES = { 1: "7805094", 3: "7805099" };
+export const PLUS_PACKAGES = { 1: "7815389", 3: "7815393" };
 
 /**
  * A Tebex checkout link for River Plus, with the player's Minecraft account on the order so

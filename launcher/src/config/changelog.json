@@ -1,6 +1,17 @@
 {
   "releases": [
     {
+      "version": "0.3.1",
+      "title": "River Client 0.3.1",
+      "summary": "Signed Windows releases, native macOS builds and more reliable launcher updates.",
+      "items": [
+        "Added: Native macOS launcher builds for Apple Silicon and Intel Macs.",
+        "Improved: The Windows application and installers are signed by Supro Nivelo s.r.o.",
+        "Fixed: Update checks rejecting a release when the server changed its minimum supported version.",
+        "Improved: Differential updates can reuse unchanged blocks of large files instead of downloading the entire file."
+      ]
+    },
+    {
       "version": "0.3.0",
       "title": "River Client 0.3.0",
       "summary": "A cleaner River menu, a Keybinds page, performance mods by default, 26.3 launching again, and the lyrics crash fixed.",

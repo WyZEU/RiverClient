@@ -10,10 +10,13 @@ import kotlin.io.path.exists
 object DesktopBridge {
     private const val PRESENCE_REFRESH_MS = 2000L
     private val gson = GsonBuilder().create()
-    /** The folder the launcher and the game share: %APPDATA% on Windows, ~/.config on Linux. */
+    /** Matches Electron's appData directory on Windows, Linux and macOS. */
     fun riverDataRoot(): Path {
         System.getenv("APPDATA")?.takeIf { it.isNotBlank() }?.let { return Path.of(it) }
         val home = System.getProperty("user.home")
+        if (System.getProperty("os.name").orEmpty().contains("Mac", ignoreCase = true)) {
+            return Path.of(home, "Library", "Application Support")
+        }
         if (System.getProperty("os.name").orEmpty().contains("Linux")) {
             return System.getenv("XDG_CONFIG_HOME")?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
                 ?: Path.of(home, ".config")

@@ -951,6 +951,8 @@ async function main() {
     Raise RIVER_MINIMUM_VERSION when release files are actually deleted, not when a new
     release goes out.
   */
+  // This field is signed below. The Worker cannot override it from its dynamic mod
+  // policy: changing the launcher's minimum requires publishing a newly signed manifest.
   const minimumVersion = String(process.env.RIVER_MINIMUM_VERSION || "0.1.7").trim();
   if (compareReleaseVersions(minimumVersion, version) > 0) {
     throw new Error(`RIVER_MINIMUM_VERSION (${minimumVersion}) is newer than the version being published (${version}).`);

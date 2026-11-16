@@ -1,0 +1,62 @@
+name: Linux release build
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      RIVER_RELEASE_BUILD: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Check out the build commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+      - name: Set up Java 21 and 25
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+      - name: Install dependencies and verify the source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          npm ci --prefix launcher
+          node launcher/scripts/prepare-windows-release.js --check
+      - name: Verify sign-in persistence without a Linux keyring
+        run: |
+          storage_test_dir=$(mktemp -d /tmp/river-linux-storage-XXXXXX)
+          trap 'rm -rf "$storage_test_dir"' EXIT
+          timeout --kill-after=10s 60s xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" write
+          timeout --kill-after=10s 60s xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" restart
+      - name: Build all Minecraft targets and bootstrap
+        run: |
+          ./gradlew build --no-daemon -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64,JAVA_HOME_25_X64
+          node launcher/scripts/prepare-windows-release.js
+      - name: Build the Linux distribution
+        working-directory: launcher
+        run: npm run dist:linux
+      - name: Check the packaged Linux runtime
+        run: |
+          ELECTRON_RUN_AS_NODE=1 launcher/dist/linux-unpacked/river-client -e 'const assert = require("node:assert/strict"); const pkg = require(process.cwd() + "/launcher/dist/linux-unpacked/resources/app.asar/package.json"); assert.equal(pkg.version, require("./launcher/package.json").riverVersion); console.log("Linux Electron", process.versions.electron, "version", pkg.version);'
+          node launcher/scripts/linux-release-artifact.js
+      - name: Retain the verified Linux build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: river-linux-${{ github.sha }}
+          path: launcher/dist/linux-release/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

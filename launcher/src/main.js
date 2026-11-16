@@ -3,16 +3,21 @@ const nowPlaying = require("./now-playing.js");
 const curseforge = require("./curseforge.js");
 const { migrationPlan, migrationVersion } = require("./migration-plan.js");
 const { planRvrRestore } = require("./rvr-restore.js");
+const { compressPathsToRiverArchive, extractRiverArchive, archivePathParts } = require("./river-archive.js");
+const { installContentFile } = require("./content-install.js");
+const { sameInstalledContent, mergeMissingMetadata } = require("./content-metadata.js");
+const { createCredentialStore, publicAuth, publicSavedProfile } = require("./credential-store.js");
+const { createAuthSession } = require("./auth-session.js");
 const { pickRiverModEntry, fileMatchesSha256 } = require("./river-mod-cache.js");
 const { verifyManifest } = require("./update-signature.js");
+const { buildApplyUpdateScript } = require("./update-apply.js");
+const { normalizeUpdateFilePath, buildDifferentialUpdatePlan, downloadFileViaBlockmap } = require("./update-files.js");
+const { nativeClassifierKey, matchesOsRule, isMacNativeLibraryAllowed, macJavaCandidates, javaArchitectureMatches, manualUpdateTarget } = require("./runtime-platform.js");
 // Never bundle River's CurseForge credential into a distributed launcher.
 function effectiveCurseForgeKey(settings) { return String(settings?.curseForgeApiKey || ""); }
-const { app, BrowserWindow, ipcMain, shell, dialog, screen, nativeImage, globalShortcut, clipboard, Notification } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, screen, nativeImage, globalShortcut, clipboard, Notification, safeStorage } = require("electron");
 const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
-// Shared with scripts/publish-update.js on purpose: if the two ends chunked differently
-// no hash would ever match and every patch would silently fall back to a full download.
-const { chunkBuffer } = require("../scripts/blockmap.js");
 const { pingMinecraftServer } = require("./server-ping.js");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
@@ -28,6 +33,8 @@ const { pathToFileURL } = require("node:url");
 const zlib = require("node:zlib");
 const os = require("node:os");
 const semver = require("semver");
+const credentialStore = createCredentialStore({ safeStorage });
+const authSession = createAuthSession();
 
 // Last-resort guard: a stray uncaught error or rejected promise in the main process
 // otherwise pops Electron's fatal "A JavaScript error occurred" dialog and quits the
@@ -156,6 +163,7 @@ function createUpdaterWindow() {
     }
   });
 
+  if (IS_MAC) mainWindow.setWindowButtonVisibility(false);
   mainWindow.loadFile(path.join(__dirname, "renderer", "updater.html"));
 }
 
@@ -198,16 +206,14 @@ function launchDedicatedUpdaterProcess(update) {
   // launched, it would only patch a temp folder that is deleted on exit. Send the user
   // to the new portable download instead.
   if (portableExecutableFile() || !IS_WINDOWS) {
-    const target = IS_WINDOWS
-      ? (update?.portableUrl || update?.installerUrl || RIVER_WEBSITE_URL)
-      : (update?.linuxUrl || RIVER_WEBSITE_URL);
+    const target = manualUpdateTarget(update, RIVER_WEBSITE_URL);
     shell.openExternal(target).catch(() => {});
     const message = (IS_WINDOWS
       ? `River Client ${update?.latestVersion || ""} is ready. The portable build can't update itself, so the download has been opened in your browser - replace your current River Client.exe with it.`
-      : `River Client ${update?.latestVersion || ""} is ready. River on Linux can't update itself yet, so the download has been opened in your browser - replace your current copy with it.`
+      : `River Client ${update?.latestVersion || ""} is ready. River on ${IS_MAC ? "macOS" : "Linux"} can't update itself yet, so the download has been opened in your browser - replace your current copy with it.`
     ).replace(/\s+/g, " ").trim();
-    emit("launcher:log", `[update] Portable build detected; opened ${target} instead of self-updating.`);
-    emitActivity({ title: "Download the new portable", detail: message, current: 1, total: 1, done: true });
+    emit("launcher:log", `[update] Manual update required; opened ${target}.`);
+    emitActivity({ title: "Download the new version", detail: message, current: 1, total: 1, done: true });
     return { ok: false, message, portable: true };
   }
 
@@ -1150,6 +1156,7 @@ let launcherUpdateState = {
   installerUrl: "",
   portableUrl: "",
   linuxUrl: "",
+  macUrl: "",
   packageUrl: "",
   packageParts: [],
   fileManifestUrl: "",
@@ -1261,6 +1268,7 @@ const defaults = {
 
 const IS_WINDOWS = process.platform === "win32";
 const IS_LINUX = process.platform === "linux";
+const IS_MAC = process.platform === "darwin";
 // An AppImage or an unpacked tar.gz cannot give Chromium's setuid sandbox helper the root
 // ownership it insists on, and without it the launcher does not start at all on many
 // distros. The window only ever loads River's own bundled pages, so run without it.
@@ -1455,6 +1463,9 @@ function createWindow() {
       sandbox: false
     }
   });
+  // River supplies its own title-bar controls; native traffic lights would
+  // overlap the logo and navigation in the modern layout.
+  if (IS_MAC) mainWindow.setWindowButtonVisibility(false);
   if (devPlacement) mainWindow.showInactive();
   // Started at sign-in: straight to the taskbar, so a window does not pop up over the desktop.
   if (startedAtLogin && !devPlacement) mainWindow.minimize();
@@ -2300,17 +2311,22 @@ function normalizeInstance(instance) {
 }
 
 function readAuth() {
+  let auth;
   try {
-    const auth = JSON.parse(fs.readFileSync(authPath(), "utf8"));
-    const normalized = normalizeAuth(auth);
-    if (!auth.sessionExpiresAt && normalized.signedIn && normalized.microsoftRefreshToken) {
-      fs.mkdirSync(path.dirname(authPath()), { recursive: true });
-      fs.writeFileSync(authPath(), JSON.stringify(normalized, null, 2));
-    }
-    return normalized;
-  } catch {
-    return normalizeAuth({});
+    auth = credentialStore.read(authPath(), {}, isStoredAuth);
+  } catch (error) {
+    return authSession.tag({ ...normalizeAuth({}), storageUnavailable: true, refreshError: error.message });
   }
+  const normalized = normalizeAuth(auth);
+  if (!auth.sessionExpiresAt && normalized.signedIn && normalized.microsoftRefreshToken) {
+    try { credentialStore.write(authPath(), normalized, {}, isStoredAuth); } catch {}
+  }
+  return authSession.tag(normalized);
+}
+
+function isStoredAuth(auth) {
+  return Boolean(auth && typeof auth === "object" && !Array.isArray(auth) && !Object.hasOwn(auth, "format")
+    && (!auth.profile || (typeof auth.profile.id === "string" && typeof auth.profile.name === "string")));
 }
 
 function normalizeAuth(auth) {
@@ -2352,16 +2368,23 @@ function normalizeCapeEntry(entry) {
   };
 }
 
-function writeAuth(auth) {
+function writeAuth(auth, { replaceSession = false } = {}) {
+  if (authSession.isTracked(auth)) authSession.assertCurrent(auth);
   const normalized = normalizeAuth(auth);
-  fs.mkdirSync(path.dirname(authPath()), { recursive: true });
-  fs.writeFileSync(authPath(), JSON.stringify(normalized, null, 2));
-  return normalized;
+  const previous = credentialStore.read(authPath(), {}, isStoredAuth);
+  credentialStore.write(authPath(), normalized, {}, isStoredAuth);
+  if (replaceSession || previous.profile?.id !== normalized.profile?.id) {
+    authSession.invalidate();
+    forgetRiverSession();
+  }
+  return authSession.tag(normalized);
 }
 
 function clearAuth() {
-  fs.rmSync(authPath(), { force: true });
-  return normalizeAuth({});
+  credentialStore.remove(authPath());
+  authSession.invalidate();
+  forgetRiverSession();
+  return authSession.tag(normalizeAuth({}));
 }
 
 function hasUsableMinecraftToken(auth) {
@@ -2776,7 +2799,8 @@ function getStatus() {
     appVersion: clientModVersion,
     lastLaunchFailure,
     setupRunning,
-    auth,
+    auth: publicAuth(auth),
+    credentialStorage: credentialStore.status(),
     authReady: auth.signedIn,
     mode: selectedInstance && !instanceRunsRiver(selectedInstance)
       ? `${loaderLabel(selectedInstance.loader)} ${selectedInstance.version}`
@@ -2986,28 +3010,39 @@ async function backfillInstalledIcons(instancePath) {
     for (const [file, metadata] of Object.entries(section)) {
       if (!metadata || (metadata.iconUrl && metadata.author)) continue;
       if (metadata.iconCheckedAt && Date.now() - Date.parse(metadata.iconCheckedAt) < 24 * 60 * 60 * 1000) continue;
+      const contentPath = path.join(folder, file);
+      if (!fs.existsSync(contentPath)) continue;
+      const before = fs.statSync(contentPath);
       const project = await resolveInstalledProject(instancePath, contentType, file, metadata);
-      metadata.iconCheckedAt = new Date().toISOString();
-      if (!project) {
-        changed = true;
-        continue;
+      const patch = { iconCheckedAt: new Date().toISOString() };
+      if (project) {
+        if (!metadata.iconUrl && project.icon_url) {
+          const cachedIcon = await cacheProjectIcon(project.id || metadata.projectId || metadata.slug || file, project.icon_url);
+          patch.iconUrl = cachedIcon || project.icon_url;
+          patch.remoteIconUrl = project.icon_url;
+        }
+        patch.projectId = project.id || "";
+        patch.slug = project.slug || "";
+        patch.title = project.title || path.basename(file);
+        patch.author = metadata.author || await getModrinthProjectAuthor(project);
       }
 
-      if (!metadata.iconUrl && project.icon_url) {
-        const cachedIcon = await cacheProjectIcon(project.id || metadata.projectId || metadata.slug || file, project.icon_url);
-        metadata.iconUrl = cachedIcon || project.icon_url;
-        metadata.remoteIconUrl = project.icon_url;
-      }
-      metadata.projectId = metadata.projectId || project.id || "";
-      metadata.slug = metadata.slug || project.slug || "";
-      metadata.title = metadata.title || project.title || path.basename(file);
-      metadata.author = metadata.author || await getModrinthProjectAuthor(project);
+      // All network work is finished. Read, merge and write without yielding so an
+      // install, removal, enable/disable or update scan cannot lose its newer state.
+      const latest = readModManifest(instancePath);
+      const latestSection = manifestSection(latest, contentType);
+      const current = latestSection[file];
+      if (!sameInstalledContent(metadata, current) || !fs.existsSync(contentPath)) continue;
+      const after = fs.statSync(contentPath);
+      if (before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs) continue;
+      if (current.iconCheckedAt !== metadata.iconCheckedAt) continue;
+      latestSection[file] = mergeMissingMetadata(current, patch);
+      writeModManifest(instancePath, latest);
       changed = true;
-      emit("launcher:log", `[mods] Updated metadata for ${metadata.title}.`);
+      if (project) emit("launcher:log", `[mods] Updated metadata for ${latestSection[file].title}.`);
     }
   }
 
-  if (changed) writeModManifest(instancePath, manifest);
   return changed;
 }
 
@@ -3476,6 +3511,7 @@ function openLogWindow({ focus = false } = {}) {
     }
   });
 
+  if (IS_MAC) logWindow.setWindowButtonVisibility(false);
   if (saved?.maximized) logWindow.maximize();
   logWindow.loadFile(path.join(__dirname, "renderer", "logs.html"));
   logWindow.once("ready-to-show", () => {
@@ -3492,50 +3528,6 @@ function openLogWindow({ focus = false } = {}) {
   logWindow.on("close", saveLogWindowState);
   logWindow.on("closed", () => { logWindow = null; });
   return logWindow;
-}
-
-async function compressPathsToRiverArchive(sourcePaths, destinationRvrPath) {
-  const tempZip = path.join(os.tmpdir(), `river-archive-${Date.now()}.zip`);
-  try {
-    const literalPaths = sourcePaths.map((entry) => `'${escapePowerShell(entry)}'`).join(",");
-    await runPowerShell([
-      "-NoProfile",
-      "-ExecutionPolicy", "Bypass",
-      "-Command",
-      `Compress-Archive -LiteralPath @(${literalPaths}) -DestinationPath '${escapePowerShell(tempZip)}' -CompressionLevel Fastest -Force`
-    ]);
-    if (!fs.existsSync(tempZip)) {
-      throw new Error("Archive creation failed.");
-    }
-    if (fs.existsSync(destinationRvrPath)) {
-      fs.rmSync(destinationRvrPath, { force: true });
-    }
-    fs.copyFileSync(tempZip, destinationRvrPath);
-  } finally {
-    try { fs.rmSync(tempZip, { force: true }); } catch {}
-  }
-}
-
-async function extractRiverArchive(archivePath, destinationDir) {
-  const needsTempCopy = archivePath.toLowerCase().endsWith(".rvr");
-  const extractSource = needsTempCopy
-    ? path.join(os.tmpdir(), `river-import-${Date.now()}.zip`)
-    : archivePath;
-  try {
-    if (needsTempCopy) {
-      fs.copyFileSync(archivePath, extractSource);
-    }
-    await runPowerShell([
-      "-NoProfile",
-      "-ExecutionPolicy", "Bypass",
-      "-Command",
-      `Expand-Archive -LiteralPath '${escapePowerShell(extractSource)}' -DestinationPath '${escapePowerShell(destinationDir)}' -Force`
-    ]);
-  } finally {
-    if (needsTempCopy) {
-      try { fs.rmSync(extractSource, { force: true }); } catch {}
-    }
-  }
 }
 
 function emitBoot(step, detail, done = false, error = false) {
@@ -3635,9 +3627,9 @@ ipcMain.handle("launcher:refresh-auth", async () => {
   const auth = await ensureFreshAuth();
   emitStatus();
   if (!hasUsableMinecraftToken(auth) && auth.refreshError) {
-    return { ok: false, message: auth.refreshError, auth };
+    return { ok: false, message: auth.refreshError, auth: publicAuth(auth) };
   }
-  return { ok: true, message: auth.signedIn ? "Microsoft session refreshed." : "Not signed in.", auth };
+  return { ok: true, message: auth.signedIn ? "Microsoft session refreshed." : "Not signed in.", auth: publicAuth(auth) };
 });
 
 ipcMain.handle("launcher:update-settings", (_event, patch) => {
@@ -3678,7 +3670,7 @@ function detectExternalMinecraftInstances() {
   const dataRoot = IS_LINUX ? path.join(home, ".local", "share") : appData;
   const mcRoot = IS_LINUX ? home : appData;
   const candidates = [
-    { name: "Vanilla Minecraft", gameDir: path.join(mcRoot, ".minecraft"), launcher: "Minecraft Launcher" },
+    { name: "Vanilla Minecraft", gameDir: path.join(mcRoot, IS_MAC ? "minecraft" : ".minecraft"), launcher: "Minecraft Launcher" },
     ...(IS_LINUX ? [
       { name: "Vanilla Minecraft (Flatpak)", gameDir: path.join(home, ".var", "app", "com.mojang.Minecraft", ".minecraft"), launcher: "Minecraft Launcher" },
       { name: "Modrinth profile", gameDir: path.join(dataRoot, "com.modrinth.theseus", "profiles"), launcher: "Modrinth App" },
@@ -4785,13 +4777,13 @@ ipcMain.handle("launcher:microsoft-login", async () => {
   if (offline) return offline;
   const result = await signInWithMicrosoft();
   emitStatus();
-  return result;
+  return { ...result, ...(result.auth ? { auth: publicAuth(result.auth) } : {}) };
 });
 
 ipcMain.handle("launcher:microsoft-logout", () => {
   const auth = clearAuth();
   emitStatus();
-  return { ok: true, message: "Signed out.", auth };
+  return { ok: true, message: "Signed out.", auth: publicAuth(auth) };
 });
 
 ipcMain.handle("launcher:choose-skin", async (_event, variant) => {
@@ -5673,7 +5665,7 @@ function attachLaunchProcess(status) {
 ipcMain.handle("launcher:microsoft-status", () => ({
   available: true,
   clientConfigured: Boolean(getMicrosoftClientId()),
-  auth: readAuth(),
+  auth: publicAuth(readAuth()),
   message: getMicrosoftClientId()
     ? "Microsoft sign-in is ready."
     : "River Client login is not configured in the launcher build yet."
@@ -6754,8 +6746,7 @@ function buildCompactContentIndex(instancePath, manifest, known = new Map(), bun
  * an export has to bring the instance back whole, not just the part that is easy to fetch.
  */
 async function buildRvrStagingDir(instance, progress = () => {}) {
-  const stagingDir = path.join(os.tmpdir(), `river-export-${instance.id}-${Date.now()}`);
-  fs.mkdirSync(stagingDir, { recursive: true });
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "river-export-"));
 
   const manifest = readModManifest(instance.path);
   const files = listRvrContentFiles(instance.path);
@@ -6941,7 +6932,7 @@ function importRvrArchive(rootPath, manifest, fallbackName) {
       const snapshot = JSON.parse(fs.readFileSync(settingsSnapshotPath, "utf8"));
       for (const [relativePath, content] of Object.entries(snapshot || {})) {
         if (typeof content !== "string") continue;
-        const targetPath = path.join(destPath, relativePath);
+        const targetPath = path.join(destPath, ...archivePathParts(relativePath));
         fs.mkdirSync(path.dirname(targetPath), { recursive: true });
         fs.writeFileSync(targetPath, content, "utf8");
       }
@@ -7674,9 +7665,7 @@ async function importRvrArchiveFromFile(archivePath) {
     return { ok: false, message: "That file is not a valid River .rvr export." };
   }
   const baseName = path.basename(archivePath, path.extname(archivePath));
-  const extractRoot = path.join(os.tmpdir(), `river-import-${Date.now()}`);
-
-  fs.mkdirSync(extractRoot, { recursive: true });
+  const extractRoot = fs.mkdtempSync(path.join(os.tmpdir(), "river-import-"));
   emitActivity({ title: "Importing instance", detail: "Unpacking River archive...", current: 0, total: 1 });
   try {
     await extractRiverArchive(archivePath, extractRoot);
@@ -7752,8 +7741,10 @@ ipcMain.handle("launcher:install-java", async (_event, majorVersion = 21) => ins
 function javaMajorVersion(javaPath) {
   try {
     const { spawnSync } = require("node:child_process");
-    const result = spawnSync(javaPath, ["-version"], { encoding: "utf8", timeout: 6000 });
+    const result = spawnSync(javaPath, IS_MAC ? ["-XshowSettings:properties", "-version"] : ["-version"], { encoding: "utf8", timeout: 6000 });
     const text = `${result.stderr || ""}${result.stdout || ""}`;
+    // An Intel JVM can run under Rosetta but cannot load ARM64 LWJGL libraries.
+    if (result.status !== 0 || (IS_MAC && !javaArchitectureMatches(text))) return 0;
     const m = text.match(/version "(\d+)(?:\.(\d+))?/);
     if (!m) return 0;
     const major = Number(m[1]);
@@ -7798,7 +7789,7 @@ function resolveUsableJava(settings, minMajor = 21, options = {}) {
   const bundledJre = path.join(app.getPath("userData"), "java-runtimes");
   if (fs.existsSync(bundledJre)) {
     const walk = (dir, depth = 0) => {
-      if (depth > 4) return;
+      if (depth > 6) return;
       let entries = [];
       try { entries = fs.readdirSync(dir); } catch { return; }
       for (const e of entries) {
@@ -7821,7 +7812,7 @@ function resolveUsableJava(settings, minMajor = 21, options = {}) {
     "C:\\Program Files\\Amazon Corretto",
     "C:\\Program Files (x86)\\Eclipse Adoptium",
     "C:\\Program Files (x86)\\Java"
-  ] : [
+  ] : IS_MAC ? macJavaCandidates(app.getPath("home")) : [
     "/usr/lib/jvm",
     "/usr/lib64/jvm",
     "/usr/java",
@@ -7834,7 +7825,8 @@ function resolveUsableJava(settings, minMajor = 21, options = {}) {
     if (!fs.existsSync(root)) continue;
     try {
       for (const dir of fs.readdirSync(root)) {
-        const jexe = path.join(root, dir, "bin", javaName);
+        const jexe = IS_MAC ? path.join(root, dir, "Contents", "Home", "bin", javaName)
+          : path.join(root, dir, "bin", javaName);
         if (fs.existsSync(jexe)) candidates.push(jexe);
       }
     } catch {}
@@ -7952,7 +7944,7 @@ async function installJavaRuntime(majorVersion = 21, options = {}) {
   // Find the java binary inside the extracted dir
   const javaBinaryName = IS_WINDOWS ? "java.exe" : "java";
   const findJava = (dir, depth = 0) => {
-    if (depth > 4) return null;
+    if (depth > 6) return null;
     for (const entry of fs.readdirSync(dir)) {
       const full = path.join(dir, entry);
       const isDir = fs.statSync(full).isDirectory();
@@ -7975,51 +7967,78 @@ async function installJavaRuntime(majorVersion = 21, options = {}) {
 // Profile switcher (multiple Microsoft accounts)
 function profilesPath() { return path.join(app.getPath("userData"), "profiles.json"); }
 function readProfiles() {
-  try { return JSON.parse(fs.readFileSync(profilesPath(), "utf8")); } catch { return []; }
+  return credentialStore.read(profilesPath(), [], isStoredProfiles);
+}
+function isStoredProfiles(profiles) {
+  return Array.isArray(profiles) && profiles.every((profile) => profile && typeof profile.id === "string" && typeof profile.name === "string" && isStoredAuth(profile.auth));
 }
 function writeProfiles(profiles) {
-  fs.writeFileSync(profilesPath(), JSON.stringify(profiles, null, 2));
+  credentialStore.write(profilesPath(), profiles, [], isStoredProfiles);
+}
+
+function updateSavedAuth(auth) {
+  if (!auth.profile?.id) return;
+  const profiles = readProfiles();
+  const existing = profiles.find((profile) => profile.id === auth.profile.id);
+  if (!existing) return;
+  existing.auth = auth;
+  existing.name = auth.profile.name;
+  writeProfiles(profiles);
 }
 
 ipcMain.handle("launcher:get-profiles", () => {
   const auth = readAuth();
-  return { profiles: readProfiles(), activeId: auth.profileId || null };
+  try { return { profiles: readProfiles().map(publicSavedProfile), activeId: auth.profileId || null }; }
+  catch (error) { return { ok: false, profiles: [], activeId: auth.profileId || null, message: error.message }; }
 });
 
 ipcMain.handle("launcher:save-profile", async () => {
-  const auth = readAuth();
-  if (!auth.profile?.id) return { ok: false, message: "Not signed in." };
-  const profiles = readProfiles();
-  const existing = profiles.findIndex(p => p.id === auth.profile.id);
-  const entry = {
-    id: auth.profile.id,
-    name: auth.profile.name,
-    savedAt: new Date().toISOString(),
-    auth
-  };
-  if (existing >= 0) profiles[existing] = entry;
-  else profiles.push(entry);
-  writeProfiles(profiles);
-  writeAuth({ ...auth, profileId: auth.profile.id });
-  emitStatus();
-  return { ok: true, message: `Saved profile for ${auth.profile.name}.` };
+  try {
+    const auth = readAuth();
+    if (auth.storageUnavailable) return { ok: false, message: auth.refreshError };
+    if (!auth.profile?.id) return { ok: false, message: "Not signed in." };
+    credentialStore.assertWritable(authPath(), {}, isStoredAuth);
+    const profiles = readProfiles();
+    const existing = profiles.findIndex(p => p.id === auth.profile.id);
+    const entry = {
+      id: auth.profile.id,
+      name: auth.profile.name,
+      savedAt: new Date().toISOString(),
+      auth
+    };
+    if (existing >= 0) profiles[existing] = entry;
+    else profiles.push(entry);
+    writeProfiles(profiles);
+    writeAuth({ ...auth, profileId: auth.profile.id });
+    emitStatus();
+    return { ok: true, message: `Saved profile for ${auth.profile.name}.` };
+  } catch (error) { return { ok: false, message: error.message }; }
 });
 
 ipcMain.handle("launcher:switch-profile", async (_event, profileId) => {
-  const profiles = readProfiles();
-  const profile = profiles.find(p => p.id === profileId);
-  if (!profile) return { ok: false, message: "Profile not found." };
-  const auth = writeAuth({ ...profile.auth, profileId: profileId });
-  await ensureAccountSkinSeeded(auth);
-  emitStatus();
-  refreshKeptSeasons();
-  return { ok: true, message: `Switched to ${profile.name}.` };
+  try {
+    const current = readAuth();
+    if (current.storageUnavailable) return { ok: false, message: current.refreshError };
+    // Persist the latest refresh token before leaving the active saved account.
+    updateSavedAuth(current);
+    const profiles = readProfiles();
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return { ok: false, message: "Profile not found." };
+    const auth = writeAuth({ ...profile.auth, profileId: profileId }, { replaceSession: true });
+    await ensureAccountSkinSeeded(auth);
+    authSession.assertCurrent(auth);
+    emitStatus();
+    refreshKeptSeasons();
+    return { ok: true, message: `Switched to ${profile.name}.` };
+  } catch (error) { return { ok: false, message: error.message }; }
 });
 
 ipcMain.handle("launcher:remove-profile", (_event, profileId) => {
-  const profiles = readProfiles().filter(p => p.id !== profileId);
-  writeProfiles(profiles);
-  return { ok: true, message: "Profile removed." };
+  try {
+    const profiles = readProfiles().filter(p => p.id !== profileId);
+    writeProfiles(profiles);
+    return { ok: true, message: "Profile removed." };
+  } catch (error) { return { ok: false, message: error.message }; }
 });
 
 // Quick launch
@@ -8079,19 +8098,25 @@ let riverSignInBackoffMs = 0;
 function riverSessionFile() { return path.join(app.getPath("userData"), "river-session.json"); }
 function readStoredRiverSession(uuid) {
   try {
-    const stored = JSON.parse(fs.readFileSync(riverSessionFile(), "utf8"));
+    const stored = credentialStore.read(riverSessionFile(), {}, isStoredRiverSession);
     if (stored.uuid === uuid && stored.token && Number(stored.expiresAt) > Date.now() + 60_000) {
       return { token: String(stored.token), expiresAt: Number(stored.expiresAt) };
     }
   } catch {}
   return null;
 }
+function isStoredRiverSession(session) {
+  return Boolean(session && typeof session === "object" && !Array.isArray(session) && !Object.hasOwn(session, "format"));
+}
 function storeRiverSession(uuid, session) {
-  try { fs.writeFileSync(riverSessionFile(), JSON.stringify({ uuid, token: session.token, expiresAt: session.expiresAt })); } catch {}
+  try { credentialStore.write(riverSessionFile(), { uuid, token: session.token, expiresAt: session.expiresAt }, {}, isStoredRiverSession); } catch {}
 }
 function forgetRiverSession() {
   riverSessionCache = { token: "", expiresAt: 0 };
-  try { fs.rmSync(riverSessionFile(), { force: true }); } catch {}
+  riverSignInError = "";
+  riverSignInRetryAt = 0;
+  riverSignInBackoffMs = 0;
+  try { credentialStore.remove(riverSessionFile()); } catch {}
 }
 function failRiverSignIn(message) {
   riverSignInError = message;
@@ -8108,10 +8133,11 @@ function failRiverSignIn(message) {
  * one-time nonce. Used here to prove tester status when fetching beta builds.
  */
 async function riverSignIn() {
+  const known = readAuth();
+  if (!known.signedIn) return "";
   if (riverSessionCache.token && riverSessionCache.expiresAt > Date.now() + 60_000) {
     return riverSessionCache.token;
   }
-  const known = readAuth();
   if (known?.profile?.id) {
     const stored = readStoredRiverSession(known.profile.id);
     if (stored) {
@@ -8132,6 +8158,7 @@ async function riverSignIn() {
       method: "POST",
       headers: { Authorization: `Bearer ${auth.minecraftAccessToken}` }
     });
+    if (!authSession.isCurrent(auth)) return "";
     if (!certRes.ok) {
       return failRiverSignIn(certRes.status === 429
         ? "Mojang is limiting account checks right now. River will try again in a few minutes."
@@ -8142,6 +8169,7 @@ async function riverSignIn() {
     const begin = await (await fetch(`${riverSocialBase}/auth/begin`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
     })).json();
+    if (!authSession.isCurrent(auth)) return "";
     if (!begin?.nonce) return failRiverSignIn("River did not answer the sign-in request.");
 
     const privateKey = crypto.createPrivateKey({
@@ -8165,6 +8193,7 @@ async function riverSignIn() {
       })
     })).json();
 
+    if (!authSession.isCurrent(auth)) return "";
     if (!complete?.ok || !complete.token) return failRiverSignIn(String(complete?.message || "River refused the sign-in."));
     riverSessionCache = { token: complete.token, expiresAt: Number(complete.expiresAt) || 0 };
     riverSignInError = "";
@@ -8173,6 +8202,7 @@ async function riverSignIn() {
     storeRiverSession(auth.profile.id, riverSessionCache);
     return complete.token;
   } catch {
+    if (!authSession.isCurrent(auth)) return "";
     return failRiverSignIn("Could not reach Mojang or River.");
   }
 }
@@ -8897,16 +8927,22 @@ async function signInWithMicrosoft() {
     return { ok: false, message: "River Client login is not configured yet. Add your app client id in launcher/src/config/riv3r-auth.json before shipping." };
   }
 
+  let attempt;
   try {
+    credentialStore.assertWritable(authPath(), {}, isStoredAuth);
+    authSession.invalidate();
+    attempt = authSession.tag({});
     emit("launcher:log", "[auth] Starting Microsoft device-code sign-in...");
     emit("launcher:auth", { type: "stage", title: "Microsoft sign-in", detail: "Requesting a device code..." });
     const device = await requestMicrosoftDeviceCode(clientId);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", {
       type: "device-code",
       userCode: device.user_code,
       verificationUri: device.verification_uri
     });
     if (device.verification_uri) await shell.openExternal(device.verification_uri);
+    authSession.assertCurrent(attempt);
 
     emit("launcher:auth", {
       type: "stage",
@@ -8916,29 +8952,38 @@ async function signInWithMicrosoft() {
       verificationUri: device.verification_uri
     });
     const microsoft = await pollMicrosoftToken(clientId, device);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Xbox Live", detail: "Microsoft login accepted. Connecting Xbox Live..." });
     const xbl = await authenticateXboxLive(microsoft.access_token);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Xbox Security", detail: "Authorizing Minecraft services..." });
     const xsts = await authorizeXsts(xbl.Token);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Minecraft", detail: "Getting a Minecraft access token..." });
     const minecraft = await authenticateMinecraft(xsts);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Minecraft ownership", detail: "Checking Java Edition ownership..." });
     await assertMinecraftOwnership(minecraft.access_token);
+    authSession.assertCurrent(attempt);
     emit("launcher:auth", { type: "stage", title: "Minecraft profile", detail: "Loading player profile..." });
     const profile = await fetchMinecraftProfile(minecraft.access_token);
     const auth = writeAuth({
+      ...attempt,
       microsoftRefreshToken: microsoft.refresh_token,
       minecraftAccessToken: minecraft.access_token,
       expiresAt: Date.now() + (Number(minecraft.expires_in || 0) * 1000),
       sessionExpiresAt: Date.now() + AUTH_SESSION_MS,
       profile
-    });
+    }, { replaceSession: true });
+    attempt = auth;
     await ensureAccountSkinSeeded(auth);
+    authSession.assertCurrent(auth);
 
     emit("launcher:log", `[auth] Signed in as ${profile.name}.`);
     emit("launcher:auth", { type: "done", title: "Signed in", detail: `Signed in as ${profile.name}.` });
     return { ok: true, message: `Signed in as ${profile.name}.`, auth };
   } catch (error) {
+    if (attempt && !authSession.isCurrent(attempt)) return { ok: false, message: "Account changed. Try again." };
     emit("launcher:log", `[auth] Sign-in failed: ${error.message}`);
     emit("launcher:auth", { type: "error", title: "Login failed", detail: error.message });
     return { ok: false, message: error.message };
@@ -8946,28 +8991,34 @@ async function signInWithMicrosoft() {
 }
 
 async function refreshMicrosoftSession(auth = readAuth()) {
-  const clientId = getMicrosoftClientId();
-  if (!clientId) throw new Error("River Client login is not configured.");
-  if (!auth.microsoftRefreshToken) throw new Error("Microsoft session expired. Sign in again.");
-  if (auth.sessionExpiresAt && Number(auth.sessionExpiresAt) <= Date.now()) {
-    clearAuth();
-    throw new Error("Microsoft session expired. Sign in again.");
-  }
+  return authSession.refresh(auth, async () => {
+    const clientId = getMicrosoftClientId();
+    if (!clientId) throw new Error("River Client login is not configured.");
+    if (!auth.microsoftRefreshToken) throw new Error("Microsoft session expired. Sign in again.");
+    if (auth.sessionExpiresAt && Number(auth.sessionExpiresAt) <= Date.now()) {
+      clearAuth();
+      throw new Error("Microsoft session expired. Sign in again.");
+    }
 
-  emit("launcher:log", "[auth] Refreshing Microsoft session...");
-  const microsoft = await refreshMicrosoftToken(clientId, auth.microsoftRefreshToken);
-  const xbl = await authenticateXboxLive(microsoft.access_token);
-  const xsts = await authorizeXsts(xbl.Token);
-  const minecraft = await authenticateMinecraft(xsts);
-  await assertMinecraftOwnership(minecraft.access_token);
-  const profile = await fetchMinecraftProfile(minecraft.access_token);
-  return writeAuth({
-    ...auth,
-    microsoftRefreshToken: microsoft.refresh_token || auth.microsoftRefreshToken,
-    minecraftAccessToken: minecraft.access_token,
-    expiresAt: Date.now() + (Number(minecraft.expires_in || 0) * 1000),
-    sessionExpiresAt: Date.now() + AUTH_SESSION_MS,
-    profile
+    credentialStore.assertWritable(authPath(), {}, isStoredAuth);
+    emit("launcher:log", "[auth] Refreshing Microsoft session...");
+    const microsoft = await refreshMicrosoftToken(clientId, auth.microsoftRefreshToken);
+    const xbl = await authenticateXboxLive(microsoft.access_token);
+    const xsts = await authorizeXsts(xbl.Token);
+    const minecraft = await authenticateMinecraft(xsts);
+    await assertMinecraftOwnership(minecraft.access_token);
+    const profile = await fetchMinecraftProfile(minecraft.access_token);
+    const refreshed = writeAuth({
+      ...auth,
+      microsoftRefreshToken: microsoft.refresh_token || auth.microsoftRefreshToken,
+      minecraftAccessToken: minecraft.access_token,
+      expiresAt: Date.now() + (Number(minecraft.expires_in || 0) * 1000),
+      sessionExpiresAt: Date.now() + AUTH_SESSION_MS,
+      profile
+    });
+    try { updateSavedAuth(refreshed); }
+    catch { emit("launcher:log", "[auth] Could not update the saved account; the refreshed active sign-in is preserved."); }
+    return refreshed;
   });
 }
 
@@ -8977,9 +9028,11 @@ async function ensureFreshAuth(minLifeMs = AUTH_REFRESH_SKEW_MS) {
   if (auth.minecraftAccessToken && auth.expiresAt > Date.now() + minLifeMs) return auth;
   try {
     const refreshed = await refreshMicrosoftSession(auth);
+    authSession.assertCurrent(refreshed);
     emitStatus();
     return refreshed;
   } catch (error) {
+    if (!authSession.isCurrent(auth)) return authSession.tag({ ...normalizeAuth({}), refreshError: "Account changed. Try again." });
     emit("launcher:log", `[auth] Session refresh failed: ${error.message}`);
     emitStatus();
     return withAuthRefreshError(auth, error);
@@ -9353,8 +9406,10 @@ function startLauncherUpdateWatcher() {
 async function checkLauncherUpdates() {
   const currentVersion = readBuildVersion();
   try {
-    const bundledManifest = readBundledUpdateManifest();
-    const remoteManifest = await fetchRemoteUpdateManifest();
+    const bundledManifest = process.platform === "darwin" ? null : readBundledUpdateManifest();
+    const remoteManifest = process.platform === "darwin"
+      ? await require("./macos-updates").fetchMacUpdateManifest(metricsHeaders({ "Accept": "application/json" }))
+      : await fetchRemoteUpdateManifest();
     const manifest = selectLauncherUpdateManifest(currentVersion, bundledManifest, remoteManifest);
     if (!manifest) {
       launcherUpdateState = {
@@ -9369,6 +9424,7 @@ async function checkLauncherUpdates() {
       installerUrl: "",
       portableUrl: "",
       linuxUrl: "",
+      macUrl: "",
       packageUrl: "",
       packageParts: [],
       fileManifestUrl: "",
@@ -9403,6 +9459,7 @@ async function checkLauncherUpdates() {
     const installerUrl = resolveUpdateUrl(payload.installerUrl || payload.url || "", updateManifestUrl);
     const portableUrl = resolveUpdateUrl(payload.portableUrl || "", updateManifestUrl);
     const linuxUrl = resolveUpdateUrl(payload.linuxUrl || "", updateManifestUrl);
+    const macUrl = resolveUpdateUrl(payload.macUrls?.[process.arch] || payload.macUrl || "", updateManifestUrl);
     const packageUrl = resolveUpdateUrl(payload.packageUrl || payload.appPackageUrl || "", updateManifestUrl);
     // A package too big for a single upload is published as numbered parts instead.
     const packageParts = (Array.isArray(payload.packageParts) ? payload.packageParts : [])
@@ -9430,6 +9487,7 @@ async function checkLauncherUpdates() {
       installerUrl,
       portableUrl,
       linuxUrl,
+      macUrl,
       packageUrl,
       packageParts,
       fileManifestUrl,
@@ -9465,6 +9523,7 @@ async function checkLauncherUpdates() {
       installerUrl: "",
       portableUrl: "",
       linuxUrl: "",
+      macUrl: "",
       packageUrl: "",
       packageParts: [],
       fileManifestUrl: "",
@@ -10001,237 +10060,6 @@ function verifyJsonSha256(payload, expected) {
   }
 }
 
-function normalizeUpdateFilePath(value) {
-  return String(value || "").replace(/\\/g, "/").replace(/^\/+/, "");
-}
-
-function listRelativeFiles(root) {
-  const files = [];
-  if (!root || !ofs.existsSync(root)) return files;
-  const stack = [root];
-  while (stack.length) {
-    const current = stack.pop();
-    for (const entry of ofs.readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(full);
-        continue;
-      }
-      files.push(normalizeUpdateFilePath(path.relative(root, full)));
-    }
-  }
-  return files.sort((left, right) => left.localeCompare(right));
-}
-
-/**
- * SHA-256 of a file, read in chunks, without blocking.
- *
- * The alternative is `createHash("sha256").update(ofs.readFileSync(p))`, which loads the
- * whole file into memory before hashing any of it. That is a 213 MB allocation for
- * RiverClient.exe alone, and being synchronous it happens on the main process, where
- * nothing else - no window, no input, no IPC - runs until it finishes.
- */
-function hashFileStreaming(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash("sha256");
-    const stream = ofs.createReadStream(filePath, { highWaterMark: 1024 * 1024 });
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("error", reject);
-    stream.on("end", () => resolve(hash.digest("hex").toLowerCase()));
-  });
-}
-
-/*
-  Works out which files an update actually has to fetch.
-
-  This checks every file the install is made of, and on a normal update almost all of them
-  are unchanged, so almost all of them get hashed: about half a gigabyte across ninety odd
-  files. It used to do that synchronously, so the launcher was frozen solid for the whole
-  sweep - which is what "a bit laggy when you update" was. It now streams each file and
-  yields between them, so the window keeps painting while it works.
-*/
-async function buildDifferentialUpdatePlan(fileManifest, installDir) {
-  const files = Array.isArray(fileManifest?.files)
-    ? fileManifest.files
-      .map((entry) => ({
-        path: normalizeUpdateFilePath(entry.path),
-        size: Number(entry.size || 0),
-        sha256: String(entry.sha256 || "").trim().toLowerCase(),
-        url: String(entry.url || "").trim()
-      }))
-      .filter((entry) => entry.path && entry.url)
-    : [];
-
-  const downloads = [];
-  for (const entry of files) {
-    const localPath = path.join(installDir, ...entry.path.split("/"));
-    if (!ofs.existsSync(localPath)) {
-      downloads.push(entry);
-      continue;
-    }
-    // Size is checked first because it is a cheap stat and settles most changed files
-    // without reading a byte.
-    const localSize = Number(ofs.statSync(localPath).size || 0);
-    if (entry.size > 0 && localSize !== entry.size) {
-      downloads.push(entry);
-      continue;
-    }
-    if (entry.sha256) {
-      let localSha = "";
-      try {
-        localSha = await hashFileStreaming(localPath);
-      } catch {
-        // Unreadable means it cannot be verified, so fetch it rather than trust it.
-        downloads.push(entry);
-        continue;
-      }
-      if (localSha !== entry.sha256) downloads.push(entry);
-    }
-  }
-
-  return {
-    version: String(fileManifest?.version || ""),
-    installDir,
-    files,
-    downloads,
-    totalBytes: downloads.reduce((sum, entry) => sum + Number(entry.size || 0), 0),
-    existingFiles: listRelativeFiles(installDir)
-  };
-}
-
-/*
-  Rebuilds a changed file from the copy already on disk plus the few parts of it that
-  actually differ.
-
-  File level diffing already skips anything unchanged, which covers the Electron DLLs.
-  It does nothing for the two files that change on every single build - RiverClient.exe,
-  because the ASAR integrity hash and the signature are written into it, and app.asar,
-  because it holds our own JavaScript. Those two are 321MB together and almost none of
-  either is different, so every update re-downloaded a third of a gigabyte to change a
-  couple of megabytes.
-
-  The server publishes a blockmap beside each big file: the content-defined chunks it is
-  made of, and a hash for each. Chunk the local copy the same way and most of those
-  hashes are already on disk, so only the rest has to come over the network, as a handful
-  of range requests.
-
-  Everything here is best effort. The rebuilt file is checked against the whole-file hash
-  from the release manifest, and anything at all that does not line up - no blockmap, an
-  algorithm this build does not know, a bad range response, a hash that does not match -
-  returns false and lets the caller download the file the ordinary way. It can make an
-  update smaller; it must never make one wrong.
-*/
-async function downloadFileViaBlockmap(file, localPath, target, onProgress) {
-  if (!file.blockmapUrl || !file.sha256 || !localPath || !ofs.existsSync(localPath)) return false;
-
-  let map;
-  try {
-    const response = await fetch(file.blockmapUrl, {
-      headers: { "User-Agent": launcherUserAgent },
-      signal: AbortSignal.timeout(30000)
-    });
-    if (!response.ok) return false;
-    map = await response.json();
-  } catch {
-    return false;
-  }
-  if (!map || map.algorithm !== "gear-cdc-1" || !Array.isArray(map.chunks) || !map.chunks.length) return false;
-  if (Number(map.size) !== Number(file.size)) return false;
-
-  // Index the local copy by chunk hash. The bytes are dropped straight after; only the
-  // offsets are kept, and the ranges are read back off disk when they are needed.
-  const local = new Map();
-  try {
-    const buffer = ofs.readFileSync(localPath);
-    let offset = 0;
-    for (const chunk of chunkBuffer(buffer)) {
-      if (!local.has(chunk.hash)) local.set(chunk.hash, { offset, size: chunk.size });
-      offset += chunk.size;
-    }
-  } catch {
-    // Too big to hold, or unreadable. Either way this is not the path to take.
-    return false;
-  }
-
-  // Work out what comes from disk and what has to be fetched, coalescing neighbouring
-  // missing chunks so this is a few range requests rather than one per chunk.
-  const steps = [];
-  let position = 0;
-  let missing = 0;
-  for (const chunk of map.chunks) {
-    const size = Number(chunk.size || 0);
-    if (!size) return false;
-    const hit = local.get(chunk.hash);
-    if (hit && hit.size === size) {
-      steps.push({ kind: "local", at: position, from: hit.offset, size });
-    } else {
-      const last = steps[steps.length - 1];
-      if (last && last.kind === "remote" && last.at + last.size === position) last.size += size;
-      else steps.push({ kind: "remote", at: position, size });
-      missing += size;
-    }
-    position += size;
-  }
-  if (position !== Number(file.size)) return false;
-
-  // Nothing to gain if most of it has to come anyway.
-  if (missing > Number(file.size) * 0.75) return false;
-
-  emit("launcher:log", `[update] ${file.path}: ${formatBytes(missing)} of ${formatBytes(file.size)} changed`);
-
-  let readFd = null;
-  let writeFd = null;
-  try {
-    readFd = ofs.openSync(localPath, "r");
-    writeFd = ofs.openSync(target, "w");
-    let done = 0;
-    for (const step of steps) {
-      if (step.kind === "local") {
-        const buffer = Buffer.allocUnsafe(step.size);
-        ofs.readSync(readFd, buffer, 0, step.size, step.from);
-        ofs.writeSync(writeFd, buffer, 0, step.size, step.at);
-      } else {
-        const response = await fetch(file.url, {
-          headers: {
-            "User-Agent": launcherUserAgent,
-            Range: `bytes=${step.at}-${step.at + step.size - 1}`
-          },
-          signal: AbortSignal.timeout(120000)
-        });
-        // A server that ignored the range would hand back the whole file, which would be
-        // written to the wrong place. Only a 206 means the range was honoured.
-        if (response.status !== 206) return false;
-        const buffer = Buffer.from(await response.arrayBuffer());
-        if (buffer.length !== step.size) return false;
-        ofs.writeSync(writeFd, buffer, 0, buffer.length, step.at);
-        done += buffer.length;
-        if (onProgress) onProgress({ downloaded: done, total: missing });
-      }
-    }
-  } catch {
-    return false;
-  } finally {
-    if (readFd !== null) { try { ofs.closeSync(readFd); } catch {} }
-    if (writeFd !== null) { try { ofs.closeSync(writeFd); } catch {} }
-  }
-
-  // The whole point of the exercise is that this cannot be taken on trust.
-  let rebuilt = "";
-  try {
-    rebuilt = await hashFileStreaming(target);
-  } catch {
-    return false;
-  }
-  if (rebuilt !== file.sha256) {
-    emit("launcher:log", `[update] ${file.path}: rebuilt copy did not match, downloading it in full`);
-    try { ofs.rmSync(target, { force: true }); } catch {}
-    return false;
-  }
-
-  emit("launcher:log", `[update] ${file.path}: rebuilt from disk, ${formatBytes(missing)} downloaded`);
-  return true;
-}
-
 async function downloadChangedUpdateFiles(plan, extractDir, targetVersion) {
   if (!plan.downloads.length) {
     emitActivity({
@@ -10265,6 +10093,10 @@ async function downloadChangedUpdateFiles(plan, extractDir, targetVersion) {
         unit: "bytes",
         percent: total > 0 ? (downloaded / total) * 100 : 0
       });
+    }, {
+      userAgent: launcherUserAgent,
+      log: (message) => emit("launcher:log", message),
+      formatBytes
     });
     if (patched) {
       downloadedBase += Number(file.size || 0);
@@ -10513,131 +10345,6 @@ function verifyFileSha256(file, expected) {
     ofs.rmSync(file, { force: true });
     throw new Error("Update package checksum did not match. The download was deleted.");
   }
-}
-
-function buildApplyUpdateScript({ pid, sourceDir, installDir, relaunchExe, relaunchFallbackExe, logPath, updateRoot, mode = "package", manifestPath = "" }) {
-  return [
-    "$ErrorActionPreference = 'Stop'",
-    `$host.SetShouldExit(0)`,
-    "Start-Sleep -Seconds 2",
-    `Wait-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue`,
-    "$deadline = (Get-Date).AddSeconds(30)",
-    "while ((Get-Process -Name 'RiverClient' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }",
-    "Start-Sleep -Seconds 1",
-    `$source = '${escapePowerShell(sourceDir)}'`,
-    `$target = '${escapePowerShell(installDir)}'`,
-    `$log = '${escapePowerShell(logPath)}'`,
-    `$mode = '${escapePowerShell(mode)}'`,
-    `$manifestPath = '${escapePowerShell(manifestPath)}'`,
-    `$primary = '${escapePowerShell(relaunchExe)}'`,
-    `$fallback = '${escapePowerShell(relaunchFallbackExe)}'`,
-    `$backup = Join-Path '${escapePowerShell(updateRoot)}' 'rollback'`,
-    "New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null",
-    "Set-Content -Path $log -Value ('Update script started: ' + (Get-Date).ToString('s')) -Encoding utf8",
-    "function Copy-WithRetry([string]$from, [string]$to) {",
-    "  $lastError = $null",
-    "  for ($attempt = 1; $attempt -le 10; $attempt++) {",
-    "    try { Copy-Item -LiteralPath $from -Destination $to -Force -ErrorAction Stop; return }",
-    "    catch { $lastError = $_; Start-Sleep -Milliseconds ([Math]::Min(2500, 250 * $attempt)) }",
-    "  }",
-    "  throw $lastError",
-    "}",
-    // If the zip extracted into a single subdirectory, use that as the source
-    // so files land directly in the install dir rather than in a subfolder.
-    "$children = @(Get-ChildItem -LiteralPath $source -Force)",
-    "if ($children.Count -eq 1 -and $children[0].PSIsContainer) { $source = $children[0].FullName }",
-    "Add-Content -Path $log -Value \"Source: $source\"",
-    "Add-Content -Path $log -Value \"Target: $target\"",
-    "Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue",
-    "New-Item -ItemType Directory -Force -Path $backup | Out-Null",
-    "try {",
-    "if ($mode -eq 'delta' -and (Test-Path -LiteralPath $manifestPath)) {",
-    "  Add-Content -Path $log -Value \"Applying smart differential update...\"",
-    "  $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json",
-    "  foreach ($entry in @($manifest.changedFiles)) {",
-    "    $relative = [string]$entry",
-    "    if ([string]::IsNullOrWhiteSpace($relative)) { continue }",
-    "    $parts = $relative -split '/'",
-    "    $sourceFile = Join-Path $source ([System.IO.Path]::Combine($parts))",
-    "    $targetFile = Join-Path $target ([System.IO.Path]::Combine($parts))",
-    "    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $targetFile) | Out-Null",
-    "    if (Test-Path -LiteralPath $targetFile) {",
-    "      $backupFile = Join-Path $backup ([System.IO.Path]::Combine($parts))",
-    "      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $backupFile) | Out-Null",
-    "      Copy-WithRetry $targetFile $backupFile",
-    "    }",
-    "    Copy-WithRetry $sourceFile $targetFile",
-    "    Add-Content -Path $log -Value (\"Copied changed file: \" + $relative)",
-    "  }",
-    "  $resourceAllowed = @(@($manifest.files | ForEach-Object { [string]$_.path }) | Where-Object { $_ -like 'resources/*' })",
-    "  $localeAllowed = @(@($manifest.files | ForEach-Object { [string]$_.path }) | Where-Object { $_ -like 'locales/*' })",
-    "  foreach ($scope in @(@{ Root = 'resources'; Allowed = $resourceAllowed }, @{ Root = 'locales'; Allowed = $localeAllowed })) {",
-    "    $scopeRoot = Join-Path $target $scope.Root",
-    "    if (-not (Test-Path -LiteralPath $scopeRoot)) { continue }",
-    "    Get-ChildItem -LiteralPath $scopeRoot -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object {",
-    "      $relative = ($_.FullName.Substring($target.Length).TrimStart('\\') -replace '\\\\','/')",
-    "      if ($scope.Allowed -notcontains $relative) {",
-    "        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue",
-    "        Add-Content -Path $log -Value (\"Removed old file: \" + $relative)",
-    "      }",
-    "    }",
-    "    Get-ChildItem -LiteralPath $scopeRoot -Directory -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | ForEach-Object {",
-    "      if (-not (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue | Select-Object -First 1)) {",
-    "        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue",
-    "      }",
-    "    }",
-    "  }",
-    "} else {",
-    "  $resourcesSource = Join-Path $source 'resources'",
-    "  $resourcesTarget = Join-Path $target 'resources'",
-    "  if (Test-Path -LiteralPath $resourcesSource) {",
-    "    Add-Content -Path $log -Value \"Mirroring resources directory...\"",
-    "    robocopy $resourcesSource $resourcesTarget /MIR /R:8 /W:2 /NFL /NDL /NJH /NJS /NP | Add-Content -Path $log",
-    "    $code = $LASTEXITCODE",
-    "    if ($code -gt 7) { Add-Content -Path $log -Value \"resources robocopy exit code: $code\"; throw \"resources copy failed with code $code\" }",
-    "  }",
-    "  $localesSource = Join-Path $source 'locales'",
-    "  $localesTarget = Join-Path $target 'locales'",
-    "  if (Test-Path -LiteralPath $localesSource) {",
-    "    Add-Content -Path $log -Value \"Mirroring locales directory...\"",
-    "    robocopy $localesSource $localesTarget /MIR /R:8 /W:2 /NFL /NDL /NJH /NJS /NP | Add-Content -Path $log",
-    "    $code = $LASTEXITCODE",
-    "    if ($code -gt 7) { Add-Content -Path $log -Value \"locales robocopy exit code: $code\"; throw \"locales copy failed with code $code\" }",
-    "  }",
-    "  Add-Content -Path $log -Value \"Copying top-level launcher files...\"",
-    "  Get-ChildItem -LiteralPath $source -Force | Where-Object { -not $_.PSIsContainer } | ForEach-Object {",
-    "    $dest = Join-Path $target $_.Name",
-    "    Copy-Item -LiteralPath $_.FullName -Destination $dest -Force",
-    "    Add-Content -Path $log -Value (\"Copied file: \" + $_.Name)",
-    "  }",
-    "}",
-    "} catch {",
-    "  $failure = $_.Exception.Message",
-    "  Add-Content -Path $log -Value (\"Update failed: \" + $failure)",
-    "  if ($mode -eq 'delta' -and (Test-Path -LiteralPath $manifestPath)) {",
-    "    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json",
-    "    foreach ($entry in @($manifest.changedFiles)) {",
-    "      $relative = [string]$entry",
-    "      if ([string]::IsNullOrWhiteSpace($relative)) { continue }",
-    "      $parts = $relative -split '/'",
-    "      $backupFile = Join-Path $backup ([System.IO.Path]::Combine($parts))",
-    "      $targetFile = Join-Path $target ([System.IO.Path]::Combine($parts))",
-    "      if (Test-Path -LiteralPath $backupFile) { Copy-WithRetry $backupFile $targetFile } else { Remove-Item -LiteralPath $targetFile -Force -ErrorAction SilentlyContinue }",
-    "    }",
-    "    Add-Content -Path $log -Value 'Previous launcher files restored.'",
-    "  }",
-    "  $restart = if (Test-Path -LiteralPath $primary) { $primary } else { $fallback }",
-    "  if (Test-Path -LiteralPath $restart) { Start-Process -FilePath $restart -ArgumentList @('--river-update-failed=' + $log) -WorkingDirectory $target -WindowStyle Normal }",
-    "  exit 1",
-    "}",
-    "$start = if (Test-Path -LiteralPath $primary) { $primary } elseif (Test-Path -LiteralPath $fallback) { $fallback } else { throw \"No executable found after update. Expected $primary or $fallback.\" }",
-    "Add-Content -Path $log -Value \"Relaunch: $start\"",
-    "Start-Sleep -Seconds 1",
-    "Start-Process -FilePath $start -WorkingDirectory $target -WindowStyle Normal",
-    "Add-Content -Path $log -Value 'Relaunch started.'",
-    "Start-Sleep -Seconds 3",
-    `Get-ChildItem -LiteralPath '${escapePowerShell(updateRoot)}' -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -Skip 2 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue`
-  ].join("\r\n");
 }
 
 // Launch the update bootstrap with zero visible window. Node's windowsHide is
@@ -11632,13 +11339,8 @@ function mavenArtifact(library) {
   return { path: artifactPath, url: `${baseUrl}${artifactPath}` };
 }
 
-function nativeClassifierKey() {
-  if (process.platform === "win32") return "natives-windows";
-  if (process.platform === "darwin") return "natives-macos";
-  return "natives-linux";
-}
-
 function isLibraryAllowed(library) {
+  if (!isMacNativeLibraryAllowed(library)) return false;
   if (!Array.isArray(library.rules)) return true;
   let allowed = false;
   for (const rule of library.rules) {
@@ -11649,11 +11351,7 @@ function isLibraryAllowed(library) {
 }
 
 function ruleMatches(rule) {
-  if (rule.os) {
-    const wanted = rule.os.name;
-    const current = process.platform === "win32" ? "windows" : process.platform === "darwin" ? "osx" : "linux";
-    if (wanted && wanted !== current) return false;
-  }
+  if (!matchesOsRule(rule.os)) return false;
   if (rule.features) {
     const features = {
       is_demo_user: false,
@@ -11669,12 +11367,7 @@ function ruleMatches(rule) {
 }
 
 async function expandNativeJar(jarFile, nativesDir) {
-  await runPowerShell([
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-Command",
-    `Expand-Archive -LiteralPath '${escapePowerShell(jarFile)}' -DestinationPath '${escapePowerShell(nativesDir)}' -Force`
-  ]);
+  extractNativesJar(jarFile, nativesDir);
 }
 
 async function prepareAssets(assetIndex, assetsDir) {
@@ -12816,23 +12509,11 @@ async function installModrinthVersion({ projectIdOrSlug, title, version, gameVer
 
   const manifest = readModManifest(instancePath);
   const section = manifestSection(manifest, resolvedContentType);
-  let existingProjectEntry = Object.entries(section).find(([, item]) => item && item.projectId === projectId);
+  const existingProjectEntry = Object.entries(section).find(([, item]) => item && item.projectId === projectId);
   if (resolvedContentType === "mod" && existingProjectEntry?.[1]?.disabled) {
     if (reason !== "dependency") return { ok: true, message: `${title} stays disabled.`, installed: [] };
-    const [disabledFile, disabledMetadata] = existingProjectEntry;
-    const enabledFile = disabledFile.replace(/\.disabled$/i, "");
-    const disabledPath = path.join(instancePath, resolvedInfo.folder, disabledFile);
-    const enabledPath = path.join(instancePath, resolvedInfo.folder, enabledFile);
-    if (fs.existsSync(disabledPath) && disabledPath !== enabledPath) {
-      if (fs.existsSync(enabledPath)) fs.rmSync(enabledPath, { force: true });
-      fs.renameSync(disabledPath, enabledPath);
-    }
-    delete section[disabledFile];
-    section[enabledFile] = { ...disabledMetadata, file: enabledFile, disabled: false };
-    delete manifest.updates[updateKey("mod", disabledFile)];
-    writeModManifest(instancePath, manifest);
-    existingProjectEntry = [enabledFile, section[enabledFile]];
-    emit("launcher:log", `[mods] Re-enabled required dependency ${title}.`);
+    // A required dependency is enabled only after its replacement has been verified.
+    // A failed update must leave the previous file and its disabled state intact.
   }
   const alreadyInstalled = Object.values(section).find((item) => item.projectId === projectId && item.versionId === version.id && !item.disabled);
   if (alreadyInstalled) return { ok: true, message: `${title} is already installed.`, installed: [] };
@@ -12880,55 +12561,54 @@ async function installModrinthVersion({ projectIdOrSlug, title, version, gameVer
   if (!file || !file.url) return { ok: false, message: `No downloadable file found for ${title}.` };
 
   const contentDir = path.join(instancePath, resolvedInfo.folder);
-  fs.mkdirSync(contentDir, { recursive: true });
-  if (replaceTarget) {
-    fs.rmSync(path.join(contentDir, replaceTarget), { force: true });
-    delete manifestSection(manifest, resolvedContentType)[replaceTarget];
-    delete manifest.updates[updateKey(resolvedContentType, replaceTarget)];
-    if (resolvedContentType === "mod") delete manifest.updates[replaceTarget];
-  }
-
   const target = path.join(contentDir, sanitizeFilename(file.filename || `${projectId}${resolvedInfo.extensions[0]}`));
   const targetFile = path.basename(target);
-  emit("launcher:log", `[${resolvedSectionName}] Downloading ${file.filename || title}...`);
-  emitActivity({ title: `Downloading ${resolvedInfo.label}`, detail: file.filename || title, current: 0, total: 1 });
-  await downloadFile(file.url, target);
-
   const incompatibilities = resolvedContentType === "mod" ? await resolveIncompatibilities(version) : [];
   const cachedIconUrl = project && project.icon_url ? await cacheProjectIcon(project.id || projectId, project.icon_url) : "";
   const author = project ? await getModrinthProjectAuthor(project) : "";
-  const nextManifest = readModManifest(instancePath);
-  const nextSection = manifestSection(nextManifest, resolvedContentType);
-  if (replaceTarget) {
-    delete nextSection[replaceTarget];
-    delete nextManifest.updates[updateKey(resolvedContentType, replaceTarget)];
-    if (resolvedContentType === "mod") delete nextManifest.updates[replaceTarget];
-  }
-  nextSection[targetFile] = {
-    source: "modrinth",
-    contentType: resolvedContentType,
-    file: targetFile,
-    title: project ? project.title : title,
-    slug: project ? project.slug : "",
-    iconUrl: cachedIconUrl || (project ? project.icon_url : ""),
-    remoteIconUrl: project ? project.icon_url : "",
-    author,
-    gallery: project && Array.isArray(project.gallery) ? project.gallery : [],
-    projectId,
-    versionId: version.id,
-    versionNumber: version.version_number,
-    gameVersion,
-    loader,
-    installedAt: new Date().toISOString(),
-    reason,
-    dependencies: (version.dependencies || [])
-      .filter((dependency) => dependency.dependency_type === "required")
-      .map((dependency) => ({ projectId: dependency.project_id || "", versionId: dependency.version_id || "" })),
-    incompatibilities
-  };
-  delete nextManifest.updates[updateKey(resolvedContentType, targetFile)];
-  if (resolvedContentType === "mod") delete nextManifest.updates[targetFile];
-  writeModManifest(instancePath, nextManifest);
+  emit("launcher:log", `[${resolvedSectionName}] Downloading ${file.filename || title}...`);
+  emitActivity({ title: `Downloading ${resolvedInfo.label}`, detail: file.filename || title, current: 0, total: 1 });
+  await installContentFile({
+    file,
+    target,
+    previous: replaceTarget ? path.join(contentDir, replaceTarget) : "",
+    manifestPath: modManifestPath(instancePath),
+    download: downloadFile,
+    createManifest: () => {
+      const nextManifest = readModManifest(instancePath);
+      const nextSection = manifestSection(nextManifest, resolvedContentType);
+      if (replaceTarget) {
+        delete nextSection[replaceTarget];
+        delete nextManifest.updates[updateKey(resolvedContentType, replaceTarget)];
+        if (resolvedContentType === "mod") delete nextManifest.updates[replaceTarget];
+      }
+      nextSection[targetFile] = {
+        source: "modrinth",
+        contentType: resolvedContentType,
+        file: targetFile,
+        title: project ? project.title : title,
+        slug: project ? project.slug : "",
+        iconUrl: cachedIconUrl || (project ? project.icon_url : ""),
+        remoteIconUrl: project ? project.icon_url : "",
+        author,
+        gallery: project && Array.isArray(project.gallery) ? project.gallery : [],
+        projectId,
+        versionId: version.id,
+        versionNumber: version.version_number,
+        gameVersion,
+        loader,
+        installedAt: new Date().toISOString(),
+        reason,
+        dependencies: (version.dependencies || [])
+          .filter((dependency) => dependency.dependency_type === "required")
+          .map((dependency) => ({ projectId: dependency.project_id || "", versionId: dependency.version_id || "" })),
+        incompatibilities
+      };
+      delete nextManifest.updates[updateKey(resolvedContentType, targetFile)];
+      if (resolvedContentType === "mod") delete nextManifest.updates[targetFile];
+      return nextManifest;
+    }
+  });
 
   emit("launcher:log", `[${resolvedSectionName}] Installed ${targetFile} to ${contentDir}`);
   const installed = [...dependencyResults, targetFile];
@@ -13196,10 +12876,23 @@ async function checkModUpdates(instancePath) {
     }
   });
   await Promise.all(workers);
-  manifest.updates = updates;
-  manifest.checkedAt = new Date().toISOString();
-  writeModManifest(instancePath, manifest);
-  const count = Object.values(updates).filter((update) => update.available).length;
+  const current = readModManifest(instancePath);
+  for (const contentType of ["mod", "resourcepack", "shader"]) {
+    for (const [file, item] of Object.entries(manifestSection(manifest, contentType))) {
+      const latestItem = manifestSection(current, contentType)[file];
+      if (!sameInstalledContent(item, latestItem) || Boolean(item.pinned) !== Boolean(latestItem.pinned)) continue;
+      const key = updateKey(contentType, file);
+      // Another scan or a user action may have updated this cache while we waited.
+      if (JSON.stringify(current.updates[key]) !== JSON.stringify(manifest.updates[key])) continue;
+      if (contentType === "mod" && JSON.stringify(current.updates[file]) !== JSON.stringify(manifest.updates[file])) continue;
+      delete current.updates[key];
+      if (contentType === "mod") delete current.updates[file];
+      if (updates[key]) current.updates[key] = updates[key];
+    }
+  }
+  current.checkedAt = new Date().toISOString();
+  writeModManifest(instancePath, current);
+  const count = Object.values(current.updates).filter((update) => update.available).length;
   return { ok: true, message: `${count} content update${count === 1 ? "" : "s"} available.`, count };
 }
 
@@ -13506,6 +13199,11 @@ if (singleInstanceLock) {
       else runUpdaterMode();
       return;
     }
+    // Migrate all saved accounts on startup, including ones not currently selected.
+    // Locked or unavailable storage must not prevent the launcher from opening.
+    readAuth();
+    try { readProfiles(); } catch {}
+    readStoredRiverSession("");
     if (!discordRpcRefreshTimer) {
       discordRpcRefreshTimer = setInterval(() => scheduleDiscordPresenceRefresh(), 15000);
     }

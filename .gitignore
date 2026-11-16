@@ -23,6 +23,7 @@ secrets.env
 secrects.env
 .env.local
 .env.*.local
+river-update-signing.key
 
 # Launcher build artefacts
 launcher/app/
@@ -34,6 +35,7 @@ launcher/.vite/
 # Built mod jars. These are produced by `gradlew build` from the source in this
 # repo - shipping the jar as well would just be an unauditable copy of it.
 launcher/src/bundled/*.jar
+launcher/src/bundled/river-build-info.json
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 

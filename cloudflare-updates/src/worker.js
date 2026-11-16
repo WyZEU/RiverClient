@@ -4,6 +4,7 @@
 // CORS, so narrowing this cannot break them. It does stop an arbitrary page from
 // reading authenticated /social responses with a stolen session token.
 const SITE_ORIGIN = "https://riverclient.xyz";
+import { macDownloadResponse } from "./macos-downloads.js";
 
 const securityHeaders = {
   // The custom domain is HTTPS-only; tell browsers never to try plaintext.
@@ -91,6 +92,26 @@ export function isPublicDownloadKey(key) {
     && parts[0] === "releases"
     && /^[0-9][A-Za-z0-9.+_-]{0,49}$/.test(parts[1])
     && parts.slice(2).every((part) => part && part !== "." && part !== ".." && !/[\\\x00-\x1f\x7f]/.test(part));
+}
+
+export function publishedInstallerTarget(manifest) {
+  try {
+    const target = new URL(manifest?.installerUrl);
+    const key = decodeURIComponent(target.pathname.slice("/downloads/".length));
+    return target.origin === publicUpdateBaseUrl && !target.username && !target.password && !target.search && !target.hash
+      && target.pathname.startsWith("/downloads/releases/") && isPublicDownloadKey(key)
+      && key.endsWith("/River-Client-Setup.exe") ? target.href : null;
+  } catch { return null; }
+}
+
+export function publishedLinuxTarget(manifest) {
+  try {
+    const target = new URL(manifest?.linuxUrl);
+    const key = decodeURIComponent(target.pathname.slice("/downloads/".length));
+    return target.origin === publicUpdateBaseUrl && !target.username && !target.password && !target.search && !target.hash
+      && target.pathname.startsWith("/downloads/releases/") && isPublicDownloadKey(key)
+      && key.endsWith(`/River-Client-Linux-${manifest.version}.tar.gz`) ? target.href : null;
+  } catch { return null; }
 }
 
 // A remote River user is considered "present" for this many ms after their last
@@ -440,6 +461,13 @@ export default {
       return Response.redirect(discordInviteUrl, 302);
     }
 
+    if (url.pathname === "/release-capabilities.json" && request.method === "GET") {
+      return Response.json({ publicationProtocol: 1, macosPublicationProtocol: 1, linuxPublicationProtocol: 1 }, { headers });
+    }
+
+    const macDownload = await macDownloadResponse(request, env, headers);
+    if (macDownload) return macDownload;
+
     /*
       The in-game server browser's list (ServerDirectory in the client). Kept in the bucket at
       config/servers.json so servers can be added or featured without a release; with no file
@@ -658,10 +686,10 @@ export default {
       */
       if (isLauncher(request)) recordMetric(env, ctx, "check", request);
 
-      // The manifest as published, with minimumVersion raised by the update policy
-      // (update-policy.js), so falling too far behind or a forced update needs no publish.
+      // Every field, including minimumVersion, is covered by the publisher's Ed25519
+      // signature. Serve the published payload unchanged; a new launcher minimum must
+      // be signed by the publisher. Dynamic mod policy belongs to /version-status.json.
       const manifest = await publishedManifest(env);
-      manifest.minimumVersion = await currentMinimum(env, manifest);
       return Response.json(manifest, {
         headers: {
           ...headers,
@@ -687,9 +715,9 @@ export default {
     }
 
     /*
-      The update policy, from the dashboard: how many releases behind an install may be,
-      and an optional "everyone below this version updates now". Saving it also pushes to
-      every connected launcher, so a forced update lands at once instead of on next start.
+      The standalone mod's update policy, from the dashboard: how many releases behind
+      an install may be, and an optional forced minimum. Saving it also prompts connected
+      launchers to recheck, but their minimum comes only from the signed release manifest.
     */
     if (url.pathname === "/admin/update-policy.json") {
       const { ok: authorised, lockedOut, headers: adminHeaders } = await adminGate(request, env);
@@ -743,7 +771,20 @@ export default {
         plus every changed file, which is dozens of requests per version. Counting the
         whole /downloads/ prefix would report an update rolling out as a wave of new users.
       */
-      if (key === "River-Client-Setup.exe") recordMetric(env, ctx, "install", request);
+      if (key === "River-Client-Setup.exe") {
+        recordMetric(env, ctx, "install", request);
+        // New releases use immutable installer URLs. The rolling website URL follows
+        // the same atomic latest.json promotion as the updater; no second mutable
+        // installer upload can expose a partially published or mismatched release.
+        const target = publishedInstallerTarget(await publishedManifest(env));
+        if (target) return new Response(null, { status: 302, headers: { ...headers, Location: target } });
+        // Legacy manifests point back to this rolling key; continue serving it.
+      }
+      if (key === "River-Client-Linux.tar.gz") {
+        const target = publishedLinuxTarget(await publishedManifest(env));
+        if (target) return new Response(null, { status: 302, headers: { ...headers, Location: target } });
+        // Older manifests still use the existing root object.
+      }
 
       /*
         Range requests, so a client can ask for part of a file instead of all of it.

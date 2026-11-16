@@ -1,5 +1,5 @@
 /*
-  How far behind a River install may fall before it has to update.
+  How far behind a standalone River mod may fall before it has to update.
 
   Two rules, and the stricter one wins:
   - Nobody may be more than `maxBehind` releases behind. With 3, the latest and the two
@@ -7,12 +7,12 @@
   - A forced minimum set from the dashboard: "everyone below this version updates now",
     for a release that fixes something that cannot wait.
 
-  Both end up as the manifest's minimumVersion, which every launcher since 0.1.7 already
-  treats as "you cannot play until you update". The standalone mod reads the same answer
-  from /version-status.json.
+  Both determine minimumVersion in /version-status.json, read by the standalone mod.
+  The launcher's minimumVersion is part of its signed release manifest and must never
+  be rewritten here. Change RIVER_MINIMUM_VERSION when signing/publishing that manifest.
 
   The policy is config/update-policy.json in the updates bucket (never served publicly),
-  so a change reaches everyone on their next check without a redeploy or a publish. The
+  so a change reaches standalone mods on their next check without a redeploy or publish. The
   release list is the releases/ folders of the same bucket, so it can never disagree with
   what can actually be downloaded.
 */

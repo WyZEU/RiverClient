@@ -11,6 +11,27 @@ fs.mkdirSync(path.join(out, "renderer"), { recursive: true });
 fs.cpSync(path.join(root, "src", "assets"), path.join(out, "assets"), { recursive: true });
 fs.cpSync(path.join(root, "src", "config"), path.join(out, "config"), { recursive: true });
 fs.cpSync(path.join(root, "src", "bundled"), path.join(out, "bundled"), { recursive: true });
+const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+const buildVersionPath = path.join(out, "config", "build-version.json");
+const previousBuild = JSON.parse(fs.readFileSync(buildVersionPath, "utf8"));
+// Stamp development builds too, so a version bump does not leave the update UI
+// reading the old checked-in release snapshot. Preserve the legacy publisher's
+// explicit version override and channel; signed releases always use riverVersion.
+let buildVersion = {
+  version: process.env.RIVER_PUBLISH_VERSION || pkg.riverVersion || pkg.version,
+  channel: previousBuild.channel || "stable", builtAt: new Date().toISOString()
+};
+if (process.env.RIVER_RELEASE_BUILD === "1") {
+  const release = JSON.parse(fs.readFileSync(path.join(out, "bundled", "river-build-info.json"), "utf8"));
+  if (release.sourceCommit !== process.env.GITHUB_SHA || release.version !== pkg.riverVersion) {
+    throw new Error("Staged runtime provenance does not match the release source/version.");
+  }
+  buildVersion = {
+    version: release.version, channel: "stable", sourceCommit: release.sourceCommit,
+    builtAt: new Date().toISOString()
+  };
+}
+fs.writeFileSync(buildVersionPath, JSON.stringify(buildVersion, null, 2));
 // PowerShell helper for the now-playing feed: a data file, not something esbuild bundles.
 fs.copyFileSync(path.join(root, "src", "now-playing.ps1"), path.join(out, "now-playing.ps1"));
 // Now-playing native helper: extracts media-session metadata AND album art (the .ps1
@@ -31,17 +52,23 @@ function buildTailwind(input, outfile) {
 }
 
 function compileNowPlayingHelper(srcDir, outExe) {
+  const strict = process.env.RIVER_RELEASE_BUILD === "1" && process.platform === "win32";
   const csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe";
   const wm = "C:\Windows\System32\WinMetadata";
   const facBase = "C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework";
   const prebuilt = path.join(srcDir, "np-helper.exe");
   if (process.platform !== "win32" || !fs.existsSync(csc)) {
+    if (strict) throw new Error("Signed Windows releases require the native C# compiler.");
     if (fs.existsSync(prebuilt)) { fs.copyFileSync(prebuilt, outExe); console.log("np-helper: used prebuilt exe (no csc)"); }
     return;
   }
   let fac = "";
   try { for (const v of fs.readdirSync(facBase)) { const f = path.join(facBase, v, "Facades"); if (fs.existsSync(path.join(f, "System.Runtime.dll"))) { fac = f; break; } } } catch {}
-  if (!fac) { if (fs.existsSync(prebuilt)) fs.copyFileSync(prebuilt, outExe); return; }
+  if (!fac) {
+    if (strict) throw new Error("Missing .NET Framework reference assemblies for np-helper.");
+    if (fs.existsSync(prebuilt)) fs.copyFileSync(prebuilt, outExe);
+    return;
+  }
   const args = ["/nologo","/target:exe","/platform:x64","/out:"+outExe,
     "/reference:"+path.join(wm,"Windows.Media.winmd"),
     "/reference:"+path.join(wm,"Windows.Storage.winmd"),
@@ -51,7 +78,8 @@ function compileNowPlayingHelper(srcDir, outExe) {
     "/reference:"+path.join(fac,"System.IO.dll"),
     path.join(srcDir, "np-helper.cs")];
   const r = spawnSync(csc, args, { stdio: "pipe" });
-  if (r.status === 0 && fs.existsSync(outExe)) { console.log("np-helper: compiled from source"); fs.copyFileSync(outExe, prebuilt); }
+  if (r.status === 0 && fs.existsSync(outExe)) { console.log("np-helper: compiled from source"); if (!strict) fs.copyFileSync(outExe, prebuilt); }
+  else if (strict) { throw new Error(`np-helper compilation failed: ${r.error?.message || ""}\n${r.stdout || ""}\n${r.stderr || ""}`); }
   else if (fs.existsSync(prebuilt)) { fs.copyFileSync(prebuilt, outExe); console.log("np-helper: compile failed, used prebuilt"); }
 }
 

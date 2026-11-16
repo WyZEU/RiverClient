@@ -198,7 +198,8 @@ function SavedAccounts({ status, refresh, notify }) {
       else notify?.(res?.message || t("Account saved."), "info");
       await load();
       await refresh();
-    } finally { setBusy(""); }
+    } catch (error) { notify?.(String(error?.message || error), "error"); }
+    finally { setBusy(""); }
   };
 
   const switchTo = async (profile) => {
@@ -208,15 +209,18 @@ function SavedAccounts({ status, refresh, notify }) {
       if (res?.ok === false) notify?.(res.message || t("Could not switch accounts."), "error");
       await load();
       await refresh();
-    } finally { setBusy(""); }
+    } catch (error) { notify?.(String(error?.message || error), "error"); }
+    finally { setBusy(""); }
   };
 
   const remove = async (profile) => {
     setBusy(`remove-${profile.id}`);
     try {
-      await api()?.removeProfile(profile.id);
+      const res = await api()?.removeProfile(profile.id);
+      if (res?.ok === false) notify?.(res.message, "error");
       await load();
-    } finally { setBusy(""); }
+    } catch (error) { notify?.(String(error?.message || error), "error"); }
+    finally { setBusy(""); }
   };
 
   if (!status?.auth?.signedIn && !profiles.length) return null;
@@ -302,7 +306,7 @@ export function SettingsView({ status, refresh, notify, startTour }) {
     { id: "account", title: t("Account"), icon: UserRound, body: (
         <>
           <Field
-            label={signedIn ? status?.auth?.profile?.name || t("Signed in") : t("Not signed in")}
+            label={status?.auth?.storageUnavailable ? t("Saved sign-in is temporarily unavailable") : signedIn ? status?.auth?.profile?.name || t("Signed in") : t("Not signed in")}
             hint={signedIn ? t("Microsoft account") : t("Sign in to play online and use the wardrobe.")}
           >
             {signedIn ? (
@@ -314,14 +318,23 @@ export function SettingsView({ status, refresh, notify, startTour }) {
                 {t("Sign out")}
               </Button>
             ) : (
-              <Button size="sm" disabled={busy} onClick={async () => {
+              <Button size="sm" disabled={busy || status?.auth?.storageUnavailable} onClick={async () => {
                 setBusy(true);
-                try { await api()?.microsoftLogin(); await refresh(); } finally { setBusy(false); }
+                try {
+                  const result = await api()?.microsoftLogin();
+                  if (result?.ok === false) notify(result.message, "error");
+                  await refresh();
+                } finally { setBusy(false); }
               }}>
                 {t("Sign in")}
               </Button>
             )}
           </Field>
+          {status?.credentialStorage?.message ? (
+            <div role="status" className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              {t(status.credentialStorage.message)}
+            </div>
+          ) : null}
           <SavedAccounts status={status} refresh={refresh} notify={notify} />
         </>
       ) },

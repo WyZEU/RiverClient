@@ -5,6 +5,12 @@
   (see translate.js) instead of breaking the render.
 */
 export const cs = {
+  "Account changed. Try again.": "Účet se změnil. Zkus to znovu.",
+  "Saved sign-in is temporarily unavailable": "Uložené přihlášení je dočasně nedostupné",
+  "Secure system storage is unavailable. Unlock your keychain and try again; saved accounts have not been deleted.": "Zabezpečené systémové úložiště není dostupné. Odemkni klíčenku a zkus to znovu; uložené účty nebyly smazány.",
+  "Account encryption is pending. Existing sign-ins still work, but their files remain unencrypted until secure system storage is available.": "Šifrování účtů čeká na dostupné zabezpečené systémové úložiště. Dosavadní přihlášení dál fungují, jejich soubory ale zatím nejsou zašifrované.",
+  "Temporary sign-in. Secure storage is unavailable; this session ends when the launcher closes.": "Dočasné přihlášení. Zabezpečené úložiště není dostupné; relace skončí při zavření launcheru.",
+  "Saved accounts could not be read. Their files have been preserved; restore access before changing accounts.": "Uložené účty se nepodařilo načíst. Jejich soubory zůstaly zachovány; před změnou účtu obnov přístup k úložišti.",
   // Friends chat
   "Could not send that.": "Tohle se nepodařilo odeslat.",
   "Back": "Zpět",
