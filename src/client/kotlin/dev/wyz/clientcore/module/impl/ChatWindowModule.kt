@@ -26,6 +26,7 @@ import net.minecraft.client.gui.GuiGraphics
  * and the same lines marked in the normal chat. Reads what the game already received.
  */
 class ChatWindowModule : Module("chat_window", "Chat Window", "A movable chat box for chosen words", ModuleCategory.HUD, "item:minecraft:name_tag", 8, 440, false) {
+    override val styleOpts = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.SHADOW)
     override val multiLine: Boolean = true
 
     private companion object {

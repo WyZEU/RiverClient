@@ -30,6 +30,9 @@ import net.minecraft.world.effect.MobEffects
 import dev.wyz.clientcore.compat.riverBlitSprite
 
 class PotionHudModule : Module("potion_hud", "Potion HUD", "Active effects and timers", ModuleCategory.HUD, "item:minecraft:potion", 8, 198, false) {
+    // Effect names and times keep their own good/bad colours.
+    override val styleOpts = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.SHADOW)
+    override val multiLine: Boolean = true
     override val hudStack: HudStack = HudStack.TOP_RIGHT
 
     private companion object {
@@ -294,7 +297,7 @@ class PotionHudModule : Module("potion_hud", "Potion HUD", "Active effects and t
 
         if (st.showBorder && bt > 0) {
             val bo = st.borderOpacity.coerceIn(0, 255)
-            ClientUi.drawRoundedBorder(graphics, ox, oy, w, h, st.cornerRadius.coerceIn(0, 8), (bo shl 24) or (ClientUi.BORDER and 0xFFFFFF))
+            ClientUi.drawRoundedBorder(graphics, ox, oy, w, h, st.cornerRadius.coerceIn(0, 8), (bo shl 24) or panelBorderRgb())
         }
 
         drawEntries(graphics, font, entries, padX, padY, lineH, nameW, timeGap, st.textShadow)

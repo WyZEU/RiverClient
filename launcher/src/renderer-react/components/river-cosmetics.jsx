@@ -9,6 +9,9 @@ import { useT } from "../i18n/context.jsx";
 // Off until the River Plus store is live; then the "Get River Plus" line shows again.
 const PLUS_LAUNCHED = false;
 
+// Painted 1024x512 capes: scaled smoothly, the pixel-art ones stay crisp.
+const HD_CAPES = new Set(["river", "ember", "forest", "sunset", "storm", "galaxy", "plus", "gilded", "royal", "prism"]);
+
 function CapeCard({ label, active, disabled, onClick, children }) {
   return (
     <button
@@ -76,7 +79,7 @@ export function RiverCosmetics({ notify }) {
         </CapeCard>
         {state.capes.map((cape) => (
           <CapeCard key={cape.id} label={cape.label} active={state.capeStyle === cape.id} disabled={busy} onClick={() => save({ capeStyle: cape.id })}>
-            <CapeFront src={`../assets/capes/${cape.id}.png`} scale={6} />
+            <CapeFront src={`../assets/capes/${cape.id}.png`} scale={6} smooth={HD_CAPES.has(cape.id)} />
           </CapeCard>
         ))}
       </div>

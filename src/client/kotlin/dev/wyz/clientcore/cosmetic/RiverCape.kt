@@ -35,13 +35,13 @@ object RiverCape {
     private val BUILTIN_STYLES = listOf(
         "river", "axie", "hardcore", "eclipse", "eightball", "halloween", "casaeullo", "plus", "gilded",
         "ember", "forest", "sunset", "storm", "galaxy",
-        "royal", "prism", "custom"
+        "royal", "prism", "custom", "galaxysdc"
     )
 
     private val BUILTIN_LABELS = listOf(
         "River", "Axie", "Hardcore", "Eclipse", "8-Ball", "Halloween", "Casaeullo", "Plus", "Gilded",
         "Ember", "Forest", "Sunset", "Storm", "Galaxy",
-        "Royal", "Prism", "My Cape"
+        "Royal", "Prism", "My Cape", "Galaxysdc"
     )
 
     /**
@@ -118,6 +118,9 @@ object RiverCape {
         }
     }
 
+    /** Capes taken out of River. They keep their slot (saved numbers point at slots), nobody can pick them, and anyone still wearing one is shown the River cape. */
+    private val RETIRED = setOf("axie")
+
     /** Capes that only exist during their season (see Seasons): style id to season id. */
     private val SEASONAL = mapOf("halloween" to "halloween")
 
@@ -128,6 +131,7 @@ object RiverCape {
      */
     @JvmStatic
     fun available(style: String): Boolean {
+        if (style in RETIRED) return false
         val season = SEASONAL[style] ?: return true
         return dev.wyz.clientcore.ui.Seasons.unlocked(season)
     }
@@ -207,7 +211,7 @@ object RiverCape {
         // somebody else may wear a seasonal cape is decided by the server, which drops it from
         // the roster for anyone who did not earn it.
         if (!dev.wyz.clientcore.module.impl.CosmeticsModule.showOthersCapes()) return null
-        return EffectRoster.remoteCapeStyle(uuid)?.takeIf { it in STYLES }
+        return EffectRoster.remoteCapeStyle(uuid)?.takeIf { it in STYLES && it !in RETIRED }
     }
 
     /** Returns a copy of the skin with the given cape style patched in. */

@@ -17,6 +17,10 @@ import net.minecraft.client.gui.GuiGraphics
 //?}
 
 class KeystrokesModule : Module("keystrokes", "Keystrokes", "WASD, space and mouse buttons", ModuleCategory.HUD, "keyboard", 8, 62) {
+    // Each key is its own small panel: no padding, labels or shadow, and the spacing is the gap between keys.
+    override val styleOpts = setOf(StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.ACCENT)
+    override val multiLine: Boolean = true
+    override val spacingName: String = "Key gap"
 
     override val editorProfile: ModuleEditorProfile = ModuleEditorProfile.KEYSTROKES
     override val hudStack: HudStack = HudStack.TOP_RIGHT

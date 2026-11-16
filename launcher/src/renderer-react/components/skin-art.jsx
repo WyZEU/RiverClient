@@ -79,7 +79,7 @@ export function SkinFront({ src, slim = false, scale = 5, className }) {
 }
 
 /** The decorated outer side of a cape, as it hangs on a player's back. */
-export function CapeFront({ src, scale = 6, className }) {
+export function CapeFront({ src, scale = 6, className, smooth = false }) {
   if (!src) return null;
   const s = scale;
   return (
@@ -93,7 +93,7 @@ export function CapeFront({ src, scale = 6, className }) {
         backgroundSize: `${64 * s}px ${32 * s}px`,
         backgroundPosition: `-${1 * s}px -${1 * s}px`,
         backgroundRepeat: "no-repeat",
-        imageRendering: "pixelated"
+        imageRendering: smooth ? "auto" : "pixelated"
       }}
     />
   );

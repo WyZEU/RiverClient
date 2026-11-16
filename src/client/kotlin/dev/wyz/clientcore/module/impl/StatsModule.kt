@@ -35,7 +35,7 @@ class StatsModule : Module("stats", "Stats", "FPS, CPS, ping and memory", Module
 
     /** More than one row means the "Line spacing" style option is worth showing. */
     override val multiLine: Boolean
-        get() = listOf(showFps(), showCps(), showPing(), showMemory()).count { it } > 1
+        get() = listOf(showFps(), showCps(), showPing(), showMemory()).count { it } > 1 && !effectiveStyle().layoutHorizontal
 
     override fun addModuleSettings(list: MutableList<Setting>) {
         list.add(SectionSetting("Readouts"))

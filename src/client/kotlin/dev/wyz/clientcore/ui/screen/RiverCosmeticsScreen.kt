@@ -190,7 +190,7 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         val styles = RiverCape.STYLES.withIndex().filter { (_, s) ->
             RiverCape.available(s) && inTab(s) &&
                 (if (s in RiverCape.PLUS) plusShown else !CapeEntitlements.locked(s))
-        }
+        }.sortedBy { (_, s) -> s == RiverCape.CUSTOM } // My Cape stays last; newer capes are appended after it
         val includeNone = tab != Tab.PLUS
         val cardW = 74
         val cardH = 110

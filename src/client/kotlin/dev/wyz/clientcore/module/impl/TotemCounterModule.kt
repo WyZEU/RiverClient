@@ -29,6 +29,7 @@ import java.util.UUID
  * is on, so turning it on mid-fight shows the right numbers straight away.
  */
 class TotemCounterModule : Module("totem_counter", "Totem Counter", "Your totems, and pops above names", ModuleCategory.HUD, "item:minecraft:totem_of_undying", 8, 276, false) {
+    override val styleOpts = setOf(StyleOpt.PADDING, StyleOpt.BORDER, StyleOpt.TEXT, StyleOpt.SHADOW)
 
     // Lazy: modules are built while the mod loads, and 26.2 refuses to make an item stack
     // before its item components are bound, which crashed the game on startup.
