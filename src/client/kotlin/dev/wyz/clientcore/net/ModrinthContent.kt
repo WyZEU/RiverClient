@@ -2,6 +2,7 @@ package dev.wyz.clientcore.net
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonParser
+import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
 import java.net.HttpURLConnection
 import java.net.URL
@@ -13,7 +14,7 @@ import java.util.concurrent.Executors
 
 /**
  * Tiny Modrinth API client for the in-game content browser. Searches and downloads
- * shaders, resource packs and data packs for 1.21.11. No API key is needed for Modrinth,
+ * shaders, resource packs and data packs for the running game. No API key is needed for Modrinth,
  * and every call runs on a small daemon pool so the render/tick loop is never blocked;
  * results are handed back on the client main thread via Minecraft.execute.
  *
@@ -23,7 +24,9 @@ import java.util.concurrent.Executors
 object ModrinthContent {
 
     private const val API = "https://api.modrinth.com/v2"
-    private const val GAME_VERSION = "1.21.11"
+    private val gameVersion: String by lazy {
+        FabricLoader.getInstance().getModContainer("minecraft").orElseThrow().metadata.version.friendlyString
+    }
     private const val USER_AGENT = "riverclient.xyz/river-client (in-game content browser)"
     private const val CONNECT_TIMEOUT = 6000
     private const val READ_TIMEOUT = 10000
@@ -94,7 +97,7 @@ object ModrinthContent {
     private fun search(type: Type, query: String, sort: Sort, categories: Set<String>): List<Hit> {
         val facetGroups = buildList {
             add("[\"project_type:${type.projectType}\"]")
-            add("[\"versions:$GAME_VERSION\"]")
+            add("[\"versions:$gameVersion\"]")
             for (category in categories) add("[\"categories:$category\"]")
         }
         val facets = "[" + facetGroups.joinToString(",") + "]"
@@ -139,10 +142,10 @@ object ModrinthContent {
     private fun downloadNow(type: Type, hit: Hit, targetDir: Path): String {
         val loaders = "[" + type.loaders.joinToString(",") { "\"$it\"" } + "]"
         val versionsUrl = "$API/project/${hit.projectId}/version" +
-            "?loaders=${enc(loaders)}&game_versions=${enc("[\"$GAME_VERSION\"]")}"
+            "?loaders=${enc(loaders)}&game_versions=${enc("[\"$gameVersion\"]")}"
         val body = get(versionsUrl) ?: throw IllegalStateException("Could not reach Modrinth.")
         val versions = JsonParser.parseString(body).asJsonArray
-        if (versions.isEmpty) throw IllegalStateException("No 1.21.11 build is available.")
+        if (versions.isEmpty) throw IllegalStateException("No $gameVersion build is available.")
         val file = pickFile(versions) ?: throw IllegalStateException("No downloadable file was found.")
         Files.createDirectories(targetDir)
         val dest = targetDir.resolve(sanitize(file.second))

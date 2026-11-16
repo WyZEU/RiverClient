@@ -1,7 +1,9 @@
 # macOS builds
 
 River's Electron launcher can be packaged as separate Apple Silicon (`arm64`)
-and Intel (`x64`) DMGs. It requires macOS 12 or newer, matching Electron 41.
+and Intel (`x64`) DMGs. It requires macOS 12 or newer, matching Electron 43.
+The launcher stays on the patched Electron 43 line to retain Monterey support;
+Electron 44 and newer require macOS 13.
 The application keeps the existing `dev.wyz.river.launcher` bundle identifier
 and River branding. Install by dragging **River Client** into **Applications**.
 

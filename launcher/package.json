@@ -53,11 +53,11 @@
   "devDependencies": {
     "@aws-sdk/client-s3": "3.1169.0",
     "@tailwindcss/cli": "^4.3.3",
-    "electron": "^41.10.7",
-    "electron-builder": "26.8.1",
+    "electron": "^43.8.10",
+    "electron-builder": "26.18.1",
     "esbuild": "0.27.0",
     "tailwindcss": "^4.3.3",
-    "wrangler": "^4.24.0",
+    "wrangler": "^4.163.0",
     "yauzl": "3.4.0"
   },
   "build": {
@@ -146,5 +146,8 @@
       "**/np-helper.exe",
       "**/now-playing.ps1"
     ]
+  },
+  "overrides": {
+    "minimatch@>=7.0.0 <11.0.1": "11.0.1"
   }
 }

@@ -3,6 +3,7 @@ const nowPlaying = require("./now-playing.js");
 const curseforge = require("./curseforge.js");
 const { migrationPlan, migrationVersion } = require("./migration-plan.js");
 const { planRvrRestore } = require("./rvr-restore.js");
+const { installContentFile } = require("./content-install.js");
 const { pickRiverModEntry, fileMatchesSha256 } = require("./river-mod-cache.js");
 const { verifyManifest } = require("./update-signature.js");
 const { normalizeUpdateFilePath, buildDifferentialUpdatePlan, downloadFileViaBlockmap } = require("./update-files.js");
@@ -12586,23 +12587,11 @@ async function installModrinthVersion({ projectIdOrSlug, title, version, gameVer
 
   const manifest = readModManifest(instancePath);
   const section = manifestSection(manifest, resolvedContentType);
-  let existingProjectEntry = Object.entries(section).find(([, item]) => item && item.projectId === projectId);
+  const existingProjectEntry = Object.entries(section).find(([, item]) => item && item.projectId === projectId);
   if (resolvedContentType === "mod" && existingProjectEntry?.[1]?.disabled) {
     if (reason !== "dependency") return { ok: true, message: `${title} stays disabled.`, installed: [] };
-    const [disabledFile, disabledMetadata] = existingProjectEntry;
-    const enabledFile = disabledFile.replace(/\.disabled$/i, "");
-    const disabledPath = path.join(instancePath, resolvedInfo.folder, disabledFile);
-    const enabledPath = path.join(instancePath, resolvedInfo.folder, enabledFile);
-    if (fs.existsSync(disabledPath) && disabledPath !== enabledPath) {
-      if (fs.existsSync(enabledPath)) fs.rmSync(enabledPath, { force: true });
-      fs.renameSync(disabledPath, enabledPath);
-    }
-    delete section[disabledFile];
-    section[enabledFile] = { ...disabledMetadata, file: enabledFile, disabled: false };
-    delete manifest.updates[updateKey("mod", disabledFile)];
-    writeModManifest(instancePath, manifest);
-    existingProjectEntry = [enabledFile, section[enabledFile]];
-    emit("launcher:log", `[mods] Re-enabled required dependency ${title}.`);
+    // A required dependency is enabled only after its replacement has been verified.
+    // A failed update must leave the previous file and its disabled state intact.
   }
   const alreadyInstalled = Object.values(section).find((item) => item.projectId === projectId && item.versionId === version.id && !item.disabled);
   if (alreadyInstalled) return { ok: true, message: `${title} is already installed.`, installed: [] };
@@ -12650,55 +12639,54 @@ async function installModrinthVersion({ projectIdOrSlug, title, version, gameVer
   if (!file || !file.url) return { ok: false, message: `No downloadable file found for ${title}.` };
 
   const contentDir = path.join(instancePath, resolvedInfo.folder);
-  fs.mkdirSync(contentDir, { recursive: true });
-  if (replaceTarget) {
-    fs.rmSync(path.join(contentDir, replaceTarget), { force: true });
-    delete manifestSection(manifest, resolvedContentType)[replaceTarget];
-    delete manifest.updates[updateKey(resolvedContentType, replaceTarget)];
-    if (resolvedContentType === "mod") delete manifest.updates[replaceTarget];
-  }
-
   const target = path.join(contentDir, sanitizeFilename(file.filename || `${projectId}${resolvedInfo.extensions[0]}`));
   const targetFile = path.basename(target);
-  emit("launcher:log", `[${resolvedSectionName}] Downloading ${file.filename || title}...`);
-  emitActivity({ title: `Downloading ${resolvedInfo.label}`, detail: file.filename || title, current: 0, total: 1 });
-  await downloadFile(file.url, target);
-
   const incompatibilities = resolvedContentType === "mod" ? await resolveIncompatibilities(version) : [];
   const cachedIconUrl = project && project.icon_url ? await cacheProjectIcon(project.id || projectId, project.icon_url) : "";
   const author = project ? await getModrinthProjectAuthor(project) : "";
-  const nextManifest = readModManifest(instancePath);
-  const nextSection = manifestSection(nextManifest, resolvedContentType);
-  if (replaceTarget) {
-    delete nextSection[replaceTarget];
-    delete nextManifest.updates[updateKey(resolvedContentType, replaceTarget)];
-    if (resolvedContentType === "mod") delete nextManifest.updates[replaceTarget];
-  }
-  nextSection[targetFile] = {
-    source: "modrinth",
-    contentType: resolvedContentType,
-    file: targetFile,
-    title: project ? project.title : title,
-    slug: project ? project.slug : "",
-    iconUrl: cachedIconUrl || (project ? project.icon_url : ""),
-    remoteIconUrl: project ? project.icon_url : "",
-    author,
-    gallery: project && Array.isArray(project.gallery) ? project.gallery : [],
-    projectId,
-    versionId: version.id,
-    versionNumber: version.version_number,
-    gameVersion,
-    loader,
-    installedAt: new Date().toISOString(),
-    reason,
-    dependencies: (version.dependencies || [])
-      .filter((dependency) => dependency.dependency_type === "required")
-      .map((dependency) => ({ projectId: dependency.project_id || "", versionId: dependency.version_id || "" })),
-    incompatibilities
-  };
-  delete nextManifest.updates[updateKey(resolvedContentType, targetFile)];
-  if (resolvedContentType === "mod") delete nextManifest.updates[targetFile];
-  writeModManifest(instancePath, nextManifest);
+  emit("launcher:log", `[${resolvedSectionName}] Downloading ${file.filename || title}...`);
+  emitActivity({ title: `Downloading ${resolvedInfo.label}`, detail: file.filename || title, current: 0, total: 1 });
+  await installContentFile({
+    file,
+    target,
+    previous: replaceTarget ? path.join(contentDir, replaceTarget) : "",
+    manifestPath: modManifestPath(instancePath),
+    download: downloadFile,
+    createManifest: () => {
+      const nextManifest = readModManifest(instancePath);
+      const nextSection = manifestSection(nextManifest, resolvedContentType);
+      if (replaceTarget) {
+        delete nextSection[replaceTarget];
+        delete nextManifest.updates[updateKey(resolvedContentType, replaceTarget)];
+        if (resolvedContentType === "mod") delete nextManifest.updates[replaceTarget];
+      }
+      nextSection[targetFile] = {
+        source: "modrinth",
+        contentType: resolvedContentType,
+        file: targetFile,
+        title: project ? project.title : title,
+        slug: project ? project.slug : "",
+        iconUrl: cachedIconUrl || (project ? project.icon_url : ""),
+        remoteIconUrl: project ? project.icon_url : "",
+        author,
+        gallery: project && Array.isArray(project.gallery) ? project.gallery : [],
+        projectId,
+        versionId: version.id,
+        versionNumber: version.version_number,
+        gameVersion,
+        loader,
+        installedAt: new Date().toISOString(),
+        reason,
+        dependencies: (version.dependencies || [])
+          .filter((dependency) => dependency.dependency_type === "required")
+          .map((dependency) => ({ projectId: dependency.project_id || "", versionId: dependency.version_id || "" })),
+        incompatibilities
+      };
+      delete nextManifest.updates[updateKey(resolvedContentType, targetFile)];
+      if (resolvedContentType === "mod") delete nextManifest.updates[targetFile];
+      return nextManifest;
+    }
+  });
 
   emit("launcher:log", `[${resolvedSectionName}] Installed ${targetFile} to ${contentDir}`);
   const installed = [...dependencyResults, targetFile];
