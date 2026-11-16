@@ -24,7 +24,7 @@ async function main() {
   assert.equal(process.platform, "win32", "Run this integration on Windows");
   const candidate = path.resolve(process.argv[2] || "");
   assert.ok(fs.existsSync(path.join(candidate, "RiverClient.exe")), "Pass a built win-unpacked candidate directory");
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "river-upgrade-030-"));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "river-upgrade-030-")));
   try {
     const archive = process.env.RIVER_PUBLIC_030_ZIP || path.join(root, "public-0.3.0.zip");
     if (!fs.existsSync(archive)) {

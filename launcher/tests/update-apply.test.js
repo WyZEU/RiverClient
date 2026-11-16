@@ -6,7 +6,9 @@ const path = require("node:path");
 const { apply, write, snapshot, hasPowerShell } = require("./fixtures/update-apply.js");
 
 function fixture(t, mode = "delta") {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "river-apply-"));
+  // GitHub's Windows temp path may use an 8.3 alias. PowerShell expands it, so
+  // fault-injection comparisons must use the same canonical filesystem path.
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "river-apply-")));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const installDir = path.join(root, "installation with space");
   const sourceDir = path.join(root, "staging");
