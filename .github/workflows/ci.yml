@@ -80,20 +80,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Public-client upgrade test failed.' }
 
   mod-build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup JDK
-        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
-        with:
-          java-version: |
-            21
-            25
-          distribution: "temurin"
-
-      # Builds the active Stonecutter targets and bootstrap (legacy/ is separate).
-      # This ensures downloaded JARs can be checked against this source.
-      - name: Build
-        run: ./gradlew build --no-daemon -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64,JAVA_HOME_25_X64
+    permissions:
+      contents: read
+    uses: ./.github/workflows/linux-build.yml

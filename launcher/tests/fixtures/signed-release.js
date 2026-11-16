@@ -72,11 +72,18 @@ function fixture(t, { large = false } = {}) {
       .map((name) => `${hash(fs.readFileSync(path.join(artifactDirectory, name)))}  ${name}`).join("\n") + "\n");
   }
   checksums();
+  const linuxArtifactDirectory = path.join(root, "linux-artifact");
+  fs.mkdirSync(linuxArtifactDirectory);
+  const linuxBytes = require("node:zlib").gzipSync("synthetic Linux distribution");
+  fs.writeFileSync(path.join(linuxArtifactDirectory, "River-Client-Linux.tar.gz"), linuxBytes);
+  const linuxInfo = { schemaVersion: 1, platform: "linux", arch: "x64", version, sourceCommit: commit, runtime,
+    archive: { name: "River-Client-Linux.tar.gz", size: linuxBytes.length, sha256: hash(linuxBytes) } };
+  fs.writeFileSync(path.join(linuxArtifactDirectory, "LINUX-BUILD-INFO.json"), JSON.stringify(linuxInfo));
   const pair = crypto.generateKeyPairSync("ed25519");
-  return { root, artifactDirectory, outputDirectory, app, info, inventory, write, checksums,
+  return { root, artifactDirectory, linuxArtifactDirectory, linuxInfo, outputDirectory, app, info, inventory, write, checksums,
     privateKey: pair.privateKey.export({ type: "pkcs8", format: "pem" }),
     publicKey: pair.publicKey.export({ type: "spki", format: "der" }).toString("base64"),
-    options: { artifactDirectory, outputDirectory, expectedCommit: commit, channel: "stable", minimumVersion: "0.2.9",
+    options: { artifactDirectory, linuxArtifactDirectory, outputDirectory, expectedCommit: commit, channel: "stable", minimumVersion: "0.2.9",
       publishedAt: "2026-11-16T11:00:00.000Z", notes: { version, approved: true, title: "River Client 0.3.1", summary: "Test release", items: ["Signed Windows distribution"] } } };
 }
 

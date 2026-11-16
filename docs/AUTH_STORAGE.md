@@ -8,9 +8,11 @@ After Electron is ready, the launcher reads `minecraft-auth.json`, `profiles.jso
 
 Migration verifies encryption/decryption, writes a sibling temporary file with mode `0600`, flushes it, reads and decrypts it again, then atomically renames it over the original. A failed migration preserves the original; temporary files are cleaned up. Successful migration keeps no plaintext backup. Decrypted data is cached only in the main process; a launcher restart decrypts the persisted file again.
 
-If secure OS storage is unavailable, an **existing legacy file** remains readable and writable so refresh-token rotation does not discard an existing login. Settings explicitly reports that its account files are still unencrypted. Reads retry migration after 30 seconds. Linux `basic_text` and `unknown` backends are treated as unavailable. New files and files already encrypted never fall back to plaintext.
+If secure OS storage is unavailable, an **existing legacy file** remains readable and writable so refresh-token rotation does not discard an existing login. Settings explicitly reports that its account files are still unencrypted. Reads retry migration after 30 seconds. Linux `basic_text` and `unknown` backends are treated as unavailable. Files already encrypted never fall back to plaintext.
 
-For a missing file, new sign-ins and saved-account selections use a temporary session in main-process memory. Settings reports that it ends when the launcher closes. Logout clears it, refresh can rotate its token, and storage availability is retried after 30 seconds; once available, the pending value is persisted as ciphertext. This also permits signing in again after logout on systems without a keychain. Existing encrypted files are still protected from replacement or plaintext fallback.
+On Linux without an available keyring, a missing file can be created as plaintext with mode `0600`, using the same atomic write and read-back checks. Fresh Microsoft sign-ins, saved accounts and River sessions survive restart, and Settings reports pending encryption. Once a secure provider becomes available, the files migrate to ciphertext. A provider that reports availability but fails encryption uses a temporary session instead; it does not create plaintext.
+
+On Windows and macOS with unavailable secure storage, new sign-ins and saved-account selections use a temporary session in main-process memory. Settings reports that it ends when the launcher closes. Logout clears it, refresh can rotate its token, and storage availability is retried after 30 seconds; once available, the pending value is persisted as ciphertext. Existing encrypted files remain protected from replacement or plaintext fallback on every platform.
 
 A locked keychain, unreadable ciphertext or unsupported format does not become an empty saved-account list on disk. Login and account mutations fail without overwriting that file. Unlocking the original OS storage allows it to be read again. An already decrypted account remains usable in memory; refresh checks that storage is available before requesting a new token. Filesystem failures retain the previous persisted session.
 
@@ -19,6 +21,12 @@ Refreshed tokens are copied into the matching saved account. Switching accounts 
 Login attempts, explicit account switches and logout invalidate pending work from the previous session. A late refresh, device-code result, skin/profile write or River sign-in cannot restore it. Concurrent refresh callers share one token rotation. Session markers are kept in memory and excluded from JSON and public IPC responses.
 
 The synchronous API matches the launcher's pinned Electron 43 runtime and existing synchronous main-process auth callers. Keep the application identity stable between signed updates. Older launcher versions do not understand the encrypted format, and copying it to a different OS account/machine does not transfer its OS key. Downgrade or cross-machine login portability is not provided by this migration.
+
+## Rollback after migration
+
+Reinstalling 0.3.0 after a successful migration cannot preserve sign-in: 0.3.0 cannot decrypt the envelope and may replace it on its next account write. Do not use that downgrade as the routine rollback procedure or retain plaintext token backups. Prefer a corrected release with a higher three-part version that keeps the credential reader and the application identity. This preserves the current OS-encrypted sessions.
+
+An update-application failure that restores the old files before the new launcher starts is different: credential migration has not run yet. The updater recovery tests cover that case. Any deliberate return to 0.3.0 after the new launcher has run requires owner approval of the sign-in loss and fresh Microsoft authorization. Record that decision before publication; the review alone is not acceptance of the tradeoff.
 
 ## Verification
 

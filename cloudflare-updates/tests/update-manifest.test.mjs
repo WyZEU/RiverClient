@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
-import worker, { publishedInstallerTarget } from "../src/worker.js";
+import worker, { publishedInstallerTarget, publishedLinuxTarget } from "../src/worker.js";
 import { resetUpdatePolicyCache, releaseVersions } from "../src/update-policy.js";
 import signatures from "../../launcher/src/update-signature.js";
 
@@ -73,7 +73,7 @@ test("standalone mod policy still raises its minimum without changing the launch
 test("publication capability and rolling installer use the committed immutable release", async () => {
   const target = "https://updates.riverclient.xyz/downloads/releases/0.3.1-abcdef123456/River-Client-Setup.exe";
   const env = environment({ version: "0.3.1", installerUrl: target }, {});
-  assert.deepEqual(await get("/release-capabilities.json", env), { publicationProtocol: 1 });
+  assert.deepEqual(await get("/release-capabilities.json", env), { publicationProtocol: 1, macosPublicationProtocol: 1, linuxPublicationProtocol: 1 });
   const response = await worker.fetch(new Request("https://updates.riverclient.xyz/downloads/River-Client-Setup.exe"), env, { waitUntil() {} });
   assert.equal(response.status, 302);
   assert.equal(response.headers.get("location"), target);
@@ -101,4 +101,25 @@ test("partial uploads and beta namespaces do not advance standalone-mod release 
   prefixes.push("releases/0.3.1/"); // Final marker, written only after latest.json commits.
   resetUpdatePolicyCache();
   assert.deepEqual(await releaseVersions(env), ["0.3.1", "0.3.0"]);
+});
+
+test("Linux root download follows the stable manifest and preserves the legacy fallback", async () => {
+  const base = "https://updates.riverclient.xyz";
+  const target = `${base}/downloads/releases/0.3.1-abcdef123456/River-Client-Linux-0.3.1.tar.gz`;
+  const env = environment({ version: "0.3.1", linuxUrl: target }, {});
+  const request = new Request(`${base}/downloads/River-Client-Linux.tar.gz`);
+  const response = await worker.fetch(request, env, { waitUntil() {} });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), target);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const legacy = environment({ version: "0.3.0", linuxUrl: `${base}/downloads/River-Client-Linux.tar.gz` }, {});
+  const previous = legacy.UPDATES.get;
+  legacy.UPDATES.get = async (key) => key === "River-Client-Linux.tar.gz" ? { body: "legacy Linux", httpEtag: '"legacy"' } : previous(key);
+  const fallback = await worker.fetch(request, legacy, { waitUntil() {} });
+  assert.equal(fallback.status, 200);
+  assert.equal(await fallback.text(), "legacy Linux");
+  for (const linuxUrl of [`${base}/downloads/River-Client-Linux.tar.gz`, target.replace(base, "https://elsewhere.example"),
+    `${target}?secret=1`, target.replace("Linux-0.3.1", "Linux-0.3.0"), `${base}/downloads/config/River-Client-Linux-0.3.1.tar.gz`]) {
+    assert.equal(publishedLinuxTarget({ version: "0.3.1", linuxUrl }), null);
+  }
 });

@@ -144,6 +144,15 @@ function createCredentialStore({ safeStorage, platform = process.platform, fileS
     try { serialized = encrypt(plaintext); }
     catch (error) {
       if (["empty", "temporary"].includes(states.get(file)?.state)) {
+        if (platform === "linux" && !available()) {
+          // A Linux desktop may have no keyring at all. Persist a new login with
+          // owner-only permissions, then migrate it when a secure provider returns.
+          replace(file, plaintext, plaintext, false);
+          temporary.delete(file);
+          remember(file, plaintext, value, "legacy", PENDING);
+          retryAt.set(file, now() + 30_000);
+          return clone(value);
+        }
         temporary.set(file, clone(value));
         states.set(file, { state: "temporary", message: TEMPORARY });
         retryAt.set(file, now() + 30_000);
@@ -151,7 +160,7 @@ function createCredentialStore({ safeStorage, platform = process.platform, fileS
       }
       if (states.get(file)?.state !== "legacy") throw error;
       // Preserve refresh-token rotation for users whose *existing* legacy storage cannot
-      // migrate yet. New files and previously encrypted files never fall back to plaintext.
+      // migrate yet. Previously encrypted files never fall back to plaintext.
       replace(file, plaintext, plaintext, false);
       remember(file, plaintext, value, "legacy", PENDING);
       retryAt.set(file, now() + 30_000);

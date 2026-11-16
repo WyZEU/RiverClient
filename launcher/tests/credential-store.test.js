@@ -10,7 +10,7 @@ function fixture(t, options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "river-credentials-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const safeStorage = encryptionProvider();
-  const store = createCredentialStore({ safeStorage, ...options });
+  const store = createCredentialStore({ safeStorage, platform: "darwin", ...options });
   const file = path.join(root, "minecraft-auth.json");
   const auth = account();
   const raw = JSON.stringify(auth, null, 2);
@@ -63,9 +63,49 @@ test("Linux basic_text and unknown backends never count as secure storage", (t) 
     assert.equal(f.store.status().state, "legacy");
     assert.equal(fs.readFileSync(f.file, "utf8"), f.raw);
     assert.deepEqual(f.store.write(path.join(f.root, "new.json"), f.auth, {}), f.auth);
-    assert.equal(f.store.status().state, "temporary");
-    assert.equal(fs.existsSync(path.join(f.root, "new.json")), false);
+    assert.equal(f.store.status().state, "legacy");
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.root, "new.json"))), f.auth);
   }
+});
+
+test("fresh Linux accounts survive restart without a keyring and migrate when it becomes available", (t) => {
+  let clock = 0;
+  const f = fixture(t, { platform: "linux", now: () => clock });
+  f.store.remove(f.file);
+  f.safeStorage.available = false;
+  f.store.assertWritable(f.file, {});
+  f.store.write(f.file, f.auth, {});
+  const rotated = { ...f.auth, microsoftRefreshToken: "test-linux-rotated" };
+  const restarted = createCredentialStore({ safeStorage: f.safeStorage, platform: "linux", now: () => clock });
+  assert.deepEqual(restarted.read(f.file, {}), f.auth);
+  restarted.write(f.file, rotated, {});
+  assert.equal(restarted.status().state, "legacy");
+  assert.match(restarted.status().message, /encryption is pending/);
+  if (process.platform !== "win32") assert.equal(fs.statSync(f.file).mode & 0o777, 0o600);
+  f.safeStorage.available = true;
+  clock += 30_001;
+  assert.deepEqual(restarted.read(f.file, {}), rotated);
+  assert.equal(restarted.status().state, "encrypted");
+  const ciphertext = fs.readFileSync(f.file, "utf8");
+  assert.doesNotMatch(ciphertext, /test-linux-rotated/);
+  f.safeStorage.available = false;
+  assert.throws(() => restarted.write(f.file, f.auth, {}), /Secure system storage/);
+  assert.equal(fs.readFileSync(f.file, "utf8"), ciphertext);
+});
+
+test("a failing secure Linux provider does not create plaintext and failed fallback writes are reported", (t) => {
+  const fileSystem = { ...fs };
+  const f = fixture(t, { platform: "linux", fileSystem });
+  f.store.remove(f.file);
+  f.safeStorage.encryptString = () => { throw new Error("Locked provider"); };
+  f.store.write(f.file, f.auth, {});
+  assert.equal(f.store.status().state, "temporary");
+  assert.equal(fs.existsSync(f.file), false);
+  f.store.remove(f.file);
+  f.safeStorage.available = false;
+  fileSystem.renameSync = () => { throw new Error("Disk full"); };
+  assert.throws(() => f.store.write(f.file, f.auth, {}), /safely save/);
+  assert.deepEqual(fs.readdirSync(f.root), []);
 });
 
 test("temporary sessions work without new plaintext files and persist securely when storage returns", (t) => {

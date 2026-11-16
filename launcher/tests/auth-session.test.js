@@ -12,7 +12,7 @@ const { encryptionProvider, account } = require("./fixtures/auth-storage.js");
 const source = fs.readFileSync(path.join(__dirname, "../src/main.js"), "utf8");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-function fixture(t) {
+function fixture(t, platform = "darwin") {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "river-auth-session-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const safeStorage = encryptionProvider();
@@ -24,7 +24,7 @@ function fixture(t) {
   f.restart = () => {
     f.context = vm.createContext({
       fs, path, Date, Buffer, crypto, publicAuth, publicSavedProfile,
-      credentialStore: createCredentialStore({ safeStorage }),
+      credentialStore: createCredentialStore({ safeStorage, platform }),
       authSession: createAuthSession(),
       app: { getPath: () => root },
       AUTH_SESSION_MS: 30 * 24 * 60 * 60 * 1000, AUTH_REFRESH_SKEW_MS: 300_000,
@@ -78,6 +78,24 @@ function fixture(t) {
   f.restart();
   return f;
 }
+
+test("fresh Linux sign-in and saved-account selection persist without a keyring", async (t) => {
+  const f = fixture(t, "linux");
+  f.safeStorage.available = false;
+  fs.unlinkSync(path.join(f.root, "minecraft-auth.json"));
+  fs.unlinkSync(path.join(f.root, "profiles.json"));
+  assert.equal((await f.invoke("microsoft-login")).ok, true);
+  assert.equal((await f.invoke("save-profile")).ok, true);
+  f.restart();
+  assert.equal(f.context.readAuth().signedIn, true);
+  assert.equal(f.context.readAuth().microsoftRefreshToken, "test-ms-rotated");
+  assert.equal((await f.invoke("get-profiles")).profiles.length, 1);
+  assert.equal((await f.invoke("microsoft-logout")).ok, true);
+  assert.equal((await f.invoke("switch-profile", "alice")).ok, true);
+  f.restart();
+  assert.equal(f.context.readAuth().profile.id, "alice");
+  assert.equal(f.context.credentialStore.status().state, "legacy");
+});
 
 test("legacy active and saved accounts survive migration, restart, refresh, switching and logout", async (t) => {
   const f = fixture(t);

@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { fixture, zip, hash } = require("./fixtures/signed-release");
-const { prepareSignedUpdate, validatePrepared, signPrepared } = require("../scripts/prepare-signed-update");
+const { prepareSignedUpdate, validatePrepared, signPrepared, compareVersions, releaseKeyFor } = require("../scripts/prepare-signed-update");
 const { verifyArtifact, extractZip, ARTIFACT_FILES } = require("../scripts/release-artifact");
 const { publishPrepared } = require("../scripts/publish-signed-update");
 const { signManifest, verifyManifest } = require("../src/update-signature");
@@ -30,7 +30,7 @@ function objectStore(f) {
     }
   };
   async function fetchRemote(url) {
-    if (url.endsWith("/release-capabilities.json")) return Response.json({ publicationProtocol: 1 });
+    if (url.endsWith("/release-capabilities.json")) return Response.json({ publicationProtocol: 1, linuxPublicationProtocol: 1 });
     const key = url.endsWith("/latest.json") ? "latest.json" : decodeURIComponent(new URL(url).pathname.slice("/downloads/".length));
     return objects.has(key) ? new Response(objects.get(key)) : new Response("missing", { status: 404 });
   }
@@ -55,6 +55,8 @@ test("preparation preserves original signed bytes and produces a client-compatib
   const fileManifest = JSON.parse(fs.readFileSync(path.join(f.outputDirectory, "metadata/file-manifest.json")));
   assert.equal(hash(JSON.stringify(fileManifest)), manifest.files.fileManifest.sha256);
   assert.equal(manifest.files.package.sha256, hash(fs.readFileSync(path.join(f.artifactDirectory, "River-Client-App.zip"))));
+  assert.equal(manifest.files.linux.sha256, hash(fs.readFileSync(path.join(f.linuxArtifactDirectory, "River-Client-Linux.tar.gz"))));
+  assert.match(manifest.linuxUrl, /\/releases\/0\.3\.1-cccccccccccc\/River-Client-Linux-0\.3\.1\.tar\.gz$/);
   assert.equal(manifest.mods.length, 1);
   assert.ok(manifest.installerUrl.includes("/releases/0.3.1-cccccccccccc/"));
   assert.ok(fileManifest.files.find((file) => file.path === "resources/app.asar").blockmapUrl);
@@ -92,6 +94,27 @@ test("preparation refuses unapproved notes, unsafe minimums and an existing outp
   await assert.rejects(prepareSignedUpdate({ ...f.options, minimumVersion: "0.4.0" }), /Minimum/);
   await prepareSignedUpdate(f.options);
   await assert.rejects(prepareSignedUpdate(f.options), /already exists/);
+});
+
+test("Linux is mandatory and must match the reviewed source, version, targets and archive bytes", async (t) => {
+  for (const change of ["missing", "commit", "version", "targets", "bytes"]) {
+    const f = fixture(t);
+    if (change === "missing") f.options.linuxArtifactDirectory = undefined;
+    if (change === "commit") f.linuxInfo.sourceCommit = "d".repeat(40);
+    if (change === "version") f.linuxInfo.version = "0.3.0";
+    if (change === "targets") f.linuxInfo.runtime.minecraftVersions = ["1.21.11"];
+    if (change === "bytes") fs.appendFileSync(path.join(f.linuxArtifactDirectory, "River-Client-Linux.tar.gz"), "corruption");
+    fs.writeFileSync(path.join(f.linuxArtifactDirectory, "LINUX-BUILD-INFO.json"), JSON.stringify(f.linuxInfo));
+    await assert.rejects(prepareSignedUpdate(f.options), /Linux/);
+    assert.equal(fs.existsSync(f.outputDirectory), false);
+  }
+});
+
+test("new releases use three parts while historical four-part versions remain comparable", () => {
+  assert.equal(compareVersions("0.3.1", "0.2.8.1"), 1);
+  assert.equal(compareVersions("0.2.8.1", "0.2.8"), 1);
+  assert.equal(compareVersions("0.3.0.0", "0.3.0"), 0);
+  assert.throws(() => releaseKeyFor("0.3.1.1", "c".repeat(40), "stable"), /MAJOR.MINOR.PATCH/);
 });
 
 test("ZIP extraction rejects traversal, links, duplicate case-insensitive names and changed bytes", async (t) => {
@@ -138,6 +161,11 @@ test("successful publication verifies every object, promotes once, writes histor
   assert.equal(receipt.assetsVerified, true);
   assert.deepEqual(f.operations.slice(-2), ["latest.json", "releases/0.3.1/published.json"]);
   assert.equal(f.operations.includes("River-Client-Setup.exe"), false);
+  assert.equal(f.operations.includes("River-Client-Linux.tar.gz"), false, "the rolling URL follows the committed manifest atomically");
+  const published = (await f.store.getJson("latest.json")).value;
+  const linuxKey = decodeURIComponent(new URL(published.linuxUrl).pathname.slice("/downloads/".length));
+  assert.equal(hash(f.objects.get(linuxKey)), published.files.linux.sha256);
+  assert.equal(receipt.linuxUrl, published.linuxUrl);
   const length = f.operations.length;
   await f.publish();
   assert.equal(f.operations.length, length);
@@ -162,6 +190,8 @@ test("interrupted and corrupt uploads cannot change the channel or standalone-mo
 
 test("Worker capabilities, unchanged signatures and reviewed channel version are required before uploads", async (t) => {
   const f = await ready(t);
+  await assert.rejects(f.publish({ fetchRemote: async (url) => url.endsWith("/release-capabilities.json")
+    ? Response.json({ publicationProtocol: 1 }) : f.fetchRemote(url) }), /Linux rolling-download/);
   await assert.rejects(f.publish({ fetchRemote: async () => new Response("missing", { status: 404 }) }), /404/);
   await assert.rejects(f.publish({ expectedPreviousVersion: "0.2.9" }), /Channel version changed/);
   await assert.rejects(f.publish({ fetchRemote: async (url) => url.endsWith("/latest.json")
@@ -220,6 +250,16 @@ function sourceFixture(commit) {
     comparison: { status: "ahead" } };
 }
 
+test("Linux download provenance requires its own artifact from the successful release run", () => {
+  const commit = "c".repeat(40), source = sourceFixture(commit);
+  assert.throws(() => validateBuildSource(source.run, source.artifacts, commit, source.comparison, "linux"));
+  const linux = { ...source.artifacts[0], name: `river-linux-${commit}`, id: 124 };
+  assert.equal(validateBuildSource(source.run, [...source.artifacts, linux], commit, source.comparison, "linux").id, 124);
+  for (const patch of [{ conclusion: "failure" }, { head_sha: "d".repeat(40) }, { path: ".github/workflows/ci.yml" }]) {
+    assert.throws(() => validateBuildSource({ ...source.run, ...patch }, [linux], commit, source.comparison, "linux"));
+  }
+});
+
 test("build provenance excludes failed runs, PRs, forks, wrong workflow/commit and missing artifact digests", () => {
   const commit = "c".repeat(40), source = sourceFixture(commit);
   assert.equal(validateBuildSource(source.run, source.artifacts, commit, source.comparison).id, 123);
@@ -233,9 +273,12 @@ test("build provenance excludes failed runs, PRs, forks, wrong workflow/commit a
   assert.throws(() => validateBuildSource(source.run, source.artifacts, commit, { status: "diverged" }));
 });
 
-test("Actions archive digest is checked and the API token is not sent to download storage", async (t) => {
+for (const platform of ["windows", "linux"]) test(`${platform} Actions archive digest is checked and the API token is not sent to download storage`, async (t) => {
   const f = fixture(t), source = sourceFixture(f.options.expectedCommit);
-  const archive = zip(ARTIFACT_FILES.map((name) => ({ name, bytes: fs.readFileSync(path.join(f.artifactDirectory, name)) })));
+  source.artifacts[0].name = `river-${platform}-${f.options.expectedCommit}`;
+  const names = platform === "linux" ? require("../scripts/linux-release-artifact").LINUX_ARTIFACT_FILES : ARTIFACT_FILES;
+  const directory = platform === "linux" ? f.linuxArtifactDirectory : f.artifactDirectory;
+  const archive = zip(names.map((name) => ({ name, bytes: fs.readFileSync(path.join(directory, name)) })));
   source.artifacts[0].digest = `sha256:${hash(archive)}`;
   const fetchRemote = async (url, options) => {
     if (url === "https://artifact.example/download") { assert.equal(options.headers, undefined); return new Response(archive); }
@@ -245,12 +288,13 @@ test("Actions archive digest is checked and the API token is not sent to downloa
     if (url.includes("/artifacts?")) return Response.json({ total_count: 1, artifacts: source.artifacts });
     return Response.json(source.run);
   };
-  const record = await downloadSignedBuild({ runId: "123", expectedCommit: f.options.expectedCommit,
+  const record = await downloadSignedBuild({ platform, runId: "123", expectedCommit: f.options.expectedCommit,
     outputDirectory: path.join(f.root, "downloaded"), recordFile: path.join(f.root, "source.json"), token: "test-token", fetchRemote });
   assert.equal(record.artifactDigest, source.artifacts[0].digest);
-  await verifyArtifact(path.join(f.root, "downloaded"), f.options.expectedCommit);
+  if (platform === "windows") await verifyArtifact(path.join(f.root, "downloaded"), f.options.expectedCommit);
+  else await require("../scripts/linux-release-artifact").verifyLinuxArtifact(path.join(f.root, "downloaded"), f.options.expectedCommit, f.info.version, f.info.runtime.minecraftVersions);
   source.artifacts[0].digest = `sha256:${"0".repeat(64)}`;
-  await assert.rejects(downloadSignedBuild({ runId: "123", expectedCommit: f.options.expectedCommit,
+  await assert.rejects(downloadSignedBuild({ platform, runId: "123", expectedCommit: f.options.expectedCommit,
     outputDirectory: path.join(f.root, "bad-download"), recordFile: path.join(f.root, "bad-source.json"), token: "test-token", fetchRemote }), /digest mismatch/);
   assert.equal(fs.existsSync(path.join(f.root, "bad-download")), false);
 });

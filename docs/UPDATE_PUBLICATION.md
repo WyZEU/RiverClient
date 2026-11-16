@@ -1,7 +1,10 @@
-# Publishing a signed Windows update
+# Publishing a signed Windows and Linux update
 
-The `Publish signed Windows update` workflow consumes the exact artifact from a
-successful `Signed Windows release` run. It does not rebuild the application.
+The `Publish signed Windows and Linux update` workflow consumes the exact Windows
+and Linux artifacts from a successful `Signed Windows release` run. It does not
+rebuild the application. The Linux job builds all 14 Minecraft targets, packages
+the x64 archive and checks the packaged version, source commit, runtime JARs and
+executable permissions. The same Linux job also runs in PR CI.
 By default it only prepares a review artifact. Setting `publish` to `true`
 explicitly enables R2 uploads and promotion of `latest.json` or `beta.json`.
 
@@ -42,21 +45,27 @@ prints secret values. Without `--apply` it checks policy and secret names only.
 
 ## Prerequisites for the first publication
 
-1. Resolve the GitHub owner's billing lock, then merge the reviewed workflows
-   into `master`. A branch or PR cannot sign or publish a production update.
+1. Merge the reviewed workflows into `master` after CI passes. A branch or PR
+   cannot sign or publish a production update.
 2. Deliberately deploy the reviewed `cloudflare-updates` Worker before publishing.
    `GET https://updates.riverclient.xyz/release-capabilities.json` must return
-   `{"publicationProtocol":1}`. The public stable manifest must verify and match
+   both `publicationProtocol: 1` and `linuxPublicationProtocol: 1`. The public stable manifest must verify and match
    the signed manifest in R2 byte-for-byte in canonical form. An older Worker
    that changes signed fields is rejected before any upload.
 3. The prepared candidate is **0.3.1**. For subsequent releases, advance only
    `riverVersion` in `launcher/package.json`; the launcher and all active Minecraft
    targets derive their version from it. The published release must be newer than
    stable and the selected channel; recheck live versions before release.
+   New releases and hotfixes use canonical `MAJOR.MINOR.PATCH` (for example, a
+   subsequent hotfix uses `0.3.2`, not `0.3.1.1`). Historical four-part versions such
+   as `0.2.8.1` remain readable and comparable, including reviewed minimum versions.
 4. Wait for the automatic [signed Windows build](WINDOWS_RELEASE.md) from the push
-   to `master`, then review its native
+   to `master`, including its successful Linux job, then review its native
    validation results and perform the Windows login/game launch/update acceptance
    checks. Local unit fixtures are not real signed Windows binaries.
+5. Review the [credential rollback limitation](AUTH_STORAGE.md#rollback-after-migration).
+   A manual downgrade to 0.3.0 after encryption requires new sign-in. Prefer a
+   forward hotfix; record the owner's acceptance before publishing the migration.
 
 ## What manual publication means
 
@@ -64,9 +73,9 @@ Pushing to `master` automatically builds and signs a candidate. Users keep the
 currently published update until an operator explicitly publishes a chosen build:
 
 1. Open **Actions → Signed Windows release → the successful run**. Download and
-   test its signed artifact. Copy `build_run_id` and `source_commit` from the run
+   test its signed Windows artifact and Linux archive. Copy `build_run_id` and `source_commit` from the run
    summary; the summary also links to the publication workflow.
-2. Open **Actions → Publish signed Windows update → Run workflow** and select
+2. Open **Actions → Publish signed Windows and Linux update → Run workflow** and select
    **master**. Enter the copied values, choose `stable` or `beta`, add approved
    notes, the reviewed minimum, and the current target channel version.
 3. Leave **publish unchecked** for a preview. Download the resulting plan artifact
@@ -87,7 +96,7 @@ Dispatch `publish-windows-update.yml` on `master` with `publish=false` first:
 
 | Input | Meaning |
 | --- | --- |
-| `build_run_id` | Successful Windows release run ID from a master push or manual retry, not a PR CI run. |
+| `build_run_id` | Successful Windows release run ID, including its Linux job, from a master push or manual retry, not a PR CI run. |
 | `source_commit` | Full 40-character source commit from that build. |
 | `channel` | `stable` or `beta`; beta's manifest remains access-controlled. |
 | `minimum_version` | Explicit reviewed launcher minimum; do not raise it automatically. |
@@ -108,6 +117,13 @@ evidence. It extracts only listed regular files, rejects unsafe Windows paths,
 and rechecks the actual Authenticode signatures on Windows. It generates hashes
 and blockmaps from these signed bytes, without running the old publisher.
 
+Linux is mandatory: the downloader verifies its separate immutable Actions
+artifact digest from that same run, and preparation rejects a mismatched commit,
+version, Minecraft target inventory or archive SHA-256. The prepared manifest
+includes `linuxUrl` and `files.linux` pointing at
+`releases/<version>-<commit12>/River-Client-Linux-<version>.tar.gz`. These fields and
+the archive checksum are covered by the existing Ed25519 signature.
+
 Download `river-update-plan-<run>-<attempt>` and review the source record,
 publication plan, unsigned manifest, file manifest, notes and minimum. Only
 metadata is retained in this review artifact; it is not a runnable application.
@@ -126,8 +142,11 @@ matches the existing launcher's `SHA256(JSON.stringify(parsedManifest))` check.
 
 A conditional write against the previously read ETag promotes the channel once
 all files are verified. Another publisher cannot silently overwrite that change.
-The website's rolling `River-Client-Setup.exe` route redirects to the immutable
-installer selected by the same stable manifest. A stable history marker under
+The website's rolling `River-Client-Setup.exe` and `River-Client-Linux.tar.gz`
+routes redirect to the immutable downloads selected by that same stable manifest.
+The root Linux object is not overwritten independently: the redirect changes at
+the channel commit, while old manifests still serve their legacy root objects.
+A stable history marker under
 `releases/<version>/published.json` is written only after promotion, so partial
 uploads and beta uploads cannot advance the standalone mod's version policy.
 Beta does not change stable, its rolling installer, or stable history. As in the
@@ -152,7 +171,8 @@ From the repository root, with `launcher` dependencies installed:
 
 ```sh
 node launcher/scripts/download-signed-build.js --run-id RUN_ID --commit FULL_SHA --output dist/signed-build --record dist/build-source.json
-node launcher/scripts/prepare-signed-update.js --artifact dist/signed-build --output dist/publication --commit FULL_SHA --notes /absolute/path/approved-notes.json --minimum-version REVIEWED_MINIMUM --channel stable --published-at ARTIFACT_CREATED_AT_ISO_UTC
+node launcher/scripts/download-signed-build.js --platform linux --run-id RUN_ID --commit FULL_SHA --output dist/linux-build --record dist/linux-source.json
+node launcher/scripts/prepare-signed-update.js --artifact dist/signed-build --linux-artifact dist/linux-build --output dist/publication --commit FULL_SHA --notes /absolute/path/approved-notes.json --minimum-version REVIEWED_MINIMUM --channel stable --published-at ARTIFACT_CREATED_AT_ISO_UTC
 node launcher/scripts/publish-signed-update.js --prepared dist/publication
 ```
 
@@ -168,21 +188,22 @@ artifacts: those legacy paths can rebuild an unsigned application.
 
 ## Scope and verification
 
-This path publishes Windows only. It does not build Linux, replace existing
-Linux download objects, deploy the Worker/site, post a Discord announcement, or
-send an update WebSocket broadcast. Existing clients discover a promoted update
-at startup or the 30-minute fallback poll. Linux continues to use its separate
-download flow. An actual update from an older installed Windows client remains
-a required release acceptance check.
+This path publishes Windows and Linux together. It does not deploy the Worker or
+website, post a Discord announcement, or send an update WebSocket broadcast.
+Existing clients discover a promoted update at startup or the 30-minute fallback
+poll. Linux's update button opens the verified versioned archive for manual
+replacement. macOS uses its separate signed manifest and manual publication flow;
+see [MACOS_RELEASE.md](MACOS_RELEASE.md).
 
-The existing channel and required/minimum policy are shared by Windows and Linux.
-Keep `required_update=false` and do not raise the minimum beyond a usable Linux
-release while publishing Windows only; otherwise Linux users could be required to
-install a version this workflow does not provide. Without a new `linuxUrl`, their
-update button opens the website. Coordinated Linux releases need a separate path.
+The channel and required/minimum policy are shared by Windows and Linux. Keep
+`required_update=false` unless the owner explicitly approves a forced update, and
+do not raise the minimum automatically. Before release, perform a real Windows
+Microsoft sign-in, launch 1.21.11 and 26.3, update an installed public 0.3.0 client,
+and export/import a `.rvr`. The automated Windows upgrade tests simulate Microsoft
+responses; passing them does not replace live login/gameplay acceptance.
 
 Local tests cover immutable bytes, archive validation, key mismatch, client
-blockmap reconstruction, R2 transfer/readback failures, conditional promotion,
+blockmap reconstruction, missing/mismatched Linux builds, R2 transfer/readback failures, conditional promotion,
 concurrent writers, retries after commit, beta isolation and Worker redirects.
 Run `node --test launcher/tests/*.test.js cloudflare-updates/tests/*.test.mjs`.
 No production publication or original-key handoff was performed by this preparation.

@@ -1,10 +1,10 @@
-name: Publish signed Windows update
+name: Publish signed Windows and Linux update
 
 on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: Successful Signed Windows release run ID
+        description: Successful Signed Windows release run ID including its Linux build
         required: true
         type: string
       source_commit:
@@ -96,12 +96,19 @@ jobs:
           node launcher/scripts/download-signed-build.js --run-id $env:BUILD_RUN_ID --commit $env:SOURCE_COMMIT --output "$env:RUNNER_TEMP\river-signed-build" --record "$env:RUNNER_TEMP\river-build-source.json"
           if ($LASTEXITCODE -ne 0) { throw 'Signed build provenance validation failed.' }
 
+      - name: Download the Linux artifact from the same successful release run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node launcher/scripts/download-signed-build.js --platform linux --run-id $env:BUILD_RUN_ID --commit $env:SOURCE_COMMIT --output "$env:RUNNER_TEMP\river-linux-build" --record "$env:RUNNER_TEMP\river-linux-source.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Linux build provenance validation failed.' }
+
       - name: Prepare update hashes, blockmaps and manifest without rebuilding
         run: |
           $notesFile = "$env:RUNNER_TEMP\river-release-notes.json"
           [IO.File]::WriteAllText($notesFile, $env:RELEASE_NOTES_JSON)
           $source = Get-Content -Raw "$env:RUNNER_TEMP\river-build-source.json" | ConvertFrom-Json
-          $params = @('launcher/scripts/prepare-signed-update.js', '--artifact', "$env:RUNNER_TEMP\river-signed-build", '--output', "$env:RUNNER_TEMP\river-publication", '--commit', $env:SOURCE_COMMIT, '--notes', $notesFile, '--minimum-version', $env:MINIMUM_VERSION, '--channel', $env:UPDATE_CHANNEL, '--published-at', $source.publishedAt)
+          $params = @('launcher/scripts/prepare-signed-update.js', '--artifact', "$env:RUNNER_TEMP\river-signed-build", '--linux-artifact', "$env:RUNNER_TEMP\river-linux-build", '--output', "$env:RUNNER_TEMP\river-publication", '--commit', $env:SOURCE_COMMIT, '--notes', $notesFile, '--minimum-version', $env:MINIMUM_VERSION, '--channel', $env:UPDATE_CHANNEL, '--published-at', $source.publishedAt)
           if ($env:REQUIRED_UPDATE -eq 'true') { $params += '--required' }
           node @params
           if ($LASTEXITCODE -ne 0) { throw 'Publication preparation failed.' }
@@ -113,6 +120,7 @@ jobs:
           name: river-update-plan-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/river-build-source.json
+            ${{ runner.temp }}/river-linux-source.json
             ${{ runner.temp }}/river-publication/publication-plan.json
             ${{ runner.temp }}/river-publication/manifest.unsigned.json
             ${{ runner.temp }}/river-publication/metadata/file-manifest.json

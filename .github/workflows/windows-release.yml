@@ -13,6 +13,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  linux:
+    if: github.repository == 'WyZEU/RiverClient' && github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/linux-build.yml
+
   build:
     if: github.repository == 'WyZEU/RiverClient' && github.ref == 'refs/heads/master'
     runs-on: windows-2022
@@ -123,7 +127,7 @@ jobs:
           | build_run_id | $env:GITHUB_RUN_ID |
           | source_commit | $env:GITHUB_SHA |
 
-          Download and test the signed artifact from this run. When ready, open [Publish signed Windows update](https://github.com/$env:GITHUB_REPOSITORY/actions/workflows/publish-windows-update.yml), select master, and use the build_run_id and source_commit above.
+          Download and test the Windows and Linux artifacts from this run. Both jobs must succeed. When ready, open [Publish signed Windows and Linux update](https://github.com/$env:GITHUB_REPOSITORY/actions/workflows/publish-windows-update.yml), select master, and use the build_run_id and source_commit above.
 
           Choose the channel, reviewed release notes, minimum version and expected previous version. Run with publish=false to review the plan; publish=true uploads and activates that exact build. This build has not changed the public update channel. Artifacts are retained for 14 days.
           "@ | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY

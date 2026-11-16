@@ -40,6 +40,7 @@ async function publishPrepared({ directory, store, expectedPreviousVersion, publ
   try {
     const capabilities = JSON.parse(await fetchBytes(`${config.publicBaseUrl}/release-capabilities.json`, fetchRemote));
     assert(capabilities.publicationProtocol === 1, "Deploy the immutable-publication Worker changes before publishing.");
+    assert(capabilities.linuxPublicationProtocol === 1, "Deploy the Linux rolling-download Worker changes before publishing.");
     const stable = verifiedSnapshot(await store.getJson("latest.json"), publicKey, "stable");
     const served = JSON.parse(await fetchBytes(`${config.publicBaseUrl}/latest.json`, fetchRemote));
     assert(verifyManifest(served, publicKey) && canonicalize(served) === canonicalize(stable.value),
@@ -97,6 +98,7 @@ async function publishPrepared({ directory, store, expectedPreviousVersion, publ
     }
     receipt.manifestUrl = `${config.publicBaseUrl}/${channelKey}`;
     receipt.installerUrl = manifest.installerUrl;
+    receipt.linuxUrl = manifest.linuxUrl;
     return receipt;
   } catch (error) {
     receipt.error = error.message;

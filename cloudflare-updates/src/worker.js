@@ -4,6 +4,7 @@
 // CORS, so narrowing this cannot break them. It does stop an arbitrary page from
 // reading authenticated /social responses with a stolen session token.
 const SITE_ORIGIN = "https://riverclient.xyz";
+import { macDownloadResponse } from "./macos-downloads.js";
 
 const securityHeaders = {
   // The custom domain is HTTPS-only; tell browsers never to try plaintext.
@@ -100,6 +101,16 @@ export function publishedInstallerTarget(manifest) {
     return target.origin === publicUpdateBaseUrl && !target.username && !target.password && !target.search && !target.hash
       && target.pathname.startsWith("/downloads/releases/") && isPublicDownloadKey(key)
       && key.endsWith("/River-Client-Setup.exe") ? target.href : null;
+  } catch { return null; }
+}
+
+export function publishedLinuxTarget(manifest) {
+  try {
+    const target = new URL(manifest?.linuxUrl);
+    const key = decodeURIComponent(target.pathname.slice("/downloads/".length));
+    return target.origin === publicUpdateBaseUrl && !target.username && !target.password && !target.search && !target.hash
+      && target.pathname.startsWith("/downloads/releases/") && isPublicDownloadKey(key)
+      && key.endsWith(`/River-Client-Linux-${manifest.version}.tar.gz`) ? target.href : null;
   } catch { return null; }
 }
 
@@ -451,8 +462,11 @@ export default {
     }
 
     if (url.pathname === "/release-capabilities.json" && request.method === "GET") {
-      return Response.json({ publicationProtocol: 1 }, { headers });
+      return Response.json({ publicationProtocol: 1, macosPublicationProtocol: 1, linuxPublicationProtocol: 1 }, { headers });
     }
+
+    const macDownload = await macDownloadResponse(request, env, headers);
+    if (macDownload) return macDownload;
 
     /*
       The in-game server browser's list (ServerDirectory in the client). Kept in the bucket at
@@ -765,6 +779,11 @@ export default {
         const target = publishedInstallerTarget(await publishedManifest(env));
         if (target) return new Response(null, { status: 302, headers: { ...headers, Location: target } });
         // Legacy manifests point back to this rolling key; continue serving it.
+      }
+      if (key === "River-Client-Linux.tar.gz") {
+        const target = publishedLinuxTarget(await publishedManifest(env));
+        if (target) return new Response(null, { status: 302, headers: { ...headers, Location: target } });
+        // Older manifests still use the existing root object.
       }
 
       /*
