@@ -11,17 +11,27 @@ fs.mkdirSync(path.join(out, "renderer"), { recursive: true });
 fs.cpSync(path.join(root, "src", "assets"), path.join(out, "assets"), { recursive: true });
 fs.cpSync(path.join(root, "src", "config"), path.join(out, "config"), { recursive: true });
 fs.cpSync(path.join(root, "src", "bundled"), path.join(out, "bundled"), { recursive: true });
+const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+const buildVersionPath = path.join(out, "config", "build-version.json");
+const previousBuild = JSON.parse(fs.readFileSync(buildVersionPath, "utf8"));
+// Stamp development builds too, so a version bump does not leave the update UI
+// reading the old checked-in release snapshot. Preserve the legacy publisher's
+// explicit version override and channel; signed releases always use riverVersion.
+let buildVersion = {
+  version: process.env.RIVER_PUBLISH_VERSION || pkg.riverVersion || pkg.version,
+  channel: previousBuild.channel || "stable", builtAt: new Date().toISOString()
+};
 if (process.env.RIVER_RELEASE_BUILD === "1") {
   const release = JSON.parse(fs.readFileSync(path.join(out, "bundled", "river-build-info.json"), "utf8"));
-  const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   if (release.sourceCommit !== process.env.GITHUB_SHA || release.version !== pkg.riverVersion) {
     throw new Error("Staged runtime provenance does not match the release source/version.");
   }
-  fs.writeFileSync(path.join(out, "config", "build-version.json"), JSON.stringify({
+  buildVersion = {
     version: release.version, channel: "stable", sourceCommit: release.sourceCommit,
     builtAt: new Date().toISOString()
-  }, null, 2));
+  };
 }
+fs.writeFileSync(buildVersionPath, JSON.stringify(buildVersion, null, 2));
 // PowerShell helper for the now-playing feed: a data file, not something esbuild bundles.
 fs.copyFileSync(path.join(root, "src", "now-playing.ps1"), path.join(out, "now-playing.ps1"));
 // Now-playing native helper: extracts media-session metadata AND album art (the .ps1

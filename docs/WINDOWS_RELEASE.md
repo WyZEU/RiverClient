@@ -45,21 +45,49 @@ role were checked again before setting them. No client secret was created.
    Use `--apply` only when configuring or deliberately refreshing the three
    identifier secrets. Their values cannot be read back from GitHub; this command
    verifies their names after uploading them.
-3. Merge the reviewed PR into `master`, then dispatch:
+3. Merge the reviewed PR into `master`. That push automatically starts the first
+   signed build. Each subsequent push to `master` starts another build of that
+   exact commit. To retry without another code change, manual dispatch remains
+   available:
 
    ```sh
    gh workflow run windows-release.yml --repo WyZEU/RiverClient --ref master
    ```
 
-The workflow only starts manually on that repository's `master`. It uploads
+The workflow runs automatically on pushes to this repository's `master`, with an
+optional manual start on the same branch. Different commits have separate build
+concurrency groups, so a later push does not cancel an earlier signed build.
+It uploads
 GitHub Actions artifacts with 14-day retention; it does not create a public
 GitHub Release, upload to Cloudflare, or change the update channel.
+
+The successful build summary shows the version, `build_run_id`, `source_commit`
+and a link to the manual publication workflow. Test the retained artifact before
+using those values to publish. CI still runs on branches/PRs; signing is restricted
+to `master` in both the workflow guard and Azure federation.
 
 If new upstream code arrives before review is complete, merge the updated
 `origin/master` into the same PR branch and rerun CI and the release version check.
 Confirm that any new Minecraft targets are included in runtime staging. Branch
 and PR CI do not have an Azure federation subject and cannot perform this signed
 release. Keep the release workflow and federation restricted to `master`.
+
+## One release version
+
+Before a new release, edit only **`riverVersion` in `launcher/package.json`**, for
+example `0.3.0` to `0.3.1`. Gradle reads that field for all active Minecraft targets,
+their JAR names and Fabric metadata. The launcher build generates its own version
+metadata from the same value; signed packaging uses it for the application and
+Windows file version. No second version declaration in `build.gradle.kts` needs
+editing. The checked-in build-version/update manifests are previous-release
+snapshots, not another version to bump. The independent bootstrap version and
+the launcher's legacy npm `version` field do not need a client-release bump.
+
+Pushes do **not** increment the version. Several candidate builds can share a
+version and be distinguished by their full source commit/run ID. Choose the
+tested candidate for manual publication. Once that version has been published,
+the next update needs a higher version; publication rejects replacement of an
+already published version with a different build.
 
 ## Build and signing contract
 
@@ -75,9 +103,9 @@ SHA-256 hashes. Both Java versions are explicitly discoverable by Gradle.
 its C# source; a missing compiler or failed compilation cannot silently omit it
 or substitute an old executable.
 
-The generated application metadata and Windows file version use `riverVersion`.
-All mod version declarations must agree. Before a new public update, advance the
-version; rebuilding the same version is not enough to trigger an update.
+The generated application metadata, Minecraft mod versions and Windows file
+version derive from the same `riverVersion`. Rebuilding an already published
+version is not enough to trigger an update.
 
 Signing runs **inside** electron-builder through a custom SHA-256 hook. This
 includes the main EXE, native helper, NSIS installer/uninstaller and portable
@@ -147,8 +175,14 @@ The checks ran on macOS with local Temurin JDKs 21/25. Native Windows compilatio
 of the C# helper, Azure OIDC token exchange/signing, NSIS install/uninstall and
 packaged runtime checks are prepared in the workflow but have not run yet.
 
-After adding immutable update publication and the concurrent Tebex fixes on
-2026-11-16, all **114 JavaScript tests** passed on Node **22.23.5**. The launcher
+After adding immutable update publication, a single release version and the
+concurrent Tebex fixes on 2026-11-16, all **115 JavaScript tests** passed on Node
+**22.23.5**. The launcher
 bundle, release configuration, Actionlint and PowerShell parsing passed again.
 Publication tests use generated test keys and simulated storage/HTTP; they do not
 substitute for an original-key signature, live R2 upload or Windows acceptance.
+
+Changing only `riverVersion` to **0.3.1** was exercised through Gradle for all 14
+Minecraft targets: project versions, final JAR names and generated Fabric metadata
+agreed. The actual launcher bundle and Windows packaging configuration also picked
+up 0.3.1. The checked-in candidate version is now 0.3.1; it has not been published.

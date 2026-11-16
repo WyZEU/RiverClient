@@ -49,12 +49,37 @@ prints secret values. Without `--apply` it checks policy and secret names only.
    `{"publicationProtocol":1}`. The public stable manifest must verify and match
    the signed manifest in R2 byte-for-byte in canonical form. An older Worker
    that changes signed fields is rejected before any upload.
-3. Advance `riverVersion` and all mod version declarations together. The published
-   release must be newer than stable and the selected channel. Rebuilding the
-   current `0.3.0` version is not a new update; recheck live versions before release.
-4. Complete the [signed Windows build](WINDOWS_RELEASE.md), then review its native
+3. The prepared candidate is **0.3.1**. For subsequent releases, advance only
+   `riverVersion` in `launcher/package.json`; the launcher and all active Minecraft
+   targets derive their version from it. The published release must be newer than
+   stable and the selected channel; recheck live versions before release.
+4. Wait for the automatic [signed Windows build](WINDOWS_RELEASE.md) from the push
+   to `master`, then review its native
    validation results and perform the Windows login/game launch/update acceptance
    checks. Local unit fixtures are not real signed Windows binaries.
+
+## What manual publication means
+
+Pushing to `master` automatically builds and signs a candidate. Users keep the
+currently published update until an operator explicitly publishes a chosen build:
+
+1. Open **Actions → Signed Windows release → the successful run**. Download and
+   test its signed artifact. Copy `build_run_id` and `source_commit` from the run
+   summary; the summary also links to the publication workflow.
+2. Open **Actions → Publish signed Windows update → Run workflow** and select
+   **master**. Enter the copied values, choose `stable` or `beta`, add approved
+   notes, the reviewed minimum, and the current target channel version.
+3. Leave **publish unchecked** for a preview. Download the resulting plan artifact
+   and check the version, files, notes and policy. This run changes no public files.
+4. Run the publication workflow again with the same build/inputs and **publish
+   checked**. The workflow signs the update manifest, uploads/verifies the exact
+   build and changes the selected update channel. No manual file upload or local
+   signing-key handling is needed.
+
+This is an explicit workflow dispatch by an operator, not an automatic follow-up
+to a successful build or a separate reviewer-approval queue. It does not create a
+GitHub Release. Existing clients discover the promoted update on startup or their
+30-minute poll; `required_update` controls whether they must take it.
 
 ## Workflow inputs and review
 
@@ -62,7 +87,7 @@ Dispatch `publish-windows-update.yml` on `master` with `publish=false` first:
 
 | Input | Meaning |
 | --- | --- |
-| `build_run_id` | Successful manual Windows release run ID, not a PR CI run. |
+| `build_run_id` | Successful Windows release run ID from a master push or manual retry, not a PR CI run. |
 | `source_commit` | Full 40-character source commit from that build. |
 | `channel` | `stable` or `beta`; beta's manifest remains access-controlled. |
 | `minimum_version` | Explicit reviewed launcher minimum; do not raise it automatically. |
@@ -77,7 +102,7 @@ Example release notes (replace with reviewed release content):
 {"version":"0.3.1","approved":true,"title":"River Client 0.3.1","summary":"Signed Windows release and updater fixes.","items":["Windows binaries signed by Supro Nivelo s.r.o.","Fixed differential update blockmap handling."]}
 ```
 
-The workflow validates the source repository, manual build workflow, successful
+The workflow validates the source repository, master-only build workflow, successful
 run, master ancestry, artifact SHA-256 digest, file inventories and smoke-test
 evidence. It extracts only listed regular files, rejects unsafe Windows paths,
 and rechecks the actual Authenticode signatures on Windows. It generates hashes

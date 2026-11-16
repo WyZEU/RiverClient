@@ -30,6 +30,11 @@ The separate `legacy/` project is not included in that build.
 
 ## Windows releases
 
+Set the release version only in `launcher/package.json` (`riverVersion`). Every
+push to `master` builds and signs a Windows candidate automatically. Publishing
+that candidate to the updater remains a separate manual workflow; a push alone
+does not change the public release.
+
 See [signed Windows builds](docs/WINDOWS_RELEASE.md) for the Supro Nivelo signing
 workflow and first-run setup, [automatic updates](docs/AUTOUPDATE.md) for the
 current update protocol, and [signed update publication](docs/UPDATE_PUBLICATION.md)

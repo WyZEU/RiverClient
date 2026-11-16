@@ -14,8 +14,8 @@ function validateBuildSource(run, artifacts, expectedCommit, comparison) {
   assertCommit(expectedCommit);
   assert(run.repository?.full_name === config.repository && run.head_repository?.full_name === config.repository,
     "The signed build must originate in the River repository.");
-  assert(run.path === config.buildWorkflow && run.event === "workflow_dispatch" && run.head_branch === config.releaseBranch,
-    "Expected the manually dispatched master-only Windows release workflow.");
+  assert(run.path === config.buildWorkflow && ["push", "workflow_dispatch"].includes(run.event) && run.head_branch === config.releaseBranch,
+    "Expected a master-only Windows release workflow started by push or manual dispatch.");
   assert(run.status === "completed" && run.conclusion === "success" && run.head_sha === expectedCommit,
     "The expected source commit has no successful signed build in this run.");
   assert(["identical", "ahead"].includes(comparison.status), "The build commit is not an ancestor of current master.");

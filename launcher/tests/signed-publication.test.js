@@ -215,7 +215,7 @@ test("beta publication leaves stable manifest, rolling downloads and stable hist
 
 function sourceFixture(commit) {
   return { run: { repository: { full_name: config.repository }, head_repository: { full_name: config.repository },
-    path: config.buildWorkflow, event: "workflow_dispatch", head_branch: "master", status: "completed", conclusion: "success", head_sha: commit },
+    path: config.buildWorkflow, event: "push", head_branch: "master", status: "completed", conclusion: "success", head_sha: commit },
     artifacts: [{ id: 123, name: `river-windows-${commit}`, expired: false, size_in_bytes: 1024, digest: `sha256:${"a".repeat(64)}`, created_at: "2026-11-16T11:00:00Z" }],
     comparison: { status: "ahead" } };
 }
@@ -223,7 +223,9 @@ function sourceFixture(commit) {
 test("build provenance excludes failed runs, PRs, forks, wrong workflow/commit and missing artifact digests", () => {
   const commit = "c".repeat(40), source = sourceFixture(commit);
   assert.equal(validateBuildSource(source.run, source.artifacts, commit, source.comparison).id, 123);
-  for (const patch of [{ conclusion: "failure" }, { event: "pull_request" }, { head_branch: "feature" },
+  assert.equal(validateBuildSource({ ...source.run, event: "workflow_dispatch" }, source.artifacts, commit, source.comparison).id, 123);
+  for (const patch of [{ conclusion: "failure" }, { event: "pull_request" }, { event: "pull_request_target" },
+    { event: "workflow_run" }, { head_branch: "feature" },
     { head_sha: "d".repeat(40) }, { path: ".github/workflows/ci.yml" }, { head_repository: { full_name: "someone/RiverClient" } }]) {
     assert.throws(() => validateBuildSource({ ...source.run, ...patch }, source.artifacts, commit, source.comparison));
   }

@@ -16,10 +16,6 @@ function releasePlan(root) {
   if (!targets.length || new Set(targets).size !== targets.length) {
     throw new Error("Empty or duplicate Minecraft targets.");
   }
-  const gradle = fs.readFileSync(path.join(root, "build.gradle.kts"), "utf8");
-  if (!gradle.includes(`version = "${version}+$minecraftVersion"`)) {
-    throw new Error("Gradle mod version and launcher riverVersion disagree.");
-  }
   const bootstrap = fs.readFileSync(path.join(root, "river-bootstrap/build.gradle.kts"), "utf8")
     .match(/^version\s*=\s*"([0-9.]+)"/m)?.[1];
   if (!bootstrap) throw new Error("Missing explicit bootstrap version.");

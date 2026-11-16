@@ -1,13 +1,15 @@
 name: Signed Windows release
 
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: river-windows-release
+  group: river-windows-release-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -108,6 +110,23 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      - name: Show manual publication details
+        run: |
+          $version = (Get-Content -Raw launcher/package.json | ConvertFrom-Json).riverVersion
+          @"
+          ## Signed Windows build ready for testing
+
+          | Publication input | Value |
+          | --- | --- |
+          | Version | $version |
+          | build_run_id | $env:GITHUB_RUN_ID |
+          | source_commit | $env:GITHUB_SHA |
+
+          Download and test the signed artifact from this run. When ready, open [Publish signed Windows update](https://github.com/$env:GITHUB_REPOSITORY/actions/workflows/publish-windows-update.yml), select master, and use the build_run_id and source_commit above.
+
+          Choose the channel, reviewed release notes, minimum version and expected previous version. Run with publish=false to review the plan; publish=true uploads and activates that exact build. This build has not changed the public update channel. Artifacts are retained for 14 days.
+          "@ | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
 
       - name: Upload signing and installation diagnostics
         if: always()

@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     /*
       Loom ships as two plugins from 1.17.20. `-remap` is the classic one that maps
@@ -35,7 +37,16 @@ apply(plugin = if (unobfuscated) "net.fabricmc.fabric-loom" else "net.fabricmc.f
 // accessor, so the extension is looked up by type instead.
 val loom = extensions.getByType<net.fabricmc.loom.api.LoomGradleExtensionAPI>()
 
-version = "0.3.0+$minecraftVersion"
+// The launcher, Windows package and every Minecraft target share one release version.
+val launcherPackage = JsonSlurper().parseText(
+    providers.fileContents(rootProject.layout.projectDirectory.file("launcher/package.json")).asText.get()
+) as Map<*, *>
+val riverVersion = launcherPackage["riverVersion"] as? String
+    ?: error("launcher/package.json must define riverVersion")
+require(Regex("""(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)""").matches(riverVersion)) {
+    "riverVersion must be canonical MAJOR.MINOR.PATCH"
+}
+version = "$riverVersion+$minecraftVersion"
 group = "dev.wyz"
 
 base {
