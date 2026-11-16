@@ -35,6 +35,12 @@ jobs:
           test -z "$(git status --porcelain)"
           npm ci --prefix launcher
           node launcher/scripts/prepare-windows-release.js --check
+      - name: Verify sign-in persistence without a Linux keyring
+        run: |
+          storage_test_dir=$(mktemp -d /tmp/river-linux-storage-XXXXXX)
+          trap 'rm -rf "$storage_test_dir"' EXIT
+          timeout --kill-after=10s 60s xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" write
+          timeout --kill-after=10s 60s xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" restart
       - name: Build all Minecraft targets and bootstrap
         run: |
           ./gradlew build --no-daemon -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64,JAVA_HOME_25_X64
@@ -46,12 +52,6 @@ jobs:
         run: |
           ELECTRON_RUN_AS_NODE=1 launcher/dist/linux-unpacked/river-client -e 'const assert = require("node:assert/strict"); const pkg = require(process.cwd() + "/launcher/dist/linux-unpacked/resources/app.asar/package.json"); assert.equal(pkg.version, require("./launcher/package.json").riverVersion); console.log("Linux Electron", process.versions.electron, "version", pkg.version);'
           node launcher/scripts/linux-release-artifact.js
-      - name: Verify sign-in persistence without a Linux keyring
-        run: |
-          storage_test_dir=$(mktemp -d /tmp/river-linux-storage-XXXXXX)
-          trap 'rm -rf "$storage_test_dir"' EXIT
-          timeout --kill-after=10s 60s xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" write
-          timeout --kill-after=10s 60s xvfb-run -a launcher/node_modules/.bin/electron --no-sandbox launcher/tests/electron-linux-storage.cjs "$storage_test_dir" restart
       - name: Retain the verified Linux build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
