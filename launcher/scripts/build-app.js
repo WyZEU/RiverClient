@@ -53,9 +53,12 @@ function buildTailwind(input, outfile) {
 
 function compileNowPlayingHelper(srcDir, outExe) {
   const strict = process.env.RIVER_RELEASE_BUILD === "1" && process.platform === "win32";
-  const csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe";
-  const wm = "C:\Windows\System32\WinMetadata";
-  const facBase = "C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework";
+  // Backslashes are escape sequences in a JavaScript string: written singly, "\v4.0.30319"
+  // became a vertical tab and every one of these paths pointed nowhere, so csc was never
+  // found and a signed build always failed. Keep them raw.
+  const csc = String.raw`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`;
+  const wm = String.raw`C:\Windows\System32\WinMetadata`;
+  const facBase = String.raw`C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework`;
   const prebuilt = path.join(srcDir, "np-helper.exe");
   if (process.platform !== "win32" || !fs.existsSync(csc)) {
     if (strict) throw new Error("Signed Windows releases require the native C# compiler.");
