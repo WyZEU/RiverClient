@@ -20,8 +20,9 @@ test("Linux staging verifies the actual archive, executable modes, packaged vers
   write("launcher/package.json", JSON.stringify({ riverVersion: version }));
   write("settings.gradle.kts", 'versions("26.3")');
   write("river-bootstrap/build.gradle.kts", 'version = "0.1.9.0"');
+  write("launcher/src/main.js", 'const DEFAULT_MC_VERSION = "26.3";\n');
   const files = ["clientcore-0.3.1+26.3.jar", "river-bootstrap-0.1.9.0.jar"].map((name) => ({ name, size: 4, sha256: hash("PK\x03\x04") }));
-  const runtime = { schemaVersion: 1, version, sourceCommit, minecraftVersions: ["26.3"], files };
+  const runtime = { schemaVersion: 1, version, sourceCommit, minecraftVersions: ["26.3"], bundledMinecraft: "26.3", files };
   const base = "payload/River-Client-Linux";
   for (const { name } of files) write(`${base}/resources/bundled/${name}`, "PK\x03\x04");
   write(`${base}/resources/bundled/river-build-info.json`, JSON.stringify(runtime));
