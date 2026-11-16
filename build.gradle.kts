@@ -83,6 +83,7 @@ val packFormatRange = if (packFormat.toInt() > 64) {
 loom.splitEnvironmentSourceSets()
 
 loom.mods.create("clientcore") {
+    sourceSet(sourceSets["main"])
     sourceSet(sourceSets["client"])
 }
 
@@ -103,6 +104,9 @@ dependencies {
     modImplementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
     modImplementation("net.fabricmc:fabric-language-kotlin:$fabricKotlinVersion")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
 
     /*
       Dev-run parity with the launcher's optimization suite: the real client always
@@ -132,6 +136,10 @@ java {
 
 kotlin {
     jvmToolchain(javaVersion)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.processResources {

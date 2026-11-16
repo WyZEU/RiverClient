@@ -46,7 +46,7 @@ object ConfigService {
         val cleaned = raw.trim()
             .replace(Regex("[^A-Za-z0-9 _-]"), "")
             .replace(Regex("\\s+"), " ")
-            .take(24)
+            .take(ProfileNames.MAX_LENGTH)
         return cleaned.ifEmpty { DEFAULT_PROFILE }
     }
 
@@ -140,12 +140,7 @@ object ConfigService {
         }.getOrNull() ?: return null
 
         val suggested = parsed.get("name")?.takeIf { it.isJsonPrimitive }?.asString ?: "Imported"
-        var name = sanitizeName(suggested)
-        var i = 2
-        while (profilePath(name).exists()) {
-            name = sanitizeName("$suggested $i")
-            i += 1
-        }
+        val name = ProfileNames.available(sanitizeName(suggested)) { profilePath(it).exists() }
         writeProfile(name, config)
         return name
     }
