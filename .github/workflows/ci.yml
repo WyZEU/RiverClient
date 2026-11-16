@@ -34,8 +34,11 @@ jobs:
         working-directory: launcher
         run: npm run build:app
 
-      - name: Worker tests
-        run: node --test cloudflare-updates/tests/*.test.mjs
+      - name: Launcher and Worker tests
+        run: node --test launcher/tests/*.test.js cloudflare-updates/tests/*.test.mjs
+
+      - name: Release configuration check
+        run: node launcher/scripts/prepare-windows-release.js --check
 
   mod-build:
     runs-on: ubuntu-latest
@@ -46,10 +49,12 @@ jobs:
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:
-          java-version: "21"
+          java-version: |
+            21
+            25
           distribution: "temurin"
 
-      # Builds both mod trees and the bootstrap agent, so the jars anyone
-      # downloads can be checked against this source.
+      # Builds the active Stonecutter targets and bootstrap (legacy/ is separate).
+      # This ensures downloaded JARs can be checked against this source.
       - name: Build
-        run: ./gradlew build --no-daemon
+        run: ./gradlew build --no-daemon -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64,JAVA_HOME_25_X64

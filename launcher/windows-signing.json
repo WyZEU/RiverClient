@@ -1,0 +1,10 @@
+{
+  "endpoint": "https://neu.codesigning.azure.net/",
+  "account": "supro-nivelo-signing",
+  "profile": "tunnel-brawl-windows",
+  "publisher": "Supro Nivelo s.r.o.",
+  "subject": "CN=Supro Nivelo s.r.o., O=Supro Nivelo s.r.o., L=Praha 6, S=Prague, C=CZ",
+  "moduleVersion": "0.1.8",
+  "sdkVersion": "10.0.26100.4188",
+  "clientVersion": "1.0.128"
+}

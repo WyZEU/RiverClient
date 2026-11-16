@@ -658,10 +658,10 @@ export default {
       */
       if (isLauncher(request)) recordMetric(env, ctx, "check", request);
 
-      // The manifest as published, with minimumVersion raised by the update policy
-      // (update-policy.js), so falling too far behind or a forced update needs no publish.
+      // Every field, including minimumVersion, is covered by the publisher's Ed25519
+      // signature. Serve the published payload unchanged; a new launcher minimum must
+      // be signed by the publisher. Dynamic mod policy belongs to /version-status.json.
       const manifest = await publishedManifest(env);
-      manifest.minimumVersion = await currentMinimum(env, manifest);
       return Response.json(manifest, {
         headers: {
           ...headers,
@@ -687,9 +687,9 @@ export default {
     }
 
     /*
-      The update policy, from the dashboard: how many releases behind an install may be,
-      and an optional "everyone below this version updates now". Saving it also pushes to
-      every connected launcher, so a forced update lands at once instead of on next start.
+      The standalone mod's update policy, from the dashboard: how many releases behind
+      an install may be, and an optional forced minimum. Saving it also prompts connected
+      launchers to recheck, but their minimum comes only from the signed release manifest.
     */
     if (url.pathname === "/admin/update-policy.json") {
       const { ok: authorised, lockedOut, headers: adminHeaders } = await adminGate(request, env);

@@ -19,13 +19,20 @@ Source-available, not open source. Don't lift it into your own client. See
 ```
 src/                  the mod
 versions/             per-version build config
-river-bootstrap/      Java agent that loads the mod
+river-bootstrap/      fallback Java agent for loading the mod
 launcher/             the launcher (Electron + React)
 cloudflare-updates/   the Worker
 ```
 
-One source tree builds 1.21.4, 1.21.6, 1.21.7, 1.21.8, 1.21.11, 26.1.2 and 26.2. The
-26.x builds need Java 25, everything older runs on 21.
+One source tree builds the Minecraft targets listed in `settings.gradle.kts`.
+The 26.x builds need Java 25, while the older main-tree targets use Java 21.
+The separate `legacy/` project is not included in that build.
+
+## Windows releases
+
+See [signed Windows builds](docs/WINDOWS_RELEASE.md) for the Supro Nivelo signing
+workflow and first-run setup, and [automatic updates](docs/AUTOUPDATE.md) for the
+current update protocol and publication requirements.
 
 ## Something's broken
 

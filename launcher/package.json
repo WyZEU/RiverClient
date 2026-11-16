@@ -13,6 +13,7 @@
     "dist:installer": "npm run build:app && electron-builder --win nsis",
     "dist:portable": "npm run build:app && electron-builder --win portable",
     "dist:dir": "npm run build:app && electron-builder --win dir",
+    "dist:windows:signed": "npm run build:app && electron-builder --config electron-builder.windows.cjs --win nsis portable --x64 --publish never",
     "dist:linux": "npm run build:app && electron-builder --linux dir && node scripts/package-linux.js",
     "release:draft": "node scripts/release-draft.js",
     "publish:update": "node scripts/publish-update.js",
