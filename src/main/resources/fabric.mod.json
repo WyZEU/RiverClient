@@ -22,6 +22,11 @@
   "mixins": [
     "clientcore.mixins.json"
   ],
+  "custom": {
+    "badoptimizations:cache_hooks": {
+      "common": "dev.wyz.clientcore.compat.BadOptimizationsHook"
+    }
+  },
   "depends": {
     "fabricloader": ">=${fabric_loader}",
     "minecraft": "${minecraft_version}",

@@ -17,7 +17,7 @@ import net.minecraft.client.renderer.MultiBufferSource
  * The real glow behind the 3D lyrics, done on the GPU. While the world is drawn the words are
  * also drawn into a layer of their own, depth-tested against the world so walls still hide
  * them. Once the world is finished, that layer is blurred by the post effect
- * `clientcore:lyric_glow` (two wide box blurs, then a soft falloff kept off the letters) and
+ * `clientcore:lyric_glow` (a combined wide blur, then a soft falloff kept off the letters) and
  * blended over the screen, before the GUI.
  *
  * 1.21.6 to 26.1. Elsewhere, or if the effect fails to load, [begin] returns null and

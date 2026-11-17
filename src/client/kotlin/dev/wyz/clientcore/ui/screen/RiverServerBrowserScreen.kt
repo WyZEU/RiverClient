@@ -12,7 +12,10 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphics
 //?}
 import net.minecraft.client.gui.screens.ConnectScreen
+import net.minecraft.client.gui.screens.ConfirmScreen
 import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.gui.screens.TitleScreen
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen
 //? if >=1.21.9 {
 import net.minecraft.client.input.CharacterEvent
 import net.minecraft.client.input.KeyEvent
@@ -99,7 +102,7 @@ class RiverServerBrowserScreen(private val parent: Screen?) : Screen(Component.l
         // Header
         RiverIcons.draw(g, "server", x, top, 16, ClientUi.ACCENT_B)
         g.drawString(font, "Servers", x + 22, top + 4, ClientUi.TEXT, true)
-        g.drawString(font, "Pinged from your connection", x + 22 + font.width("Servers") + 8, top + 4, ClientUi.DIM, false)
+        if (pw >= 540) g.drawString(font, "Pinged from this connection", x + 22 + font.width("Servers") + 8, top + 4, ClientUi.DIM, false)
 
         val closeSize = 22
         val closeHovered = mouseX in (right - closeSize)..right && mouseY in top..(top + closeSize)
@@ -113,15 +116,18 @@ class RiverServerBrowserScreen(private val parent: Screen?) : Screen(Component.l
         hit(refreshX, top - 2, refreshW, 20) { ServerDirectory.refresh(force = true) }
 
         // Tag chips, then the search box on the same row when there is room.
-        val chipsY = top + 28
+        var chipsY = top + 28
         val tags = listOf("All") + ServerDirectory.entries.flatMap { it.tags }.distinct().sorted()
         var chipX = x
         tags.forEach { label ->
             val cw = font.width(label) + 16
+            if (chipX + cw > right) { chipX = x; chipsY += 24 }
+            if (chipsY > top + 52) return@forEach
+            val chipY = chipsY
             val active = tag == label
-            val hovered = mouseX in chipX..(chipX + cw) && mouseY in chipsY..(chipsY + 18)
-            ClientUi.drawFlatButton(g, font, chipX, chipsY, cw, 18, label, hovered, active)
-            hit(chipX, chipsY, cw, 18) { tag = label; scroll = 0 }
+            val hovered = mouseX in chipX..(chipX + cw) && mouseY in chipY..(chipY + 18)
+            ClientUi.drawFlatButton(g, font, chipX, chipY, cw, 18, label, hovered, active)
+            hit(chipX, chipY, cw, 18) { tag = label; scroll = 0 }
             chipX += cw + 6
         }
         val searchW = 180
@@ -262,8 +268,25 @@ class RiverServerBrowserScreen(private val parent: Screen?) : Screen(Component.l
     }
 
     private fun join(entry: ServerDirectory.Entry) {
+        if (mcClient.level != null) {
+            mcClient.setScreen(ConfirmScreen({ confirmed ->
+                if (confirmed) {
+                    dev.wyz.clientcore.net.ReconnectRuntime.cancel()
+                    dev.wyz.clientcore.ui.pause.PauseCamera.end(mcClient)
+//? if >=1.21.6 {
+                    mcClient.disconnectWithSavingScreen()
+//?} else {
+/*                    mcClient.disconnect()
+*///?}
+                    connect(entry, JoinMultiplayerScreen(TitleScreen()))
+                } else mcClient.setScreen(this)
+            }, Component.literal("Switch server?"), Component.literal("Leave this world and join ${entry.name}?")))
+        } else connect(entry, this)
+    }
+
+    private fun connect(entry: ServerDirectory.Entry, back: Screen) {
         val data = ServerData(entry.name, entry.address, ServerData.Type.OTHER)
-        ConnectScreen.startConnecting(this, mcClient, ServerAddress.parseString(entry.address), data, false, null)
+        ConnectScreen.startConnecting(back, mcClient, ServerAddress.parseString(entry.address), data, false, null)
     }
 
     private fun addToList(entry: ServerDirectory.Entry) {

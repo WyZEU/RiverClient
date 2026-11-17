@@ -219,16 +219,16 @@ object LyricsWorldRenderer {
         val karaoke = piece.words.size > 1
         var current = -1
         if (karaoke) for (i in piece.words.indices) if (now >= piece.sungAt[i]) current = i
-        val texts = Array(piece.words.size) { LyricFonts.styled(piece.words[it], look.face, it == current) }
+        val layout = scene.layout(piece, look.face) ?: run { poseStack.popPose(); return }
         val font = client.font
-        val space = font.width(LyricFonts.styled(" ", look.face, false)).toFloat()
-        var total = -space
-        for (t in texts) total += font.width(t) + space
+        val space = layout.space.toFloat()
+        val total = layout.width.toFloat() + if (current >= 0) layout.boldWidths[current] - layout.widths[current] else 0
         var x = -total / 2f
         val y = -font.lineHeight / 2f
 
-        for (i in texts.indices) {
-            val w = font.width(texts[i]).toFloat()
+        for (i in piece.words.indices) {
+            val text = if (i == current) layout.bold[i] else layout.plain[i]
+            val w = (if (i == current) layout.boldWidths[i] else layout.widths[i]).toFloat()
             var a = alpha
             var pulse = 1f
             // Rainbow text: every word on screen shares the colour of the moment, so they change together.
@@ -248,7 +248,7 @@ object LyricsWorldRenderer {
             poseStack.pushPose()
             poseStack.translate(x + w / 2f, 0f, 0f)
             poseStack.scale(pulse, pulse, 1f)
-            drawWord(texts[i], -w / 2f, y, a, blur, color, glitch(now, piece.driftSeed + i * 1.7f, look.flicker), 1f + 0.8f * hold, look, glow, sink)
+            drawWord(text, -w / 2f, y, a, blur, color, glitch(now, piece.driftSeed + i * 1.7f, look.flicker), 1f + 0.8f * hold, look, glow, sink)
             poseStack.popPose()
             x += w + space
         }

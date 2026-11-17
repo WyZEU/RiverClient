@@ -48,6 +48,14 @@ object FriendMessageToasts {
 
     private val popups = ArrayDeque<Popup>()
 
+    fun musicInvite(uuid: String, name: String) {
+        if (!RiverRuntime.config.friendsMessageToasts) return
+        val text = "Music Jam invitation. Open Music Jam in the pause menu."
+        Minecraft.getInstance().gui.chat.addMessage(Component.literal("[River] $name: $text"))
+        popups.addLast(Popup(uuid, name, text, System.currentTimeMillis()))
+        while (popups.size > MAX_ON_SCREEN) popups.removeFirst()
+    }
+
     fun tick(client: Minecraft) {
         val notices = RiverSocial.pendingNotices
         if (notices.isEmpty()) return

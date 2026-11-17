@@ -164,6 +164,10 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
 
     override fun addModuleSettings(list: MutableList<Setting>) {
         list.add(SectionSetting("Now Playing"))
+        list.add(dev.wyz.clientcore.module.settings.ActionSetting("Music Jam", "Open") {
+            val client = Minecraft.getInstance()
+            client.setScreen(dev.wyz.clientcore.ui.screen.RiverMusicJamScreen(client.screen))
+        })
         list.add(BoolSetting("Compact", { flag("np_compact", true) }, { setFlag("np_compact", it) })
             .hint("A small bar. Hover or click it in a menu for the full player."))
         list.add(BoolSetting("Album art", { flag("np_art", true) }, { setFlag("np_art", it) }))
@@ -206,10 +210,14 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
      */
     private fun read(now: Long) {
         runCatching {
+            val shared = dev.wyz.clientcore.media.MusicJam.playback()
+            if (dev.wyz.clientcore.media.MusicJam.following && shared == null) { track = null; return }
             val fresh = bridgeFile.exists() && now - Files.getLastModifiedTime(bridgeFile).toMillis() < STALE_MS
             // A feed with no song in it is no reason to stop looking: the launcher's helper can
             // come up empty (blocked by an antivirus, say) while this reader still finds it.
-            val feed = if (fresh) gson.fromJson(Files.readString(bridgeFile), Track::class.java)?.takeIf { it.title.isNotBlank() } else null
+            val feed = shared?.let { Track(playing = it.playing, title = it.title, artist = it.artist, album = it.album,
+                position = (it.positionMs / 1000).toInt(), duration = (it.durationMs / 1000).toInt(), source = it.source) }
+                ?: if (fresh) gson.fromJson(Files.readString(bridgeFile), Track::class.java)?.takeIf { it.title.isNotBlank() } else null
             fromSession = feed == null
             val t = feed ?: run {
                 dev.wyz.clientcore.media.MediaSession.current()?.let {
@@ -332,6 +340,9 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
      * position is good to about a second; lyrics have a sync offset for the rest.
      */
     fun playback(): Playback? {
+        if (dev.wyz.clientcore.media.MusicJam.following) return dev.wyz.clientcore.media.MusicJam.playback()?.let {
+            Playback(it.title, it.artist, it.album, (it.durationMs / 1000).toInt(), it.positionMs, it.playing)
+        }
         poll()
         val t = track ?: return null
         if (t.title.isBlank()) return null
@@ -513,7 +524,8 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         if (song != lyricsSong || now - lyricsAskedAt > 250L) {
             lyricsSong = song
             lyricsAskedAt = now
-            lyricsLines = (LyricsService.stateFor(pb.title, pb.artist, pb.album, pb.durationSec) as? LyricsState.Ready)?.lines
+            lyricsLines = dev.wyz.clientcore.media.MusicJam.lyrics()
+                ?: (LyricsService.stateFor(pb.title, pb.artist, pb.album, pb.durationSec) as? LyricsState.Ready)?.lines
         }
         val lines = lyricsLines ?: return null
         val pos = pb.positionMs + lyrics.offsetMs()
@@ -599,7 +611,7 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         val showArt = flag("np_art", true)
         val showBar = flag("np_progress", true) && t.duration > 0
         val showTimes = flag("np_times", true) && t.duration > 0
-        val showControls = cursorFree && flag("np_controls", true)
+        val showControls = cursorFree && flag("np_controls", true) && !dev.wyz.clientcore.media.MusicJam.following
         val textH = font.lineHeight + 2 +
             (if (t.artist.isNotBlank()) font.lineHeight + 1 else 0) +
             (if (showBar) BAR_H + 2 + (if (showTimes) font.lineHeight + 1 else 0) else 0) +
@@ -613,7 +625,7 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         val showArt = flag("np_art", true)
         val showBar = flag("np_progress", true) && t.duration > 0
         val showTimes = flag("np_times", true) && t.duration > 0
-        val showControls = cursorFree && flag("np_controls", true)
+        val showControls = cursorFree && flag("np_controls", true) && !dev.wyz.clientcore.media.MusicJam.following
         val barW = fullBarW(client, t)
         val st = effectiveStyle()
         val shadow = st.textShadow
@@ -769,7 +781,9 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
     }
 
     /** Runs a media key (prev, playpause or next) from River's pause menu. */
-    fun control(action: String) = writeCommand(action)
+    fun control(action: String) {
+        if (!dev.wyz.clientcore.media.MusicJam.following) writeCommand(action)
+    }
 
     /** One media control glyph in an [BTN] px box at (x, y), for River's pause menu. */
     fun drawControl(g: GuiGraphics, action: String, x: Int, y: Int, playing: Boolean) {
@@ -782,6 +796,7 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
     }
 
     private fun writeCommand(action: String) {
+        if (dev.wyz.clientcore.media.MusicJam.following) return
         // Without the launcher the media keys go through River's own reader.
         if (fromSession && dev.wyz.clientcore.media.MediaSession.command(action)) return
         runCatching {

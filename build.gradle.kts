@@ -169,12 +169,19 @@ tasks.processResources {
 // pack.mcmeta lives in the client source set, which gets its own task under
 // splitEnvironmentSourceSets(), so templating it needs configuring separately.
 tasks.named<ProcessResources>("processClientResources") {
+    inputs.property("minecraft_version", minecraftVersion)
     inputs.property("pack_format", packFormat)
     inputs.property("pack_format_range", packFormatRange)
     // These post effects use uniform blocks introduced in 1.21.6. Older clients
     // use the lyric halo fallback and do not offer the saturation setting.
     if (minecraftVersion in setOf("1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4", "1.21.5")) {
         exclude("assets/clientcore/post_effect/**")
+    }
+    // The full-screen vertex shader moved from post/ to core/ in 1.21.9.
+    if (minecraftVersion in setOf("1.21.6", "1.21.7", "1.21.8")) {
+        filesMatching("assets/clientcore/post_effect/*.json") {
+            filter { line -> line.replace("minecraft:core/screenquad", "minecraft:post/screenquad") }
+        }
     }
     filesMatching("pack.mcmeta") {
         expand("pack_format" to packFormat, "pack_format_range" to packFormatRange)

@@ -1,6 +1,7 @@
 package dev.wyz.clientcore.ui.screen
 
 import dev.wyz.clientcore.RiverRuntime
+import dev.wyz.clientcore.input.PauseMenuSizing
 import dev.wyz.clientcore.compat.riverBlit
 import dev.wyz.clientcore.ui.ClientUi
 import dev.wyz.clientcore.ui.RiverScreen
@@ -100,6 +101,7 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
     private class Hit(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val sound: Boolean = true, val onClick: () -> Unit)
 
     private var openedAt = 0L
+    private var columnScale = 1f
 
     override fun init() {
         super.init()
@@ -207,22 +209,33 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
         val client = minecraft ?: return
         val font = client.font
         val elapsed = (System.currentTimeMillis() - openedAt).coerceAtLeast(0L)
-        val x = maxOf(14, (width * 0.07f).toInt())
-        val w = minOf(RiverMainMenu.BTN_W, width - x * 2)
-
-        drawShade(g, x + w, ease(elapsed / 260f))
-
         // Lay the column out first so it can be fitted to the window, then draw it.
         val rows = buttonRows()
         val buttonsH = rows.size * RiverMainMenu.BTN_H + (rows.size - 1) * RiverMainMenu.BTN_GAP
         val tailH = (if (disconnect != null) RiverMainMenu.QUIT_EXTRA_GAP + RiverMainMenu.BTN_H else 0) +
             RiverMainMenu.ICON_ROW_GAP + RiverMainMenu.ICON_BTN
+        val layout = PauseMenuSizing.layout(width, height, client.window.guiScale.toDouble(), buttonsH + tailH + 34)
+        columnScale = layout.scale
+        val columnWidth = layout.width
+        val columnHeight = layout.height
+        val columnMouseX = (mouseX / columnScale).toInt()
+        val columnMouseY = (mouseY / columnScale).toInt()
+        val x = maxOf(layout.padding, (columnWidth * 0.07f).toInt())
+        val w = minOf(RiverMainMenu.BTN_W, columnWidth - x * 2)
+        drawShade(g, ((x + w) * columnScale).toInt(), ease(elapsed / 260f))
+//? if >=1.21.6 {
+        g.pose().pushMatrix()
+        g.pose().scale(columnScale, columnScale)
+//?} else {
+/*        g.pose().pushPose()
+        g.pose().scale(columnScale, columnScale, 1f)
+*///?}
         val art = RiverMainMenu.titleArt()
-        val spare = height - 24 - (buttonsH + tailH + 34)
+        val spare = columnHeight - layout.padding * 2 - 18 - (buttonsH + tailH + 34)
         val artW = if (art == null) 0 else minOf((w * 0.8f).toInt(), ((spare - 8) * art.second / art.third.coerceAtLeast(1)).coerceAtLeast(0))
         val artH = if (art == null || artW < 60) 0 else artW * art.third / art.second
         val total = (if (artH > 0) artH + 8 else 0) + 30 + buttonsH + tailH
-        var y = maxOf(8, (height - total) / 2)
+        var y = maxOf(layout.padding, (columnHeight - total - 18) / 2)
 
         // The title art and its splash, as on the title screen.
         if (art != null && artH > 0) {
@@ -258,7 +271,7 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
                 val bx = x + slot * (cellW + RiverMainMenu.BTN_GAP)
                 val by = y + ((1f - bIn) * 8f).toInt()
                 val enabled = entry.button?.active != false
-                val hovered = enabled && mouseX in bx..(bx + cellW) && mouseY in by..(by + RiverMainMenu.BTN_H)
+                val hovered = enabled && columnMouseX in bx..(bx + cellW) && columnMouseY in by..(by + RiverMainMenu.BTN_H)
                 RiverMainMenu.drawButton(g, font, entry.label, bx, by, cellW, hovered, bIn * (if (enabled) 1f else 0.45f), isQuit = false, primary = entry.primary)
                 if (enabled) hits += Hit(bx, by, bx + cellW, by + RiverMainMenu.BTN_H, entry.button == null, entry.onClick)
                 index++
@@ -273,7 +286,7 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
             y += RiverMainMenu.QUIT_EXTRA_GAP
             val bIn = ease((elapsed - 120L - index * 35L) / 340f)
             val by = y + ((1f - bIn) * 8f).toInt()
-            val hovered = leave.active && mouseX in x..(x + w) && mouseY in by..(by + RiverMainMenu.BTN_H)
+            val hovered = leave.active && columnMouseX in x..(x + w) && columnMouseY in by..(by + RiverMainMenu.BTN_H)
             RiverMainMenu.drawButton(g, font, leave.message.string, x, by, w, hovered, bIn, isQuit = true, primary = false)
             if (leave.active) hits += Hit(x, by, x + w, by + RiverMainMenu.BTN_H, sound = false) { press(leave) }
             y += RiverMainMenu.BTN_H
@@ -286,16 +299,23 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
             Triple("River Client", null) { client.setScreen(RiverMenuScreen(this)) },
             Triple("Wardrobe", "shirt") { client.setScreen(RiverCosmeticsScreen(this)) },
             Triple("Friends", "users") { client.setScreen(RiverFriendsScreen(this)) },
+            Triple("Music Jam", "music") { client.setScreen(RiverMusicJamScreen(this)) },
+            Triple("Servers", "server") { client.setScreen(RiverServerBrowserScreen(this)) },
             Triple("More options", "more") { showVanillaMenu() }
         )
         val iconIn = ease((elapsed - 120L - index * 35L) / 340f)
         icons.forEachIndexed { i, (tooltip, icon, open) ->
             val bx = x + i * (RiverMainMenu.ICON_BTN + RiverMainMenu.ICON_GAP)
             val by = y + ((1f - iconIn) * 8f).toInt()
-            val hovered = mouseX in bx..(bx + RiverMainMenu.ICON_BTN) && mouseY in by..(by + RiverMainMenu.ICON_BTN)
+            val hovered = columnMouseX in bx..(bx + RiverMainMenu.ICON_BTN) && columnMouseY in by..(by + RiverMainMenu.ICON_BTN)
             RiverMainMenu.drawIconButton(g, font, tooltip, icon, bx, by, hovered, iconIn)
             hits += Hit(bx, by, bx + RiverMainMenu.ICON_BTN, by + RiverMainMenu.ICON_BTN, onClick = open)
         }
+//? if >=1.21.6 {
+        g.pose().popMatrix()
+//?} else {
+/*        g.pose().popPose()
+*///?}
 
         // Corner labels, as on the title screen: River on the left, the frame rate on the right.
         ClientUi.fillRounded(g, 6, height - 13, 2, 9, 1, ClientUi.ACCENT_B)
@@ -384,13 +404,13 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
 //? if >=1.21.9 {
     override fun mouseClicked(event: MouseButtonEvent, doubled: Boolean): Boolean {
         if (event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return super.mouseClicked(event, doubled)
-        val mx = event.x()
-        val my = event.y()
+        val mx = event.x() / columnScale
+        val my = event.y() / columnScale
 //?} else {
 /*    override fun mouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
         if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return super.mouseClicked(mouseX, mouseY, button)
-        val mx = mouseX
-        val my = mouseY
+        val mx = mouseX / columnScale
+        val my = mouseY / columnScale
 *///?}
         for (h in hits.asReversed()) {
             if (mx >= h.x1 && mx <= h.x2 && my >= h.y1 && my <= h.y2) {

@@ -5,6 +5,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The servers River's in-game browser lists, and how each one is doing right now.
@@ -49,6 +50,8 @@ object ServerDirectory {
     @Volatile var entries: List<Entry> = BUNDLED
         private set
     @Volatile private var fetchedAt = 0L
+    @Volatile private var pingedAt = 0L
+    private val refreshing = AtomicBoolean(false)
 
     private val statuses = ConcurrentHashMap<String, Status>()
     private val pool = Executors.newFixedThreadPool(6) { runnable ->
@@ -60,25 +63,28 @@ object ServerDirectory {
     /** Fetches the live list (at most every ten minutes) and pings everything on it. */
     fun refresh(force: Boolean = false) {
         val now = System.currentTimeMillis()
-        if (force || now - fetchedAt > 10 * 60_000L) {
-            fetchedAt = now
-            pool.submit {
-                fetchList()?.let { entries = it }
+        if (now - pingedAt < (if (force) 5000L else 30_000L) || !refreshing.compareAndSet(false, true)) return
+        pingedAt = now
+        pool.submit {
+            try {
+                if (now - fetchedAt > 10 * 60_000L) {
+                    fetchedAt = now
+                    fetchList()?.let { entries = it }
+                }
                 pingAll()
-            }
-        } else {
-            pingAll()
+            } finally { refreshing.set(false) }
         }
     }
 
     private fun pingAll() {
-        for (entry in entries) {
+        val work = entries.map { entry ->
             statuses[entry.address] = statuses[entry.address]?.takeIf { it !is Status.Offline } ?: Status.Pending
             pool.submit {
                 statuses[entry.address] = runCatching { Status.Online(ServerPing.ping(entry.address)) }
                     .getOrElse { Status.Offline }
             }
         }
+        work.forEach { runCatching { it.get() } }
     }
 
     private fun fetchList(): List<Entry>? = runCatching {
@@ -89,19 +95,21 @@ object ServerDirectory {
         }
         try {
             if (connection.responseCode !in 200..299) return null
-            val root = connection.inputStream.use { JsonParser.parseReader(it.reader()) }.asJsonObject
-            root.getAsJsonArray("servers").mapNotNull { element ->
+            val bytes = connection.inputStream.use { it.readNBytes(256 * 1024 + 1) }
+            if (bytes.size > 256 * 1024) return null
+            val root = JsonParser.parseString(bytes.toString(Charsets.UTF_8)).asJsonObject
+            root.getAsJsonArray("servers").take(100).mapNotNull { element ->
                 val obj = element.asJsonObject
-                val name = obj.get("name")?.asString ?: return@mapNotNull null
-                val address = obj.get("address")?.asString ?: return@mapNotNull null
+                val name = obj.get("name")?.asString?.take(80) ?: return@mapNotNull null
+                val address = obj.get("address")?.asString?.takeIf { it.isNotBlank() && it.length <= 255 && it.none(Char::isWhitespace) } ?: return@mapNotNull null
                 Entry(
                     name = name,
                     address = address,
-                    description = obj.get("description")?.asString.orEmpty(),
-                    tags = obj.getAsJsonArray("tags")?.map { it.asString }.orEmpty(),
+                    description = obj.get("description")?.asString.orEmpty().take(240),
+                    tags = obj.getAsJsonArray("tags")?.take(4)?.map { it.asString.take(18) }.orEmpty(),
                     featured = obj.get("featured")?.asBoolean == true
                 )
-            }.takeIf { it.isNotEmpty() }
+            }.distinctBy { it.address.lowercase() }.take(50).takeIf { it.isNotEmpty() }
         } finally {
             connection.disconnect()
         }

@@ -18,7 +18,7 @@ import java.nio.file.StandardCopyOption
  * the bundled JXA reader reads the system Now Playing session through MediaRemote.
  */
 object MediaSession {
-    class Track(val title: String, val artist: String, val album: String, val durationMs: Long, val positionMs: Long, val playing: Boolean, val artFile: String = "", val source: String = "")
+    class Track(val title: String, val artist: String, val album: String, val durationMs: Long, val positionMs: Long, val playing: Boolean, val artFile: String = "", val source: String = "", val trackUri: String = "")
 
     private class Line(
         val playing: Boolean = false,
@@ -31,6 +31,7 @@ object MediaSession {
         val rate: Double = 1.0,
         val artFile: String = "",
         val source: String = "",
+        val trackUri: String = "",
         val at: Long = 0L
     )
 
@@ -66,7 +67,7 @@ object MediaSession {
         val rate = if (mac) line.rate.takeIf { it.isFinite() }?.coerceIn(0.0, 4.0) ?: 0.0 else 1.0
         val position = if (line.playing) line.positionMs + ((now - lastAt) * rate).toLong() else line.positionMs
         val limit = if (line.durationMs > 0) line.durationMs else Long.MAX_VALUE
-        return Track(line.title, line.artist, line.album, line.durationMs, position.coerceIn(0L, limit), line.playing, line.artFile, line.source)
+        return Track(line.title, line.artist, line.album, line.durationMs, position.coerceIn(0L, limit), line.playing, line.artFile, line.source, line.trackUri)
     }
 
     /** Stops the reader once nobody has asked for a while. Called every tick. */
@@ -106,6 +107,21 @@ object MediaSession {
         process = null
         last = null
         if (mac) runCatching { Files.deleteIfExists(macDirectory.resolve("command.json")) }
+    }
+
+    /** The host clock only controls the matching Spotify session after an explicit join. */
+    fun syncJam(track: Track): Boolean {
+        if (linux) return MprisReader.syncJam(track)
+        if (!windows) return false
+        val current = current() ?: return false
+        if (!current.source.contains("spotify", true) || current.title != track.title || current.artist != track.artist) return false
+        return runCatching {
+            val folder = ConfigService.riverDirectory().resolve("media")
+            val temp = folder.resolve("jam-command.tmp")
+            Files.writeString(temp, gson.toJson(mapOf("title" to track.title, "artist" to track.artist,
+                "positionMs" to track.positionMs, "playing" to track.playing, "at" to System.currentTimeMillis())))
+            Files.move(temp, folder.resolve("jam-command.json"), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        }.isSuccess
     }
 
     /** PowerShell by its full path, because a PC's PATH can have lost that folder. */

@@ -19,9 +19,8 @@ import com.mojang.blaze3d.textures.FilterMode
 import net.minecraft.client.renderer.LevelTargetBundle
 import net.minecraft.client.renderer.texture.AbstractTexture
 import dev.wyz.clientcore.compat.McId
-import org.joml.Vector2f
+import net.minecraft.client.gui.render.TextureSetup
 //?}
-import kotlin.math.min
 
 /**
  * Frosted glass behind River's panels: the world, blurred, seen through the panel.
@@ -147,45 +146,16 @@ object Glass {
      * with the same corner rounding fillRounded uses. False when there is nothing to draw:
      * the caller then draws its solid surface instead.
      */
-    fun backdrop(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int): Boolean {
+    fun backdrop(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int): Boolean =
+        drawBackdrop(g, x, y, w, h, radius, 0, false)
+
+    private fun drawBackdrop(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int, tint: Int, sheen: Boolean): Boolean {
         if (!enabled() || w <= 0 || h <= 0) return false
         wantedAt = System.currentTimeMillis()
-        if (!captured || texture == null) return false
-        val client = Minecraft.getInstance()
-        val sw = client.window.guiScaledWidth.toFloat()
-        val sh = client.window.guiScaledHeight.toFloat()
-        if (sw <= 0f || sh <= 0f) return false
-
-        val pose = g.pose()
-        val point = Vector2f()
-        fun screen(px: Int, py: Int): Vector2f {
-            point.set(px.toFloat(), py.toFloat())
-            return pose.transformPosition(point)
-        }
-
-        val r = min(radius, min(w, h) / 2).coerceAtLeast(0)
-        val insets = ClientUi.cornerInsetsFor(h, r)
-        var start = 0
-        while (start < h) {
-            // A pixel further in on the curved rows than the stepped shape: the tint on top is
-            // drawn with a smooth edge, and the blurred world showed as light specks outside it.
-            val inset = insets[start].let { if (it > 0) it + 1 else it }
-            var end = start + 1
-            while (end < h && insets[end] == inset) end++
-            val x0 = x + inset
-            val x1 = x + w - inset
-            val y0 = y + start
-            val y1 = y + end
-            val a = screen(x0, y0)
-            val u0 = a.x / sw
-            val v0 = 1f - a.y / sh
-            val b = screen(x1, y1)
-            val u1 = b.x / sw
-            val v1 = 1f - b.y / sh
-            // Render targets are stored bottom-up, so v runs from 1 at the top of the screen.
-            g.blit(ID, x0, y0, x1, y1, u0, u1, v0, v1)
-            start = end
-        }
+        if (!captured) return false
+        val view = target?.colorTextureView ?: return false
+        val sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR)
+        GlassQuad.draw(g, x, y, w, h, radius, tint, sheen, TextureSetup.singleTexture(view, sampler))
         return true
     }
 //?} else {
@@ -194,6 +164,8 @@ object Glass {
 
     @Suppress("UNUSED_PARAMETER")
     fun backdrop(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int): Boolean = false
+
+    private fun drawBackdrop(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int, tint: Int, sheen: Boolean): Boolean = false
 *///?}
 
     /**
@@ -202,19 +174,8 @@ object Glass {
      * it drew glass, so the caller can lighten what it puts on top.
      */
     fun surface(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int, solid: Int, tint: Int = solid, tintAlpha: Float = 0.58f, sheen: Boolean = true): Boolean {
-        if (!backdrop(g, x, y, w, h, radius)) {
-            ClientUi.fillRounded(g, x, y, w, h, radius, solid)
-            return false
-        }
-        ClientUi.fillRounded(g, x, y, w, h, radius, ClientUi.alpha(tint or 0xFF000000.toInt(), tintAlpha))
-        // A soft sheen down from the top edge, the light catching the glass. Not on a panel
-        // with another one sitting on top of it: there the edge is the middle of one piece.
-        if (sheen) {
-            // Kept clear of the rounded corners: as a plain rectangle it lit them up.
-            val depth = (h / 3).coerceIn(2, 24)
-            val side = maxOf(1, radius)
-            if (w > side * 2) g.fillGradient(x + side, y + 1, x + w - side, y + 1 + depth, 0x14FFFFFF, 0x00FFFFFF)
-        }
-        return true
+        if (drawBackdrop(g, x, y, w, h, radius, ClientUi.alpha(tint or 0xFF000000.toInt(), tintAlpha), sheen)) return true
+        ClientUi.fillRounded(g, x, y, w, h, radius, solid)
+        return false
     }
 }

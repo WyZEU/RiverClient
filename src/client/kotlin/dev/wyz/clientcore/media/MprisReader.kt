@@ -36,7 +36,7 @@ internal object MprisReader {
         val t = seen.track
         val position = if (t.playing) t.positionMs + (now - seen.at) else t.positionMs
         val limit = if (t.durationMs > 0) t.durationMs else Long.MAX_VALUE
-        return MediaSession.Track(t.title, t.artist, t.album, t.durationMs, position.coerceIn(0L, limit), t.playing)
+        return MediaSession.Track(t.title, t.artist, t.album, t.durationMs, position.coerceIn(0L, limit), t.playing, source = t.source, trackUri = t.trackUri)
     }
 
     fun stop() {
@@ -46,6 +46,15 @@ internal object MprisReader {
     }
 
     /** "next", "prev" or "playpause" on the player being read. */
+    fun openJam(uri: String): Boolean {
+        if (JamTimeline.spotifyUri(uri) == null) return false
+        val names = run("list", "--no-legend") ?: return false
+        val spotify = names.lineSequence().map { it.substringBefore(' ') }.firstOrNull {
+            it.startsWith(PREFIX) && it.contains("spotify", true)
+        } ?: return false
+        return run("call", spotify, PATH, PLAYER, "OpenUri", "s", uri) != null
+    }
+
     fun command(action: String): Boolean {
         val name = chosen ?: return false
         val method = when (action) {
@@ -89,7 +98,7 @@ internal object MprisReader {
             text(metadata, "xesam:album"),
             (metadata.getAsJsonObject("mpris:length")?.get("data")?.asLong ?: 0L) / 1000L,
             position / 1000L,
-            status[name] == "Playing"
+            status[name] == "Playing", source = name, trackUri = text(metadata, "xesam:url")
         )
         return Snapshot(track, System.currentTimeMillis())
     }
@@ -117,6 +126,16 @@ internal object MprisReader {
     private fun stringProperty(name: String, property: String): String? =
         runCatching { property(name, property)?.get("data")?.asString }.getOrNull()
 
+    fun syncJam(track: MediaSession.Track): Boolean {
+        val name = chosen?.takeIf { it.contains("spotify", true) } ?: return false
+        val metadata = property(name, "Metadata")?.getAsJsonArray("data")?.firstOrNull()?.asJsonObject ?: return false
+        if (text(metadata, "xesam:title") != track.title || text(metadata, "xesam:artist") != track.artist) return false
+        val id = text(metadata, "mpris:trackid").takeIf { it.startsWith("/") } ?: return false
+        if (kotlin.math.abs((current()?.positionMs ?: 0L) - track.positionMs) > 1500 &&
+            run("call", name, PATH, PLAYER, "SetPosition", "ox", id, (track.positionMs * 1000).toString()) == null) return false
+        return run("call", name, PATH, PLAYER, if (track.playing) "Play" else "Pause") != null
+    }
+
     private fun property(name: String, property: String): JsonObject? {
         val out = run("get-property", "--json=short", name, PATH, PLAYER, property) ?: return null
         return runCatching { JsonParser.parseString(out).asJsonObject }.getOrNull()
@@ -124,7 +143,7 @@ internal object MprisReader {
 
     /** busctl's output, or null when it could not run or failed. */
     private fun run(vararg args: String): String? = runCatching {
-        val process = ProcessBuilder(listOf("busctl", "--user") + args).redirectErrorStream(false).start()
+        val process = ProcessBuilder(listOf("busctl", "--user", "--timeout=3") + args).redirectErrorStream(false).start()
         val out = process.inputStream.bufferedReader().readText()
         if (!process.waitFor(3, TimeUnit.SECONDS)) {
             process.destroyForcibly()
