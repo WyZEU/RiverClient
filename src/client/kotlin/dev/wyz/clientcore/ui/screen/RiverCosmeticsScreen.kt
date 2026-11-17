@@ -5,7 +5,6 @@ import dev.wyz.clientcore.cosmetic.CapeEntitlements
 import dev.wyz.clientcore.cosmetic.RiverCape
 import dev.wyz.clientcore.module.ModuleRegistry
 import dev.wyz.clientcore.module.impl.CapeModule
-import dev.wyz.clientcore.module.impl.NameTagModule
 import dev.wyz.clientcore.nametag.RiverBadgeState
 import dev.wyz.clientcore.ui.ClientUi
 import dev.wyz.clientcore.ui.RiverIcons
@@ -114,7 +113,9 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
     }
 
     private fun capeModule(): CapeModule? = ModuleRegistry.get("cape")
-    private fun nametagModule(): NameTagModule? = ModuleRegistry.get("nametag")
+
+    /** The red X on the None card, loaded once. */
+    private val redX by lazy { dev.wyz.clientcore.ui.menu.RiverMainMenu.loadTexture("/assets/clientcore/textures/red_x_icon.png", "river_red_x") }
 
 //? if >=26.1 {
 /*    override fun extractRenderState(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
@@ -146,28 +147,18 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         hit(closeX, py + 7, 20, 20) { onClose() }
         g.fill(px + 1, py + HEADER_H - 1, px + pw - 1, py + HEADER_H, ClientUi.BORDER)
 
-        val nametag = nametagModule()
         val plus = dev.wyz.clientcore.cosmetic.RiverPlus.active()
 
         // Left column: the player, the cape's name and what it is, then the settings.
         val lx = px + 12
         val lw = (pw * 0.22f).toInt().coerceIn(132, 200)
-        val settingsRows = (if (nametag != null) 1 else 0) + (if (plus) 1 else 0)
+        val settingsRows = if (plus) 1 else 0
         val settingsY = py + ph - 14 - settingsRows * TOGGLE_STEP
         val infoY = settingsY - 36
         val prevY = py + HEADER_H + 8
         drawPlayerPreview(g, lx, prevY, lw, infoY - prevY - 8, cape)
         drawCapeInfo(g, lx, infoY, lw, cape)
         var toggleY = settingsY
-        if (nametag != null) {
-            val badgeOn = nametag.enabled && nametag.showRiverBadge()
-            drawToggleRow(g, lx, toggleY, lw, "River badge", badgeOn, mouseX, mouseY, "fx:badge") { on ->
-                nametag.setShowRiverBadge(on)
-                if (on) nametag.enabled = true
-                RiverRuntime.saveConfig()
-            }
-            toggleY += TOGGLE_STEP
-        }
         // Cloth physics, a River Plus perk: the cape moves like fabric. Others see it too.
         if (plus) {
             drawToggleRow(g, lx, toggleY, lw, "Cloth cape", cape.cloth(), mouseX, mouseY, "fx:cloth") { on ->
@@ -423,9 +414,8 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
 /*            // No world (opened from the main menu) - no live entity to render through the
             // helper above, so just show the styled name where the 3D preview would be.
 *///?}
-            val nametag = nametagModule()
             var name: Component = Component.literal(mcClient.user.name)
-            if (nametag?.active == true && nametag.showRiverBadge()) {
+            if (RiverBadgeState.visible()) {
                 name = Component.empty().append(RiverBadgeState.badgeComponent()).append(Component.literal(" ")).append(name)
             }
 //? if >=1.21.9 {
@@ -446,7 +436,14 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         val pvY = y + 8
         g.fill(pvX, pvY, pvX + PREVIEW_W, pvY + PREVIEW_H, wellBg())
         ClientUi.drawRoundedBorder(g, pvX, pvY, PREVIEW_W, PREVIEW_H, 0, ClientUi.alpha(ClientUi.BORDER, 0.9f))
-        RiverIcons.draw(g, "ban", pvX + (PREVIEW_W - 14) / 2, pvY + (PREVIEW_H - 14) / 2, 14, if (selected) ClientUi.ACCENT_B else ClientUi.DIM)
+        val x16 = redX
+        if (x16 != null) {
+            // River's pixel red X: no cape.
+            val size = 18
+            g.riverBlit(x16.first, pvX + (PREVIEW_W - size) / 2, pvY + (PREVIEW_H - size) / 2, 0f, 0f, size, size, x16.second, x16.third, x16.second, x16.third)
+        } else {
+            RiverIcons.draw(g, "ban", pvX + (PREVIEW_W - 14) / 2, pvY + (PREVIEW_H - 14) / 2, 14, if (selected) ClientUi.ACCENT_B else ClientUi.DIM)
+        }
         drawCardFooter(g, x, y, w, h, "None", selected)
         hit(x, y, w, h, onClick)
     }

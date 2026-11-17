@@ -42,6 +42,5 @@ class NameTagModule : Module(
     override fun showPositionControlsInEditor(): Boolean = false
 
     override fun addModuleSettings(list: MutableList<Setting>) {
-        list.add(BoolSetting("River badge", { mutableNameTag().showRiverBadge }, { mutableNameTag().showRiverBadge = it }))
     }
 }

@@ -3,7 +3,6 @@ package dev.wyz.clientcore.net
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import dev.wyz.clientcore.module.ModuleRegistry
-import dev.wyz.clientcore.module.impl.NameTagModule
 import dev.wyz.clientcore.nametag.EffectRoster
 import net.minecraft.client.Minecraft
 import java.io.OutputStream
@@ -60,8 +59,8 @@ object PresenceService {
 
         val server = client.currentServer
         val level = client.level
-        val nametag = ModuleRegistry.get<NameTagModule>("nametag")
-        val badgeOn = nametag != null && nametag.active && nametag.showRiverBadge()
+        // Everyone with River announces the badge; it has no off switch.
+        val badgeOn = true
         val capeModule = ModuleRegistry.get<dev.wyz.clientcore.module.impl.CapeModule>("cape")
         // Announce what this player actually sees on themselves: a seasonal cape they can't
         // wear any more goes out as River's own.

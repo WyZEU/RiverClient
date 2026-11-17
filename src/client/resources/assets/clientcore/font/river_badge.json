@@ -3,8 +3,8 @@
     {
       "type": "bitmap",
       "file": "clientcore:font/river_badge.png",
-      "height": 10,
-      "ascent": 8,
+      "height": 8,
+      "ascent": 7,
       "chars": [
         "\ue000"
       ]
@@ -12,8 +12,8 @@
     {
       "type": "bitmap",
       "file": "clientcore:font/river_badge_halloween.png",
-      "height": 10,
-      "ascent": 8,
+      "height": 8,
+      "ascent": 7,
       "chars": [
         "\ue001"
       ]
@@ -21,8 +21,8 @@
     {
       "type": "bitmap",
       "file": "clientcore:font/river_badge_plus.png",
-      "height": 10,
-      "ascent": 8,
+      "height": 8,
+      "ascent": 7,
       "chars": [
         "\ue002"
       ]

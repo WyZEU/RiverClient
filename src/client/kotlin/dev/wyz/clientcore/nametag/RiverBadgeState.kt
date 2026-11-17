@@ -11,11 +11,19 @@ import dev.wyz.clientcore.compat.McId
 import java.util.UUID
 
 object RiverBadgeState {
+    /**
+     * Every River player has the badge; there is no switch for it. The one exception is your own
+     * cinematic mode: while it is on, nobody's badge is drawn on your screen. Other players still
+     * see yours, because cinematic mode only changes what you see.
+     */
+    @JvmStatic
+    fun visible(): Boolean = dev.wyz.clientcore.RiverRuntime.configOrNull()?.cinematicMode != true
+
     @JvmStatic
     fun shouldShow(uuid: UUID): Boolean {
+        if (!visible()) return false
         val self = Minecraft.getInstance().player
         if (self != null && self.uuid == uuid) return true
-        if (!dev.wyz.clientcore.module.impl.CosmeticsModule.showOthersBadges()) return false
         return EffectRoster.hasRemoteBadge(uuid)
     }
 

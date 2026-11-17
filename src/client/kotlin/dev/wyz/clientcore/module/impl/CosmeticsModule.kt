@@ -31,12 +31,11 @@ class CosmeticsModule : Module("cosmetics", "Cosmetics", "Other players' capes a
     override fun addModuleSettings(list: MutableList<Setting>) {
         list.add(SectionSetting("Other players"))
         list.add(BoolSetting("Show their capes", { othersCapes() }, { setFlag("others_capes", it) }))
-        list.add(BoolSetting("Show their badges", { othersBadges() }, { setFlag("others_badges", it) }))
         list.add(SectionSetting("Yours"))
         list.add(ActionSetting("Cape and badge", "Open wardrobe") {
             val client = Minecraft.getInstance()
             client.setScreen(dev.wyz.clientcore.ui.screen.RiverCosmeticsScreen(client.screen))
-        }.hint("Pick your cape and turn your badge on or off."))
+        }.hint("Pick your cape."))
     }
 
     companion object {

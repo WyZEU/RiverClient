@@ -1,7 +1,6 @@
 package dev.wyz.clientcore.mixin;
 
 import dev.wyz.clientcore.module.ModuleRegistry;
-import dev.wyz.clientcore.module.impl.NameTagModule;
 import dev.wyz.clientcore.module.impl.TiersModule;
 import dev.wyz.clientcore.module.impl.TotemCounterModule;
 import dev.wyz.clientcore.nametag.RiverBadgeState;
@@ -49,8 +48,7 @@ public abstract class PlayerDisplayNameMixin {
             }
         }
 
-        NameTagModule badge = ModuleRegistry.INSTANCE.get("nametag");
-        if (badge != null && badge.getActive() && badge.showRiverBadge() && RiverBadgeState.shouldShow(uuid)) {
+        if (RiverBadgeState.shouldShow(uuid)) {
             prefix.append(RiverBadgeState.badgeComponent(uuid)).append(Component.literal(" "));
             any = true;
         }
