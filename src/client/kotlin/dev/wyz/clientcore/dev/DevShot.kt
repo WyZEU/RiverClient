@@ -179,7 +179,7 @@ object DevShot {
             return
         }
         when (name) {
-            "world-media-live", "world-media-lyrics-only", "world-media-controls" -> {
+            "world-media-live", "world-media-lyrics-only", "world-media-controls", "world-media-open" -> {
                 dev.wyz.clientcore.module.ModuleRegistry.all.forEach {
                     it.enabled = it.id == "lyrics" || (it.id == "now_playing" && name != "world-media-lyrics-only")
                 }
@@ -192,7 +192,14 @@ object DevShot {
                         if (it.label == "Show") it.set("Lines")
                         if (it.label == "Layout") it.set("Center")
                     }
-                if (name == "world-media-controls") {
+                val music = dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.NowPlayingModule>("now_playing")
+                // The controls audit clicks the full player's buttons; the compact bar only shows them once opened.
+                music?.settings()?.filterIsInstance<dev.wyz.clientcore.module.settings.BoolSetting>()
+                    ?.firstOrNull { it.label == "Compact" }?.set(name != "world-media-controls")
+                if (name == "world-media-open") {
+                    music?.javaClass?.getDeclaredField("pinned")?.apply { isAccessible = true }?.setBoolean(music, true)
+                    client.setScreen(net.minecraft.client.gui.screens.PauseScreen(true))
+                } else if (name == "world-media-controls") {
                     mediaStep = 0
                     mediaStepAt = System.currentTimeMillis()
                     dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.NowPlayingModule>("now_playing")?.editorSetScalePercent(150)

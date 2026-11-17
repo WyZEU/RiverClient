@@ -10,6 +10,12 @@ import dev.wyz.clientcore.module.ModuleCategory
 import dev.wyz.clientcore.module.settings.BoolSetting
 import dev.wyz.clientcore.module.settings.SectionSetting
 import dev.wyz.clientcore.module.settings.Setting
+import dev.wyz.clientcore.module.settings.hint
+import dev.wyz.clientcore.module.ModuleRegistry
+import dev.wyz.clientcore.lyrics.LrcParser
+import dev.wyz.clientcore.lyrics.LyricScene
+import dev.wyz.clientcore.lyrics.LyricsService
+import dev.wyz.clientcore.lyrics.LyricsState
 import dev.wyz.clientcore.ui.ClientUi
 import net.minecraft.client.Minecraft
 //? if >=26.1 {
@@ -45,7 +51,7 @@ import dev.wyz.clientcore.compat.riverBlit
  * next controls; clicking one sends a command through the reader providing the
  * displayed track. Purely a readout otherwise - server-safe.
  */
-class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your music", ModuleCategory.HUD, "spotify", 8, 244) {
+class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyrics from your music", ModuleCategory.HUD, "spotify", 8, 244) {
 
     private companion object {
         const val POLL_MS = 500L      // the launcher writes every second; poll faster so it never lags a beat
@@ -53,6 +59,9 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
         const val BAR_H = 2
         const val STALE_MS = 12_000L
         const val BTN = 11            // media control button size
+        const val MINI = 12           // album art in the compact bar
+        const val MINI_TEXT = 150     // widest the compact bar's text gets
+        const val DOTS_W = 10
         val SPOTIFY_GREEN = 0xFF1DB954.toInt()
     }
 
@@ -115,6 +124,19 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
     private var nextBox = intArrayOf(0, 0, 0, 0)
     private var controlsShown = false
 
+    // The compact bar: opened by hovering it in a menu, or held open by a click on it.
+    private var pinned = false
+    private var panelBox = intArrayOf(0, 0, 0, 0)
+    private var shownW = 0f
+    private var shownH = 0f
+    private var lastFrameAt = 0L
+    private var wasOpen = false
+
+    // The lyric line in the compact bar, worked out once per line.
+    private class BarLine(val words: List<String>, val starts: LongArray, val ends: LongArray)
+    private var barLineKey = ""
+    private var barLine: BarLine? = null
+
     private val bridgeDir: Path by lazy { DesktopBridge.riverDataRoot().resolve("River Client").resolve("bridge") }
     private val bridgeFile: Path by lazy { bridgeDir.resolve("nowplaying.json") }
     private val reader = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
@@ -123,11 +145,20 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
 
     override fun addModuleSettings(list: MutableList<Setting>) {
         list.add(SectionSetting("Now Playing"))
+        list.add(BoolSetting("Compact", { flag("np_compact", true) }, { setFlag("np_compact", it) })
+            .hint("A small bar. Hover or click it in a menu for the full player."))
+        list.add(BoolSetting("Lyrics in the bar", { flag("np_lyrics", true) }, { setFlag("np_lyrics", it) }))
         list.add(BoolSetting("Album art", { flag("np_art", true) }, { setFlag("np_art", it) }))
         list.add(BoolSetting("Progress bar", { flag("np_progress", true) }, { setFlag("np_progress", it) }))
         list.add(BoolSetting("Times", { flag("np_times", true) }, { setFlag("np_times", it) }))
         list.add(BoolSetting("Controls in menus", { flag("np_controls", true) }, { setFlag("np_controls", it) }))
         list.add(BoolSetting("Hide when paused", { flag("np_hide_paused", false) }, { setFlag("np_hide_paused", it) }))
+        // The Lyrics module lives in here: its switch, then its own settings while it is on.
+        ModuleRegistry.get<LyricsModule>("lyrics")?.let { lyrics ->
+            list.add(SectionSetting("Lyrics"))
+            list.add(BoolSetting("Lyrics", { lyrics.enabled }, { lyrics.enabled = it }))
+            if (lyrics.enabled) lyrics.musicSettings(list)
+        }
     }
 
     /*
@@ -325,75 +356,208 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
         if (t.title.isBlank()) return
         if (System.currentTimeMillis() - readAtMs > STALE_MS) return
         if (!t.playing && flag("np_hide_paused", false)) return
-        draw(client, graphics, t)
+        draw(client, graphics, t, preview = false)
     }
 
     override fun renderEditorPreview(client: Minecraft, graphics: GuiGraphics, tickDelta: Float) {
         // Deliberately the idle state: a preview that invents a song reads as a bug the
         // first time someone sees a track they are not playing.
-        draw(client, graphics, Track(playing = false, title = "Nothing playing", artist = "", position = 0, duration = 0))
+        draw(client, graphics, Track(playing = false, title = "Nothing playing", artist = "", position = 0, duration = 0), preview = true)
     }
 
-    private fun draw(client: Minecraft, graphics: GuiGraphics, t: Track) {
+    /**
+     * Compact: a small bar with the cover, the lyric being sung (or the song) and three dots
+     * that move while it plays. With the cursor free (any menu or chat), hovering the bar
+     * opens the full player; a click keeps it open until the next click. The panel eases to
+     * its new size and the content appears once it gets there.
+     */
+    private fun draw(client: Minecraft, graphics: GuiGraphics, t: Track, preview: Boolean) {
+        val compact = flag("np_compact", true)
+        val cursorFree = !preview && overMenu(client)
+        val mouse = if (cursorFree) mouse(client) else null
+        val hovered = mouse != null && hit(panelBox, mouse[0], mouse[1])
+        val open = !compact || pinned || hovered
+
+        val st = effectiveStyle()
+        val pad = st.padding.coerceAtLeast(3)
+        val line = if (compact && !open) lyricLine() else null
+        val size = if (open) fullSize(client, t, cursorFree) else compactSize(client, t, line)
+        val targetW = (size[0] + pad * 2).toFloat()
+        val targetH = (size[1] + pad * 2).toFloat()
+
+        val now = System.currentTimeMillis()
+        val dt = ((now - lastFrameAt).coerceIn(0L, 100L)) / 1000f
+        lastFrameAt = now
+        if (preview || !compact || shownW <= 0f) {
+            shownW = targetW; shownH = targetH
+        } else {
+            val k = minOf(1f, dt * 18f)
+            shownW += (targetW - shownW) * k
+            shownH += (targetH - shownH) * k
+            if (kotlin.math.abs(targetW - shownW) < 0.5f) shownW = targetW
+            if (kotlin.math.abs(targetH - shownH) < 0.5f) shownH = targetH
+        }
+        val w = shownW.toInt()
+        val h = shownH.toInt()
+        drawPillBackground(graphics, w, h)
+        panelBox = intArrayOf(x, y, x + w, y + h)
+
+        controlsShown = false
+        val settled = w == targetW.toInt() && h == targetH.toInt()
+        // Between two compact sizes (a new lyric line) the bar keeps its text, trimmed to the
+        // width it has so far; opening or closing shows the content once the panel is there.
+        if (open && settled) drawFull(client, graphics, t, x + pad, y + pad, cursorFree)
+        else if (!open && (settled || !wasOpen)) drawCompact(client, graphics, t, line, x + pad, y + pad, w - pad * 2)
+        if (settled) wasOpen = open
+    }
+
+    // ------------------------------------------------------------------ compact bar
+
+    private fun compactText(t: Track): String = if (t.artist.isBlank()) t.title else "${t.title} - ${t.artist}"
+
+    private fun compactSize(client: Minecraft, t: Track, line: Pair<BarLine, Long>?): IntArray {
+        val font = client.font
+        val textW = (if (line != null) wordsWidth(font, line.first.words) else font.width(compactText(t))).coerceIn(40, MINI_TEXT)
+        val art = if (flag("np_art", true)) MINI + 5 else 0
+        return intArrayOf(art + textW + 6 + DOTS_W, maxOf(if (art > 0) MINI else 0, font.lineHeight))
+    }
+
+    private fun drawCompact(client: Minecraft, graphics: GuiGraphics, t: Track, line: Pair<BarLine, Long>?, ox: Int, oy: Int, shownW: Int) {
+        val font = client.font
+        val size = compactSize(client, t, line).also { it[0] = minOf(it[0], shownW) }
+        val showArt = flag("np_art", true)
+        val shadow = effectiveStyle().textShadow
+        val accent = if (effectiveStyle().accentColor >= 0) panelAccentColor() else SPOTIFY_GREEN
+        if (showArt) drawCover(graphics, t, ox, oy, MINI)
+        val tx = ox + if (showArt) MINI + 5 else 0
+        val ty = oy + (size[1] - font.lineHeight) / 2 + 1
+        val textW = size[0] - (tx - ox) - 6 - DOTS_W
+        if (line != null) {
+            drawKaraoke(graphics, font, line.first, line.second, tx, ty, textW, accent, ClientUi.alpha(accent, 0.5f), shadow)
+        } else {
+            graphics.drawString(font, trim(font, compactText(t), textW), tx, ty, panelTextColor(), shadow)
+        }
+        // Three dots that ripple while the song plays and rest dim when it is paused.
+        val now = System.currentTimeMillis()
+        val dx = ox + size[0] - DOTS_W
+        val dy = oy + size[1] / 2 - 1
+        for (i in 0 until 3) {
+            val a = if (t.playing) 0.35f + 0.65f * (0.5f + 0.5f * kotlin.math.sin(now / 180.0 - i * 0.9).toFloat()) else 0.35f
+            graphics.fill(dx + i * 4, dy, dx + i * 4 + 2, dy + 2, ClientUi.alpha(accent, a))
+        }
+    }
+
+    /** The lyric line being sung now with where the song is, or null when there is none to show. */
+    private fun lyricLine(): Pair<BarLine, Long>? {
+        if (!flag("np_lyrics", true)) return null
+        // The same song source as the Lyrics module, so both share one fetched lyrics entry.
+        val session = dev.wyz.clientcore.media.MediaSession.current()
+        val pb = if (session != null) Playback(session.title, session.artist, session.album, (session.durationMs / 1000L).toInt(), session.positionMs, session.playing)
+            else playback() ?: return null
+        val lines = (LyricsService.stateFor(pb.title, pb.artist, pb.album, pb.durationSec) as? LyricsState.Ready)?.lines ?: return null
+        val pos = pb.positionMs + (ModuleRegistry.get<LyricsModule>("lyrics")?.offsetMs() ?: 0)
+        val index = LrcParser.indexAt(lines, pos)
+        val l = lines.getOrNull(index) ?: return null
+        if (l.text.isBlank()) return null
+        val key = "${pb.title}|${pb.artist}|$index"
+        if (key != barLineKey || barLine == null) {
+            barLineKey = key
+            val timed = l.words
+            barLine = if (timed != null && timed.isNotEmpty()) {
+                BarLine(timed.map { it.text }, LongArray(timed.size) { timed[it].startMs }, LongArray(timed.size) { timed[it].startMs + maxOf(120L, timed[it].durationMs) })
+            } else {
+                val words = l.text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                val end = lines.getOrNull(index + 1)?.timeMs ?: (l.timeMs + 5000L)
+                val starts = LyricScene.wordTimes(words.toTypedArray(), l.timeMs, maxOf(400L, end - l.timeMs))
+                BarLine(words, starts, LongArray(words.size) { if (it + 1 < words.size) starts[it + 1] else end })
+            }
+        }
+        return barLine!! to pos
+    }
+
+    private fun wordsWidth(font: net.minecraft.client.gui.Font, words: List<String>): Int =
+        words.sumOf { font.width(it) } + font.width(" ") * (words.size - 1).coerceAtLeast(0)
+
+    /** The line karaoke style: each word fills in from the left as it is sung. */
+    private fun drawKaraoke(g: GuiGraphics, font: net.minecraft.client.gui.Font, line: BarLine, pos: Long, x0: Int, y: Int, maxW: Int, sung: Int, waiting: Int, shadow: Boolean) {
+        val space = font.width(" ")
+        var x = x0
+        for (i in line.words.indices) {
+            val word = line.words[i]
+            val w = font.width(word)
+            if (x + w - x0 > maxW) {
+                if (x + font.width("...") - x0 <= maxW + 6) g.drawString(font, "...", x, y, waiting, shadow)
+                break
+            }
+            val fill = when {
+                pos <= line.starts[i] -> 0f
+                pos >= line.ends[i] -> 1f
+                else -> (pos - line.starts[i]).toFloat() / (line.ends[i] - line.starts[i])
+            }
+            when {
+                fill >= 1f -> g.drawString(font, word, x, y, sung, shadow)
+                fill <= 0f -> g.drawString(font, word, x, y, waiting, shadow)
+                else -> {
+                    var cut = 0
+                    while (cut < word.length && font.width(word.substring(0, cut + 1)) <= w * fill) cut++
+                    val head = word.substring(0, cut)
+                    g.drawString(font, head, x, y, sung, shadow)
+                    g.drawString(font, word.substring(cut), x + font.width(head), y, waiting, shadow)
+                }
+            }
+            x += w + space
+        }
+    }
+
+    // ------------------------------------------------------------------ full player
+
+    private fun fullBarW(client: Minecraft, t: Track): Int =
+        maxOf(client.font.width(t.title), client.font.width(t.artist)).coerceIn(90, 150)
+
+    private fun fullSize(client: Minecraft, t: Track, cursorFree: Boolean): IntArray {
         val font = client.font
         val showArt = flag("np_art", true)
         val showBar = flag("np_progress", true) && t.duration > 0
         val showTimes = flag("np_times", true) && t.duration > 0
-        // Controls only when a real menu is open (not chat), and enabled.
-        val inMenu = overMenu(client)
-        val showControls = inMenu && flag("np_controls", true)
-
-        val art = if (showArt) cover(t.artFile) else null
-        val coverW2 = if (showArt) COVER else 0
-        val barW = font.width(t.title).coerceIn(70, 150)
-
-        // The panel behind it all, in this module's style like every other HUD module.
-        val st = effectiveStyle()
-        val pad = st.padding.coerceAtLeast(3)
+        val showControls = cursorFree && flag("np_controls", true)
         val textH = font.lineHeight + 2 +
+            (if (t.artist.isNotBlank()) font.lineHeight + 1 else 0) +
             (if (showBar) BAR_H + 2 + (if (showTimes) font.lineHeight + 1 else 0) else 0) +
             (if (showControls) BTN + 1 else 0)
-        val contentW = coverW2 + (if (showArt) 6 else 0) + barW
-        val contentH = maxOf(if (showArt) COVER else 0, textH)
-        drawPillBackground(graphics, contentW + pad * 2, contentH + pad * 2)
-        val ox = x + pad
-        val oy = y + pad
-        val tx = ox + coverW2 + (if (showArt) 6 else 0)
+        val w = (if (showArt) COVER + 6 else 0) + fullBarW(client, t)
+        return intArrayOf(w, maxOf(if (showArt) COVER else 0, textH))
+    }
+
+    private fun drawFull(client: Minecraft, graphics: GuiGraphics, t: Track, ox: Int, oy: Int, cursorFree: Boolean) {
+        val font = client.font
+        val showArt = flag("np_art", true)
+        val showBar = flag("np_progress", true) && t.duration > 0
+        val showTimes = flag("np_times", true) && t.duration > 0
+        val showControls = cursorFree && flag("np_controls", true)
+        val barW = fullBarW(client, t)
+        val st = effectiveStyle()
         val shadow = st.textShadow
         val times = labelColor
         val bar = if (st.accentColor >= 0) panelAccentColor() else SPOTIFY_GREEN
+        val tx = ox + if (showArt) COVER + 6 else 0
 
-        // Album cover - the song icon. Falls back to the Spotify mark until art arrives.
-        if (showArt) {
-            if (art != null) {
-//? if >=1.21.6 {
-                graphics.riverBlit(art, ox, oy, 0f, 0f, COVER, COVER, coverW, coverH, coverW, coverH)
-//?} else {
-/*                graphics.riverBlit(art, ox, oy, 0f, 0f, COVER, COVER, coverW, coverH, coverW, coverH)
-*///?}
-            } else {
-                ClientUi.fillRounded(graphics, ox, oy, COVER, COVER, ClientUi.RADIUS_CARD, ClientUi.PANEL_ALT)
-//? if >=1.21.6 {
-                logo()?.let { graphics.riverBlit(it, ox + 6, oy + 6, 0f, 0f, COVER - 12, COVER - 12, 64, 64, 64, 64) }
-//?} else {
-/*                logo()?.let { graphics.riverBlit(it, ox + 6, oy + 6, 0f, 0f, COVER - 12, COVER - 12, 64, 64, 64, 64) }
-*///?}
-            }
-        }
+        if (showArt) drawCover(graphics, t, ox, oy, COVER)
 
-        // Track name (no app branding), then progress + times, then controls in a menu.
         var ty = oy
         graphics.drawString(font, trim(font, t.title, barW), tx, ty, panelTextColor(), shadow)
         ty += font.lineHeight + 2
+        if (t.artist.isNotBlank()) {
+            graphics.drawString(font, trim(font, t.artist, barW), tx, ty, times, shadow)
+            ty += font.lineHeight + 1
+        }
 
         if (showBar) {
             val done = elapsed(t)
-            val barY = ty
             val ratio = (done.toFloat() / t.duration.toFloat()).coerceIn(0f, 1f)
             val fill = (barW * ratio).toInt().coerceAtLeast(1)
-            ClientUi.fillRounded(graphics, tx, barY, barW, BAR_H, 1, 0x66000000)
-            ClientUi.fillRounded(graphics, tx, barY, fill, BAR_H, 1, if (t.playing) bar else ClientUi.DIM)
-            ty = barY + BAR_H + 2
+            ClientUi.fillRounded(graphics, tx, ty, barW, BAR_H, 1, 0x66000000)
+            ClientUi.fillRounded(graphics, tx, ty, fill, BAR_H, 1, if (t.playing) bar else ClientUi.DIM)
+            ty += BAR_H + 2
             if (showTimes) {
                 graphics.drawString(font, clock(done), tx, ty, times, shadow)
                 val right = clock(t.duration)
@@ -402,13 +566,43 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
             }
         }
 
-        controlsShown = showControls
         if (showControls) {
             drawControls(graphics, font, tx, ty + 1, t)
+            controlsShown = true
         }
     }
 
-    /** Consumes a menu click before a button underneath the panel can receive it. */
+    /** Album cover at [size], or the Spotify mark until art arrives. */
+    private fun drawCover(graphics: GuiGraphics, t: Track, ox: Int, oy: Int, size: Int) {
+        val art = cover(t.artFile)
+        if (art != null) {
+            graphics.riverBlit(art, ox, oy, 0f, 0f, size, size, coverW, coverH, coverW, coverH)
+        } else {
+            ClientUi.fillRounded(graphics, ox, oy, size, size, if (size < COVER) 2 else ClientUi.RADIUS_CARD, ClientUi.PANEL_ALT)
+            val inset = size / 5
+            logo()?.let { graphics.riverBlit(it, ox + inset, oy + inset, 0f, 0f, size - inset * 2, size - inset * 2, 64, 64, 64, 64) }
+        }
+    }
+
+    // ------------------------------------------------------------------ mouse
+
+    /** The cursor in this module's own drawing space (the HUD may be scaled around x, y). */
+    private fun mouse(client: Minecraft): DoubleArray {
+//? if >=1.21.9 {
+        val mx = client.mouseHandler.getScaledXPos(client.window)
+        val my = client.mouseHandler.getScaledYPos(client.window)
+//?} else {
+/*        val mx = client.mouseHandler.xpos() * client.window.guiScaledWidth / client.window.screenWidth
+        val my = client.mouseHandler.ypos() * client.window.guiScaledHeight / client.window.screenHeight
+*///?}
+        val s = scaleFactor().toDouble()
+        return doubleArrayOf(x + (mx - x) / s, y + (my - y) / s)
+    }
+
+    /**
+     * A menu click, before a button under the panel can take it: on a control it runs that
+     * control, anywhere else on the compact bar it keeps the player open (or lets it close).
+     */
     fun onMenuClick(client: Minecraft): Boolean {
         if (!active || !overMenu(client)) return false
 //? if >=1.21.9 {
@@ -418,7 +612,13 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
 /*        val mx = client.mouseHandler.xpos() * client.window.guiScaledWidth / client.window.screenWidth
         val my = client.mouseHandler.ypos() * client.window.guiScaledHeight / client.window.screenHeight
 *///?}
-        return onControlClick(mx, my)
+        if (onControlClick(mx, my)) return true
+        val local = mouse(client)
+        if (flag("np_compact", true) && hit(panelBox, local[0], local[1])) {
+            pinned = !pinned
+            return true
+        }
+        return false
     }
 
     /** Prev / play-pause / next, drawn as simple glyphs; hitboxes captured for clicks. */

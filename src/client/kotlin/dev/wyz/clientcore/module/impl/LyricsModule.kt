@@ -39,6 +39,16 @@ import net.minecraft.client.gui.GuiGraphics
 class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you are playing", ModuleCategory.VISUAL, "sparkle", 8, 292, false) {
     override val hudStack: HudStack = HudStack.TOP_LEFT
     override val editorProfile: ModuleEditorProfile = ModuleEditorProfile.MINIMAL
+    // Switched on and set up from the Spotify module's panel; it still runs with that HUD off.
+    override val showInMenu: Boolean = false
+
+    /** The lyrics settings, shown inside the Spotify module's panel. */
+    fun musicSettings(list: MutableList<Setting>) {
+        val own = mutableListOf<Setting>()
+        addModuleSettings(own)
+        // Its own "Lyrics" heading is the Spotify panel's section already.
+        list.addAll(if (own.firstOrNull() is SectionSetting) own.drop(1) else own)
+    }
 
     private class Song(val title: String, val artist: String, val album: String, val durationSec: Int, val positionMs: Long, val playing: Boolean)
 
@@ -80,7 +90,7 @@ class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you 
 
     fun showWorld() = flag("ly_world", true)
     private fun showScreen() = flag("ly_screen", false)
-    private fun offsetMs() = scalar("ly_offset", 0).coerceIn(-3000, 3000)
+    fun offsetMs() = scalar("ly_offset", 0).coerceIn(-3000, 3000)
     private fun lineMode() = scalar("ly_show", 0).coerceIn(0, 1) == 1
     private fun centered() = scalar("ly_layout", 0).coerceIn(0, 1) == 1
     fun face() = scalar("ly_font", LyricFonts.WIDE).coerceIn(0, LyricFonts.NAMES.size - 1)
