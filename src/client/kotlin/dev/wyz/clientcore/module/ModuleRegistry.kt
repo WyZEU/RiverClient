@@ -167,7 +167,16 @@ object ModuleRegistry {
         }
     }
 
+    /**
+     * Whether the Performance module's entity and block-entity culling is on, worked out once a
+     * tick. The render hooks ask for every entity and block entity on every frame, so they read
+     * this instead of looking the module up each time.
+     */
+    @JvmField
+    var performanceCulling = false
+
     fun tick(client: Minecraft) {
+        performanceCulling = get<dev.wyz.clientcore.module.impl.PerformanceModule>("performance")?.active == true
         val modules = cachedAll
         for (i in modules.indices) {
             val module = modules[i]

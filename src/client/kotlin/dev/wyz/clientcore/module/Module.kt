@@ -285,7 +285,7 @@ abstract class Module(
 
         list.add(SectionSetting("Style"))
         list.add(ChoiceSetting("Preset", STYLE_PRESETS + "Custom", { presetName(st()) }, { applyPreset(st(), it) })
-            .hint("A starting look. Any change below makes it Custom."))
+            .hint("A ready-made look. Changing anything below makes it Custom."))
         list.add(IntSetting("Size", 50, 200, { editorScalePercent() }, { editorSetScalePercent(it) }, "%"))
 
         list.add(SectionSetting("Background"))
@@ -799,6 +799,57 @@ abstract class Module(
             }
         }
 
+        drawKeyLabel(graphics, font, bx, by, bw, bh, label, subLabel, fg)
+    }
+
+    /** One key for [drawKeys]: where it is, what it says, and whether it is held. */
+    protected class KeySpec(val x: Int, val y: Int, val w: Int, val h: Int, val label: String, val pressed: Boolean, val subLabel: String? = null)
+
+    /**
+     * Several keys drawn layer by layer - every key's blurred backdrop, then every fill, then
+     * the sheens, borders and labels - instead of key by key. The GUI renderer batches what is
+     * drawn back to back with the same pipeline, so a block of keys costs a handful of draw
+     * calls rather than five or six per key. Looks the same as [drawKey] on each.
+     */
+    protected fun drawKeys(graphics: GuiGraphics, font: Font, keys: List<KeySpec>) {
+        val accent = panelAccentColor()
+        val st = effectiveStyle()
+        val radius = st.cornerRadius.coerceIn(0, 8)
+        val opacity = st.backgroundOpacity.coerceIn(0, 255)
+        val background = st.showBackground && opacity > 0
+        val base = if (st.backgroundColor >= 0) dev.wyz.clientcore.ui.RiverColor.resolve(st.backgroundColor) and 0xFFFFFF else ClientUi.PANEL_SOFT and 0xFFFFFF
+        val glassy = BooleanArray(keys.size)
+        if (background && st.glass) {
+            for (i in keys.indices) {
+                val k = keys[i]
+                if (!k.pressed) glassy[i] = dev.wyz.clientcore.ui.Glass.backdrop(graphics, k.x, k.y, k.w, k.h, radius)
+            }
+        }
+        for (i in keys.indices) {
+            val k = keys[i]
+            when {
+                k.pressed -> ClientUi.fillRounded(graphics, k.x, k.y, k.w, k.h, radius, ClientUi.alpha(accent, 0.82f))
+                glassy[i] -> ClientUi.fillRounded(graphics, k.x, k.y, k.w, k.h, radius, ClientUi.alpha(base or 0xFF000000.toInt(), (opacity / 255f) * 0.7f))
+                background -> ClientUi.fillRounded(graphics, k.x, k.y, k.w, k.h, radius, (opacity shl 24) or base)
+            }
+        }
+        val side = maxOf(1, radius)
+        for (i in keys.indices) {
+            val k = keys[i]
+            if (glassy[i] && k.w > side * 2) {
+                val depth = (k.h / 3).coerceIn(2, 24)
+                graphics.fillGradient(k.x + side, k.y + 1, k.x + k.w - side, k.y + 1 + depth, 0x14FFFFFF, 0x00FFFFFF)
+            }
+        }
+        if (st.showBorder) {
+            val border = (st.borderOpacity.coerceIn(0, 255) shl 24) or (ClientUi.BORDER and 0xFFFFFF)
+            for (k in keys) if (!k.pressed) ClientUi.drawRoundedBorder(graphics, k.x, k.y, k.w, k.h, radius, border)
+        }
+        val text = panelTextColor()
+        for (k in keys) drawKeyLabel(graphics, font, k.x, k.y, k.w, k.h, k.label, k.subLabel, if (k.pressed) 0xFFFFFFFF.toInt() else text)
+    }
+
+    private fun drawKeyLabel(graphics: GuiGraphics, font: Font, bx: Int, by: Int, bw: Int, bh: Int, label: String, subLabel: String?, fg: Int) {
         val tw = font.width(label)
         val th = font.lineHeight
         if (subLabel == null) {
@@ -829,24 +880,49 @@ abstract class Module(
     }
 }
 
-/** The ready-made looks in a module's Style > Preset. */
-private val STYLE_PRESETS = listOf("Glass", "Solid", "Minimal", "Text only")
+/**
+ * Ready-made looks for a HUD panel. Each sets the whole look - background, glass, corners,
+ * border and padding - so picking one gives exactly what its name says. Any change after
+ * that makes the style Custom.
+ */
+private class StylePreset(
+    val name: String, val background: Boolean, val glass: Boolean, val opacity: Int,
+    val corners: Int, val border: Boolean, val borderOpacity: Int, val padding: Int
+)
 
-private fun presetName(st: SharedHudStyle): String = when {
-    !st.showBackground && !st.showBorder -> "Text only"
-    st.glass && st.backgroundOpacity == 150 && !st.showBorder && st.cornerRadius == 4 -> "Glass"
-    !st.glass && st.backgroundOpacity == 210 && !st.showBorder && st.cornerRadius == 0 -> "Solid"
-    st.glass && st.backgroundOpacity == 80 && !st.showBorder && st.cornerRadius == 2 -> "Minimal"
-    else -> "Custom"
-}
+private val PRESETS = listOf(
+    StylePreset("Frosted glass", true, true, 150, 6, false, 90, 5),
+    StylePreset("Frosted with border", true, true, 140, 6, true, 110, 5),
+    StylePreset("Dark", true, false, 210, 0, false, 90, 5),
+    StylePreset("Dark rounded", true, false, 200, 8, true, 90, 6),
+    StylePreset("Faint", true, true, 70, 4, false, 90, 4),
+    StylePreset("Outline only", false, false, 0, 6, true, 160, 5),
+    StylePreset("Text only", false, false, 0, 0, false, 0, 4)
+)
+
+private val STYLE_PRESETS = PRESETS.map { it.name }
+
+private fun presetName(st: SharedHudStyle): String = PRESETS.firstOrNull { p ->
+    when {
+        !p.background && !p.border -> !st.showBackground && !st.showBorder
+        !p.background -> !st.showBackground && st.showBorder && st.cornerRadius == p.corners && st.borderOpacity == p.borderOpacity
+        else -> st.showBackground && st.glass == p.glass && st.backgroundOpacity == p.opacity &&
+            st.cornerRadius == p.corners && st.showBorder == p.border && st.padding == p.padding &&
+            (!p.border || st.borderOpacity == p.borderOpacity)
+    }
+}?.name ?: "Custom"
 
 private fun applyPreset(st: SharedHudStyle, name: String) {
-    when (name) {
-        "Glass" -> { st.showBackground = true; st.glass = true; st.backgroundOpacity = 150; st.showBorder = false; st.cornerRadius = 4; st.padding = 5 }
-        "Solid" -> { st.showBackground = true; st.glass = false; st.backgroundOpacity = 210; st.showBorder = false; st.cornerRadius = 0; st.padding = 5 }
-        "Minimal" -> { st.showBackground = true; st.glass = true; st.backgroundOpacity = 80; st.showBorder = false; st.cornerRadius = 2; st.padding = 4 }
-        "Text only" -> { st.showBackground = false; st.showBorder = false; st.textShadow = true }
-    }
+    val p = PRESETS.firstOrNull { it.name == name } ?: return
+    st.showBackground = p.background
+    st.glass = p.glass
+    if (p.background) st.backgroundOpacity = p.opacity
+    st.cornerRadius = p.corners
+    st.showBorder = p.border
+    if (p.border) st.borderOpacity = p.borderOpacity
+    st.padding = p.padding
+    // Without a background, the text needs its shadow to stay readable.
+    if (!p.background) st.textShadow = true
 }
 
 /** HUD auto-stack anchors. Un-placed elements flow in these columns and never overlap. */

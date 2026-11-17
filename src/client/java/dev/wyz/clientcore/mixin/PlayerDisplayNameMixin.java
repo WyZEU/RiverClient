@@ -27,6 +27,9 @@ import java.util.UUID;
  */
 @Mixin(Player.class)
 public abstract class PlayerDisplayNameMixin {
+    @org.spongepowered.asm.mixin.Unique
+    private static final Component clientcore$SPACE = Component.literal(" ");
+
     @Inject(method = "getDisplayName", at = @At("RETURN"), cancellable = true)
     private void clientcore$applyRiverNameDecorations(CallbackInfoReturnable<Component> cir) {
         Component base = cir.getReturnValue();
@@ -34,32 +37,25 @@ public abstract class PlayerDisplayNameMixin {
         Player self = (Player) (Object) this;
         UUID uuid = self.getUUID();
 
-        MutableComponent prefix = Component.empty();
-        boolean any = false;
-
-        // Tier first: it says something about the player, while the badge belongs right
-        // next to the name it decorates.
+        // Everything is looked up first and a new name is only built when something applies.
+        // This runs several times a frame for every player in view, and on most servers most
+        // players have no tier, badge or pop count: those calls now allocate nothing.
+        Component tag = null;
         TiersModule tiers = ModuleRegistry.INSTANCE.get("tiers");
-        if (tiers != null && tiers.showAboveHeads()) {
-            Component tag = tiers.tagFor(uuid);
-            if (tag != null) {
-                prefix.append(tag).append(Component.literal(" "));
-                any = true;
-            }
-        }
-
-        if (RiverBadgeState.shouldShow(uuid)) {
-            prefix.append(RiverBadgeState.badgeComponent(uuid)).append(Component.literal(" "));
-            any = true;
-        }
-
+        if (tiers != null && tiers.showAboveHeads()) tag = tiers.tagFor(uuid);
+        boolean badge = RiverBadgeState.shouldShow(uuid);
         // Totem pops go after the name, where TotemCounter puts them: "Name | -3".
         Component suffix = null;
         TotemCounterModule totems = ModuleRegistry.INSTANCE.get("totem_counter");
         if (totems != null && totems.showOnNametags()) suffix = totems.popSuffix(uuid);
+        if (tag == null && !badge && suffix == null) return;
 
-        if (!any && suffix == null) return;
-        MutableComponent result = any ? prefix.append(base) : base.copy();
+        // Tier first: it says something about the player, while the badge belongs right
+        // next to the name it decorates.
+        MutableComponent result = Component.empty();
+        if (tag != null) result.append(tag).append(clientcore$SPACE);
+        if (badge) result.append(RiverBadgeState.badgeComponent(uuid)).append(clientcore$SPACE);
+        result.append(base);
         if (suffix != null) result.append(suffix);
         cir.setReturnValue(result);
     }

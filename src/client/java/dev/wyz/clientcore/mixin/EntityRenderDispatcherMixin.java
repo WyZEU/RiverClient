@@ -81,7 +81,7 @@ public abstract class EntityRenderDispatcherMixin {
 *///?} else {
     private <E extends Entity> void clientcore$riverEntityGates(E entity, Frustum frustum, double camX, double camY, double camZ, CallbackInfoReturnable<Boolean> cir) {
 //?}
-        if (!cir.getReturnValueZ()) return;
+        if (!cir.getReturnValueZ() || !ModuleRegistry.performanceCulling) return;
         PerformanceModule module = ModuleRegistry.INSTANCE.get("performance");
         if (module == null || !module.getActive()) return;
 

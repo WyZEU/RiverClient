@@ -41,6 +41,7 @@ class KeystrokesModule : Module("keystrokes", "Keystrokes", "WASD, space and mou
         list.add(BoolSetting("Space bar", { flag("space", true) }, { setFlag("space", it) }))
     }
 
+    private val keys = ArrayList<KeySpec>(7)
     private val kw = 20
     private val kh = 16
     private fun mouseH() = if (showCps()) 22 else kh
@@ -79,11 +80,14 @@ class KeystrokesModule : Module("keystrokes", "Keystrokes", "WASD, space and mou
         val col2 = x + (kw + g) * 2
         var rowY = y
 
-        drawKey(graphics, font, col1, rowY, kw, kh, label(opt.keyUp), opt.keyUp.isDown)
+        // All the keys go in one list and are drawn layer by layer (see drawKeys): one draw
+        // call per layer for the whole block instead of several per key.
+        keys.clear()
+        keys += KeySpec(col1, rowY, kw, kh, label(opt.keyUp), opt.keyUp.isDown)
         rowY += kh + g
-        drawKey(graphics, font, col0, rowY, kw, kh, label(opt.keyLeft), opt.keyLeft.isDown)
-        drawKey(graphics, font, col1, rowY, kw, kh, label(opt.keyDown), opt.keyDown.isDown)
-        drawKey(graphics, font, col2, rowY, kw, kh, label(opt.keyRight), opt.keyRight.isDown)
+        keys += KeySpec(col0, rowY, kw, kh, label(opt.keyLeft), opt.keyLeft.isDown)
+        keys += KeySpec(col1, rowY, kw, kh, label(opt.keyDown), opt.keyDown.isDown)
+        keys += KeySpec(col2, rowY, kw, kh, label(opt.keyRight), opt.keyRight.isDown)
         rowY += kh + g
 
         if (showMouse()) {
@@ -91,18 +95,23 @@ class KeystrokesModule : Module("keystrokes", "Keystrokes", "WASD, space and mou
             val rmbW = totalW - halfW - g
             val h = mouseH()
             val cps = showCps()
-            drawKey(graphics, font, col0, rowY, halfW, h, "LMB", opt.keyAttack.isDown, if (cps) "$leftCps CPS" else null)
-            drawKey(graphics, font, col0 + halfW + g, rowY, rmbW, h, "RMB", opt.keyUse.isDown, if (cps) "$rightCps CPS" else null)
+            keys += KeySpec(col0, rowY, halfW, h, "LMB", opt.keyAttack.isDown, if (cps) "$leftCps CPS" else null)
+            keys += KeySpec(col0 + halfW + g, rowY, rmbW, h, "RMB", opt.keyUse.isDown, if (cps) "$rightCps CPS" else null)
             rowY += h + g
         }
 
+        var spaceY = -1
         if (showSpace()) {
+            keys += KeySpec(col0, rowY, totalW, kh, "", opt.keyJump.isDown)
+            spaceY = rowY
+        }
+        drawKeys(graphics, font, keys)
+
+        if (spaceY >= 0) {
             // A bar rather than a word, like the key it stands for.
-            val pressed = opt.keyJump.isDown
-            drawKey(graphics, font, col0, rowY, totalW, kh, "", pressed)
             val barW = totalW / 3
-            val barColor = if (pressed) 0xFFFFFFFF.toInt() else 0xFFB9C0D2.toInt()
-            graphics.fill(col0 + (totalW - barW) / 2, rowY + kh / 2, col0 + (totalW + barW) / 2, rowY + kh / 2 + 1, barColor)
+            val barColor = if (opt.keyJump.isDown) 0xFFFFFFFF.toInt() else 0xFFB9C0D2.toInt()
+            graphics.fill(col0 + (totalW - barW) / 2, spaceY + kh / 2, col0 + (totalW + barW) / 2, spaceY + kh / 2 + 1, barColor)
         }
     }
 }

@@ -10,6 +10,8 @@ object ClientCore : ClientModInitializer {
         get() = RiverRuntime.config
 
     override fun onInitializeClient() {
+        // Network channels belong to mod startup, before any connection.
+        dev.wyz.clientcore.safety.FreelookOptOut.register()
         RiverRuntime.initialize()
     }
 }

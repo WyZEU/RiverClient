@@ -135,9 +135,11 @@ object SkyEffectsRenderer {
     )
 
     /** Which curtains each Size setting shows: Small is the middle one only. */
+    private val CURTAINS_1 = listOf(CURTAINS[1])
+    private val CURTAINS_2 = listOf(CURTAINS[0], CURTAINS[1])
     private fun curtainsFor(count: Int): List<Curtain> = when (count) {
-        1 -> listOf(CURTAINS[1])
-        2 -> listOf(CURTAINS[0], CURTAINS[1])
+        1 -> CURTAINS_1
+        2 -> CURTAINS_2
         else -> CURTAINS
     }
 
@@ -164,66 +166,128 @@ object SkyEffectsRenderer {
         return (r shl 16) or (g shl 8) or bl
     }
 
-    /** Bottom and top colour of a palette (see SkyEffectsModule.PALETTES) at point [s] along a curtain. */
-    private fun colors(module: SkyEffectsModule, s: Float, t: Double): Pair<Int, Int> = when (module.palette()) {
-        0 -> 0x2EF08A to 0x9B4DFF
-        1 -> 0x36D8E8 to 0x3F6BFF
-        2 -> 0xA855FF to 0xFF4FA3
-        3 -> 0xFF5C9E to 0x8A4DFF
-        SkyEffectsModule.SHIFTING -> {
-            // Drifts through green, teal and violet, so stretches of the sky differ and change.
-            val a = (0.5 + 0.5 * sin(s * PI + t * 0.05)).toFloat()
-            val b = (0.5 + 0.5 * sin(2.0 * s * PI - t * 0.037 + 2.0)).toFloat()
-            mix(mix(0x2EF08A, 0x36D8E8, a), 0xA855FF, b * 0.7f) to mix(mix(0x9B4DFF, 0x3F6BFF, a), 0xFF4FA3, b * 0.6f)
-        }
-        else -> {
-            // The same at both ends of the ribbon, so a rainbow custom colour has no seam.
-            val around = sin(s * PI).toFloat() * 0.15f
-            (dev.wyz.clientcore.ui.RiverColor.resolve(module.customBottom(), around) and 0xFFFFFF) to (dev.wyz.clientcore.ui.RiverColor.resolve(module.customTop(), around + 0.3f) and 0xFFFFFF)
+    /** Bottom and top colour of a palette (see SkyEffectsModule.PALETTES) at point [i] along a curtain, into [out]. */
+    private fun colors(module: SkyEffectsModule, i: Int, out: IntArray) {
+        when (module.palette()) {
+            0 -> { out[0] = 0x2EF08A; out[1] = 0x9B4DFF }
+            1 -> { out[0] = 0x36D8E8; out[1] = 0x3F6BFF }
+            2 -> { out[0] = 0xA855FF; out[1] = 0xFF4FA3 }
+            3 -> { out[0] = 0xFF5C9E; out[1] = 0x8A4DFF }
+            SkyEffectsModule.SHIFTING -> {
+                // Drifts through green, teal and violet, so stretches of the sky differ and change.
+                val a = 0.5f + 0.5f * W1.value(i)
+                val b = 0.5f + 0.5f * W2.value(i)
+                out[0] = mix(mix(0x2EF08A, 0x36D8E8, a), 0xA855FF, b * 0.7f)
+                out[1] = mix(mix(0x9B4DFF, 0x3F6BFF, a), 0xFF4FA3, b * 0.6f)
+            }
+            else -> {
+                // The same at both ends of the ribbon, so a rainbow custom colour has no seam.
+                val around = W1.sin[i] * 0.15f
+                out[0] = dev.wyz.clientcore.ui.RiverColor.resolve(module.customBottom(), around) and 0xFFFFFF
+                out[1] = dev.wyz.clientcore.ui.RiverColor.resolve(module.customTop(), around + 0.3f) and 0xFFFFFF
+            }
         }
     }
+
+    /**
+     * The same picture as before, for a fraction of the work. Every wave along a curtain is
+     * sin(k * angle + drift), and sin(a + b) = sin a cos b + cos a sin b: the part that only
+     * depends on where along the ribbon a point is (sin and cos of k * angle) is worked out once
+     * into tables, and each frame only needs the sine and cosine of each wave's drift, a handful
+     * of calls per curtain instead of about ten for every one of its 221 points. The rays'
+     * power curve comes from a table too, the fixed palettes' colours are worked out once a frame,
+     * and the arrays are kept between frames instead of being made again.
+     */
+    private class Wave(k: Int) {
+        // The point's angle round the ribbon is (i * 2 / SEGMENTS - 1) * PI.
+        val sin = FloatArray(SEGMENTS + 1) { i -> sin(k * (i * 2.0 / SEGMENTS - 1.0) * PI).toFloat() }
+        val cos = FloatArray(SEGMENTS + 1) { i -> kotlin.math.cos(k * (i * 2.0 / SEGMENTS - 1.0) * PI).toFloat() }
+        // This frame's drift, set by [at].
+        private var sinPhase = 0f
+        private var cosPhase = 1f
+
+        fun at(phase: Double): Wave {
+            sinPhase = sin(phase).toFloat()
+            cosPhase = kotlin.math.cos(phase).toFloat()
+            return this
+        }
+
+        /** sin(k * angle + phase) at point [i]. */
+        fun value(i: Int): Float = sin[i] * cosPhase + cos[i] * sinPhase
+    }
+
+    private val W1 = Wave(1)
+    private val W2 = Wave(2)
+    private val W3 = Wave(3)
+    private val W4 = Wave(4)
+    private val W5 = Wave(5)
+    private val W7 = Wave(7)
+    private val W15 = Wave(15)
+    private val W17 = Wave(17)
+    private val W26 = Wave(26)
+
+    /** x^0.7 for x in 0..1, in 1024 steps: the rays' curve without a pow per point. */
+    private val POW07 = FloatArray(1025) { Math.pow(it / 1024.0, 0.7).toFloat() }
+
+    private val xs = FloatArray(SEGMENTS + 1)
+    private val zs = FloatArray(SEGMENTS + 1)
+    private val ys = Array(ROW_AT.size) { FloatArray(SEGMENTS + 1) }
+    private val cs = Array(ROW_AT.size) { IntArray(SEGMENTS + 1) }
+    private val alphas = Array(ROW_AT.size) { FloatArray(SEGMENTS + 1) }
+    private val pair = IntArray(2)
 
     private fun drawAurora(pose: PoseStack.Pose, quads: VertexConsumer, module: SkyEffectsModule, strength: Float, t: Double) {
         val rays = module.rays()
         val rows = ROW_AT.size
-        val xs = FloatArray(SEGMENTS + 1)
-        val zs = FloatArray(SEGMENTS + 1)
-        val ys = Array(rows) { FloatArray(SEGMENTS + 1) }
-        val cs = Array(rows) { IntArray(SEGMENTS + 1) }
-        val alphas = Array(rows) { FloatArray(SEGMENTS + 1) }
+        val palette = module.palette()
+        val fixed = palette in 0..3
+        if (fixed) colors(module, 0, pair)
+        // The shifting palette's two waves only drift with time, not per curtain.
+        if (palette == SkyEffectsModule.SHIFTING) {
+            W1.at(t * 0.05)
+            W2.at(-t * 0.037 + 2.0)
+        }
 
         for (curtain in curtainsFor(module.curtains())) {
             val p = curtain.phase.toDouble()
+            val fold3 = W3.at(0.11 * t + p)
+            val fold7 = W7.at(-0.23 * t + 2 * p)
+            val fold17 = W17.at(0.5 * t)
+            val sway = W4.at(0.15 * t + p)
+            val patch = W5.at(-0.07 * t + p)
+            val rayA = W26.at(1.1 * t + p)
+            val rayB = W15.at(-0.7 * t + 2 * p)
             for (i in 0..SEGMENTS) {
                 // Every wave below repeats a whole number of times around the circle, so the
                 // ribbon's two ends meet without a seam.
                 val s = i * 2f / SEGMENTS - 1f
-                val sd = s.toDouble() * PI
                 // Folds: a long sway, a tighter ripple and small kinks, all drifting at different speeds.
-                val fold = 26.0 * sin(3.0 * sd + 0.11 * t + p) + 10.0 * sin(7.0 * sd - 0.23 * t + 2 * p) + 3.5 * sin(17.0 * sd + 0.5 * t)
+                val fold = 26f * fold3.value(i) + 10f * fold7.value(i) + 3.5f * fold17.value(i)
                 if (curtain.overhead) {
                     xs[i] = s * 300f
-                    zs[i] = -curtain.radius + fold.toFloat()
+                    zs[i] = -curtain.radius + fold
                 } else {
                     val out = curtain.radius + fold
-                    xs[i] = (out * sin(sd)).toFloat()
-                    zs[i] = (-out * kotlin.math.cos(sd)).toFloat()
+                    xs[i] = out * W1.sin[i]
+                    zs[i] = -out * W1.cos[i]
                 }
-                val bottom = curtain.altitude + (7.0 * sin(4.0 * sd + 0.15 * t + p)).toFloat()
+                val bottom = curtain.altitude + 7f * sway.value(i)
 
                 // Slow brighter and dimmer stretches along the length, never fully out.
-                val patches = (0.45 + 0.55 * (0.5 + 0.5 * sin(5.0 * sd - 0.07 * t + p))).toFloat()
+                val patches = 0.45f + 0.55f * (0.5f + 0.5f * patch.value(i))
                 // Rays: thin vertical streaks that brighten, stretch and slide sideways.
                 val ray = if (rays) {
-                    val a = 0.5 + 0.5 * sin(26.0 * sd + 1.1 * t + p)
-                    val b = 0.5 + 0.5 * sin(15.0 * sd - 0.7 * t + 2 * p)
-                    Math.pow(a * b, 0.7).toFloat()
+                    val a = 0.5f + 0.5f * rayA.value(i)
+                    val b = 0.5f + 0.5f * rayB.value(i)
+                    POW07[((a * b).coerceIn(0f, 1f) * 1024f).toInt()]
                 } else 0.5f
                 val ends = if (curtain.overhead) smooth(1f, 0.7f, kotlin.math.abs(s)) else 1f
                 val bright = strength * curtain.weight * ends * patches * (0.45f + 0.55f * ray) * PEAK_ALPHA
                 val tall = curtain.height * (0.78f + 0.4f * ray)
 
-                val (low, high) = colors(module, s, t)
+                if (!fixed) colors(module, i, pair)
+                val low = pair[0]
+                val high = pair[1]
                 val edge = mix(low, 0xFFFFFF, 0.55f)
                 for (r in 0 until rows) {
                     ys[r][i] = bottom + ROW_AT[r] * tall

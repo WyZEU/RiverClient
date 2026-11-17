@@ -702,6 +702,8 @@ object DevShot {
         if (benchStartedAt == 0L) {
             if (now - benchInWorldAt < BENCH_WARMUP_MS) return
             uncapFrameRate(client)
+            // -Driver.bench.night=true: measure at midnight, where the sky effects actually draw.
+            if (System.getProperty("river.bench.night") == "true") client.player?.connection?.sendCommand("time set midnight")
             benchBlocks = if (benchFeatures != null) {
                 benchBlockMs = 4_000L
                 val known = dev.wyz.clientcore.module.ModuleRegistry.all.filter { !it.comingSoon }.map { it.id }

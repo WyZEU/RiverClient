@@ -55,6 +55,8 @@ object ServerSafety {
     /** Whether Freelook may run on the current connection. */
     fun freelookAllowed(client: Minecraft = Minecraft.getInstance()): Boolean {
         if (client.level == null || client.singleplayerServer != null) return true
+        // The server said so itself, through the Freelook mod's opt-out.
+        if (FreelookOptOut.disabledByServer) return false
         val host = client.currentServer?.ip?.substringBefore(':')?.trim()?.lowercase()?.removeSuffix(".").orEmpty()
         val brand = runCatching { client.connection?.serverBrand() }.getOrNull().orEmpty().lowercase()
         return noFreelook.none { rule ->

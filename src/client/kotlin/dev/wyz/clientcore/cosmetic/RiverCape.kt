@@ -214,10 +214,23 @@ object RiverCape {
         return EffectRoster.remoteCapeStyle(uuid)?.takeIf { it in STYLES && it !in RETIRED }
     }
 
+    /**
+     * The patched skin per player skin, with the cape frame it was made for. Asked for every
+     * player with a River cape on every frame, the copy is only made again when the skin or the
+     * cape's frame changes, rather than every time.
+     */
+    private val patched = HashMap<PlayerSkin, Pair<String, PlayerSkin>>()
+
     /** Returns a copy of the skin with the given cape style patched in. */
     @JvmStatic
     fun applyCape(skin: PlayerSkin, style: String): PlayerSkin {
         val frame = frame(style)
+        patched[skin]?.let { (madeFor, result) -> if (madeFor == frame) return result }
+        if (patched.size > 256) patched.clear()
+        return patch(skin, style, frame).also { patched[skin] = frame to it }
+    }
+
+    private fun patch(skin: PlayerSkin, style: String, frame: String): PlayerSkin {
         ensureTexture(frame)
         // The elytra get their own texture: the cape's art cut into the wing shape. Vanilla
         // would otherwise stretch the cape over the wings.

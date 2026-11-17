@@ -3,6 +3,11 @@
   "title": "River Client 0.3.2",
   "summary": "A much smaller download.",
   "items": [
+    "Improved: River runs lighter. The aurora, Keystrokes, nametags, River capes and the entity checks do far less work each frame.",
+    "Added: Freelook turns itself off on any server that blocks the Freelook mod, not only on River's own list.",
+    "Changed: HUD style presets are new and set the whole look: Frosted glass, Frosted with border, Dark, Dark rounded, Faint, Outline only and Text only.",
+    "Fixed: Glass panels showed light specks in their rounded corners.",
+    "Fixed: The Spotify bar flickered with the cursor near its edge, and lyrics in it could be cut off or have big gaps between words. Long lines now slide along with the singing.",
     "Fixed: Freelook no longer turns on on Hypixel or MCPVP.club, which do not allow it. Pressing its key there says so once.",
     "Fixed: A crash at start, \"Failed to load class file\", after which only Repair helped. The launcher could rewrite River's file while the game was starting; it now never touches it while the game runs, and replaces it in one step.",
     "Added: Minimize on the launch screen (or Esc) shrinks it into a small card, so you can use the launcher while the game starts.",

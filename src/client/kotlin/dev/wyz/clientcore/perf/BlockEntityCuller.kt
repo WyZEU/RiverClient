@@ -27,6 +27,7 @@ object BlockEntityCuller {
 
     /** True if this block entity is currently occluded or beyond the render distance cap. */
     fun shouldCull(client: Minecraft, blockPos: BlockPos): Boolean {
+        if (!ModuleRegistry.performanceCulling) return false
         val perf = ModuleRegistry.get<PerformanceModule>("performance")
         if (perf == null || !perf.active) return false
         val level = client.level ?: return false

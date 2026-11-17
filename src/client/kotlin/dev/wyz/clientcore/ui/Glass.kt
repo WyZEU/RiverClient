@@ -167,7 +167,9 @@ object Glass {
         val insets = ClientUi.cornerInsetsFor(h, r)
         var start = 0
         while (start < h) {
-            val inset = insets[start]
+            // A pixel further in on the curved rows than the stepped shape: the tint on top is
+            // drawn with a smooth edge, and the blurred world showed as light specks outside it.
+            val inset = insets[start].let { if (it > 0) it + 1 else it }
             var end = start + 1
             while (end < h && insets[end] == inset) end++
             val x0 = x + inset
@@ -208,8 +210,10 @@ object Glass {
         // A soft sheen down from the top edge, the light catching the glass. Not on a panel
         // with another one sitting on top of it: there the edge is the middle of one piece.
         if (sheen) {
+            // Kept clear of the rounded corners: as a plain rectangle it lit them up.
             val depth = (h / 3).coerceIn(2, 24)
-            g.fillGradient(x + 1, y + 1, x + w - 1, y + 1 + depth, 0x14FFFFFF, 0x00FFFFFF)
+            val side = maxOf(1, radius)
+            if (w > side * 2) g.fillGradient(x + side, y + 1, x + w - side, y + 1 + depth, 0x14FFFFFF, 0x00FFFFFF)
         }
         return true
     }

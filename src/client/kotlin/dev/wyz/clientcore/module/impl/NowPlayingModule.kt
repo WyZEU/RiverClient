@@ -128,6 +128,12 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
     // The compact bar: opened by hovering it in a menu, or held open by a click on it.
     private var pinned = false
     private var panelBox = intArrayOf(0, 0, 0, 0)
+    /** Where the compact bar last sat, part of the zone that keeps the open player open. */
+    private var compactBox = intArrayOf(0, 0, 0, 0)
+    private fun open0() = wasOpen || pinned
+    private fun settled0(w: Int, h: Int, tw: Float, th: Float) = w == tw.toInt() && h == th.toInt()
+    /** How far a lyric line too long for the bar is scrolled, eased toward the sung word. */
+    private var lyricScroll = 0f
     private var shownW = 0f
     private var shownH = 0f
     private var lastFrameAt = 0L
@@ -139,7 +145,7 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         val parts: List<net.minecraft.network.chat.Component> = words.map { net.minecraft.network.chat.Component.literal(it) }
         var widths: IntArray? = null
         var total = 0
-        fun measure(font: net.minecraft.client.gui.Font): IntArray = widths ?: IntArray(words.size) { font.width(words[it]) }.also {
+        fun measure(font: net.minecraft.client.gui.Font): IntArray = widths ?: IntArray(words.size) { font.width(parts[it]) }.also {
             widths = it
             total = it.sum() + font.width(" ") * (words.size - 1).coerceAtLeast(0)
         }
@@ -390,7 +396,10 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         val compact = flag("np_compact", true)
         val cursorFree = !preview && overMenu(client)
         val mouse = if (cursorFree) mouse(client) else null
-        val hovered = mouse != null && hit(panelBox, mouse[0], mouse[1])
+        // The open player is narrower than the bar, so the zone that keeps it open is both
+        // shapes: otherwise a cursor near the bar's edge opens it, ends up outside, closes it,
+        // and the two flicker back and forth.
+        val hovered = mouse != null && (hit(panelBox, mouse[0], mouse[1]) || (open0() && hit(compactBox, mouse[0], mouse[1])))
         val open = !compact || pinned || hovered
 
         val st = effectiveStyle()
@@ -416,6 +425,7 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         val h = shownH.toInt()
         drawPillBackground(graphics, w, h)
         panelBox = intArrayOf(x, y, x + w, y + h)
+        if (!open && settled0(w, h, targetW, targetH)) compactBox = intArrayOf(x, y, x + w, y + h)
 
         controlsShown = false
         val settled = w == targetW.toInt() && h == targetH.toInt()
@@ -515,9 +525,13 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
             barLineKey = key
             previousBarLine = barLine
             lineChangedAt = System.currentTimeMillis()
+            lyricScroll = 0f
             val timed = l.words
             barLine = if (timed != null && timed.isNotEmpty()) {
-                BarLine(timed.map { it.text }, LongArray(timed.size) { timed[it].startMs }, LongArray(timed.size) { timed[it].startMs + maxOf(120L, timed[it].durationMs) })
+                // Some providers put the spaces inside the words (or send a space as a word of
+                // its own); the bar adds its own spacing, so those showed as big gaps.
+                val kept = timed.filter { it.text.isNotBlank() }
+                BarLine(kept.map { it.text.trim() }, LongArray(kept.size) { kept[it].startMs }, LongArray(kept.size) { kept[it].startMs + maxOf(120L, kept[it].durationMs) })
             } else {
                 val words = l.text.trim().split(WORD_GAP).filter { it.isNotEmpty() }
                 val end = lines.getOrNull(index + 1)?.timeMs ?: (l.timeMs + 5000L)
@@ -540,20 +554,38 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         val sungColor = ClientUi.alpha(sung, alpha)
         val waitingColor = ClientUi.alpha(sung, 0.45f * alpha)
         val glow = if (light) ClientUi.alpha(sung, 0.45f * alpha) else 0
-        var x = x0
-        for (i in line.words.indices) {
-            val w = widths[i]
-            if (x + w - x0 > maxW) {
-                if (x + font.width("...") - x0 <= maxW + 6) g.drawString(font, "...", x, y, waitingColor, shadow)
-                break
+        // A line wider than the bar slides along so the word being sung stays in view,
+        // instead of being cut off with "...".
+        var shift = 0
+        if (line.total > maxW) {
+            var at = 0
+            var start = 0
+            for (i in line.words.indices) {
+                if (pos < line.ends[i]) { at = start; break }
+                start += widths[i] + space
+                at = start
             }
-            val fill = when {
-                pos <= line.starts[i] -> 0f
-                pos >= line.ends[i] -> 1f
-                else -> (pos - line.starts[i]).toFloat() / (line.ends[i] - line.starts[i])
+            val target = (at - maxW * 0.35f).coerceIn(0f, (line.total - maxW).toFloat())
+            if (light) {
+                lyricScroll += (target - lyricScroll) * 0.15f
+                shift = lyricScroll.toInt()
+            } else shift = target.toInt()
+        }
+        ClientUi.withScissor(g, x0, y - 3, x0 + maxW, y + font.lineHeight + 3) {
+            var x = x0 - shift
+            for (i in line.words.indices) {
+                val w = widths[i]
+                if (x > x0 + maxW) break
+                if (x + w >= x0) {
+                    val fill = when {
+                        pos <= line.starts[i] -> 0f
+                        pos >= line.ends[i] -> 1f
+                        else -> (pos - line.starts[i]).toFloat() / (line.ends[i] - line.starts[i])
+                    }
+                    dev.wyz.clientcore.lyrics.KaraokeWipe.word(g, font, line.parts[i], x, y, w, fill, sungColor, waitingColor, shadow, glow)
+                }
+                x += w + space
             }
-            dev.wyz.clientcore.lyrics.KaraokeWipe.word(g, font, line.parts[i], x, y, w, fill, sungColor, waitingColor, shadow, glow)
-            x += w + space
         }
     }
 
