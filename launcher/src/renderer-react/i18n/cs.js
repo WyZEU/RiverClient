@@ -396,6 +396,7 @@ export const cs = {
   "Game running": "Hra běží",
   "Stop": "Zastavit",
   "Launching": "Spouštím",
+  "Show": "Zobrazit",
   "Launch": "Spustit",
   "Servers": "Servery",
   "No servers yet": "Zatím žádné servery",

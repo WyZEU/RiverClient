@@ -586,6 +586,42 @@ function isRealRuntimeJar(p) {
   return Boolean(p) && !String(p).includes("app.asar") && fs.existsSync(p) && fs.statSync(p).isFile();
 }
 
+/**
+ * Whether the copy of a jar is out of date: a different size, or a source more than two seconds
+ * newer. This used to compare exact times, and the copy's time is set from a whole-millisecond
+ * date while NTFS keeps fractions of one, so about half of all copies read as older forever and
+ * were copied again on every status poll - including while the game had that jar open.
+ */
+function jarCopyStale(sourceStat, targetStat) {
+  return !targetStat || targetStat.size !== sourceStat.size || sourceStat.mtimeMs - targetStat.mtimeMs > 2000;
+}
+
+const keptJarNotes = new Set();
+
+/**
+ * Puts a copy of `source` at `target` without a half-written moment: it is written beside the
+ * target and renamed over it. A plain copy truncates the target first, and a game reading that
+ * jar at the time crashed ("Failed to load class file ... EOFException"). While a running game
+ * holds the old jar, Windows refuses the rename and the old jar stays, which is what it needs.
+ */
+function replaceJarFile(source, target, sourceStat) {
+  const temp = `${target}.river-tmp`;
+  try {
+    fs.copyFileSync(source, temp);
+    fs.utimesSync(temp, sourceStat.atime, sourceStat.mtime);
+    fs.renameSync(temp, target);
+    keptJarNotes.delete(target);
+    return true;
+  } catch (error) {
+    try { fs.rmSync(temp, { force: true }); } catch {}
+    if (!keptJarNotes.has(target)) {
+      keptJarNotes.add(target);
+      emit("launcher:log", `[launcher] Kept the current ${path.basename(target)} (${error.code || error.message}).`);
+    }
+    return false;
+  }
+}
+
 function copyRuntimeJarToInstance(sourceJar, runtimeDir) {
   if (!isRealRuntimeJar(sourceJar)) return "";
   fs.mkdirSync(runtimeDir, { recursive: true });
@@ -593,11 +629,8 @@ function copyRuntimeJarToInstance(sourceJar, runtimeDir) {
   try {
     const sourceStat = fs.statSync(sourceJar);
     const targetStat = fs.existsSync(targetJar) ? fs.statSync(targetJar) : null;
-    if (!targetStat || targetStat.size !== sourceStat.size || targetStat.mtimeMs < sourceStat.mtimeMs) {
-      fs.copyFileSync(sourceJar, targetJar);
-      fs.utimesSync(targetJar, sourceStat.atime, sourceStat.mtime);
-    }
-    return targetJar;
+    if (jarCopyStale(sourceStat, targetStat)) replaceJarFile(sourceJar, targetJar, sourceStat);
+    return fs.existsSync(targetJar) ? targetJar : "";
   } catch {
     return "";
   }
@@ -748,10 +781,7 @@ function ensureBundledClientCoreMod(instancePath, mcVersion = instanceMcVersion(
   try {
     const sourceStat = fs.statSync(sourceJar);
     const targetStat = fs.existsSync(targetPath) ? fs.statSync(targetPath) : null;
-    if (!targetStat || targetStat.size !== sourceStat.size || targetStat.mtimeMs < sourceStat.mtimeMs) {
-      fs.copyFileSync(sourceJar, targetPath);
-      fs.utimesSync(targetPath, sourceStat.atime, sourceStat.mtime);
-    }
+    if (jarCopyStale(sourceStat, targetStat)) replaceJarFile(sourceJar, targetPath, sourceStat);
   } catch {}
 
   const manifest = readModManifest(root);
@@ -2855,7 +2885,8 @@ function getStatus() {
   }));
   const selectedInstance = instances.find((instance) => instance.selected) || instances[0] || null;
   const instanceManifest = path.join(settings.instancePath, "riv3r-instance.json");
-  if (settings.instancePath) {
+  // Never while the game runs: those are the jars it has open.
+  if (settings.instancePath && !launchProcess) {
     try {
       ensureBundledClientCoreMod(settings.instancePath);
       stageRiverRuntimeForInstance(settings.instancePath);

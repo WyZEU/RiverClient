@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Minus, Maximize2 } from "lucide-react";
 import { api } from "../lib/useStatus";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
@@ -80,6 +80,8 @@ export function LaunchOverlay({ status, notify }) {
   // { index, count, label } from main; only its preparation sets it, never the game's log.
   const [step, setStep] = useState(null);
   const [stopping, setStopping] = useState(false);
+  // Minimized: the launch goes on in a small card in the corner and the launcher is usable.
+  const [minimized, setMinimized] = useState(false);
 
   // Both feeds write the same line, so whichever spoke last is what is shown: the
   // preparation steps while the launcher is working, the game's own log after that.
@@ -112,7 +114,18 @@ export function LaunchOverlay({ status, notify }) {
     setPercent(null);
     setStep(null);
     setStopping(false);
+    setMinimized(false);
   }, [open]);
+
+  // Esc tucks the launch screen away, the same as its Minimize button.
+  useEffect(() => {
+    if (!open || minimized) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape") setMinimized(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, minimized]);
 
   const cancel = useCallback(async () => {
     setStopping(true);
@@ -134,6 +147,51 @@ export function LaunchOverlay({ status, notify }) {
   const stepLine = step ? t("Step {index} of {count}: {label}", { index: step.index, count: step.count, label: t(step.label) }) : "";
   // Steps before Minecraft starts mean files are being fetched, which happens once per version.
   const firstRunHint = step && step.index < step.count ? t("Only the first launch of a version downloads all this.") : "";
+
+  const instanceName = status?.selectedInstance?.name || "River Client";
+
+  if (minimized) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed bottom-4 right-4 z-40 w-80 rounded-lg border border-border bg-card/95 p-3 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200"
+      >
+        <div className="flex items-center gap-2.5">
+          <img src="../assets/river-logo.png" alt="" draggable={false} className="size-7 shrink-0 select-none object-contain" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold leading-tight">{instanceName}</div>
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <Loader2 className="size-3 shrink-0 animate-spin" />
+              <span className="truncate">{stepLine || t("Starting Minecraft...")}</span>
+            </div>
+          </div>
+          <Button variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => setMinimized(false)} title={t("Show")} aria-label={t("Show")}>
+            <Maximize2 className="size-4" />
+          </Button>
+        </div>
+        <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-secondary">
+          <div
+            className={cn("h-full rounded-full bg-primary", indeterminate ? "launch-sweep w-1/3" : "transition-[width] duration-300 ease-out")}
+            style={indeterminate ? undefined : { width: `${percent}%` }}
+          />
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-[11px] text-muted-foreground">{stage || t("This can take a minute on the first launch.")}</p>
+          <Button variant="ghost" size="sm" className="h-7 shrink-0 px-2" onClick={cancel} disabled={stopping}>
+            {t("Cancel")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const minimizeButton = (
+    <Button variant="ghost" size="sm" onClick={() => setMinimized(true)}>
+      <Minus className="size-4" />
+      {t("Minimize")}
+    </Button>
+  );
 
   /*
     Modern: the whole window, behind the title bar's controls, with the instance's own
@@ -177,9 +235,12 @@ export function LaunchOverlay({ status, notify }) {
             </p>
           </div>
           {firstRunHint ? <p className="-mt-3 text-[11px] text-muted-foreground/80">{firstRunHint}</p> : null}
-          <Button variant="outline" onClick={cancel} disabled={stopping}>
-            {t("Cancel")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {minimizeButton}
+            <Button variant="outline" onClick={cancel} disabled={stopping}>
+              {t("Cancel")}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -230,9 +291,12 @@ export function LaunchOverlay({ status, notify }) {
         </div>
 
         {firstRunHint ? <p className="-mt-3 text-[11px] text-muted-foreground/80">{firstRunHint}</p> : null}
-        <Button variant="ghost" size="sm" onClick={cancel} disabled={stopping}>
-          {t("Cancel")}
-        </Button>
+        <div className="flex items-center gap-1">
+          {minimizeButton}
+          <Button variant="ghost" size="sm" onClick={cancel} disabled={stopping}>
+            {t("Cancel")}
+          </Button>
+        </div>
       </div>
     </div>
   );
