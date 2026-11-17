@@ -999,7 +999,9 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null) 
         val rowW = w - Metrics.PAD * 2
         val boxW = 78
         val boxX = rowX + rowW - boxW
-        g.drawString(font, trim(label, rowW - boxW - 8), rowX, cy + 5, ClientUi.MUTED, false)
+        // While it waits for a key, the row says how to leave it empty.
+        if (capturing) g.drawString(font, trim("Esc = no key", rowW - boxW - 8), rowX, cy + 5, ClientUi.ACCENT_B, false)
+        else g.drawString(font, trim(label, rowW - boxW - 8), rowX, cy + 5, ClientUi.MUTED, false)
         val hovered = mouseX in boxX..(boxX + boxW) && mouseY in cy..(cy + Metrics.BOX_H)
         val anim = ClientUi.hover(id, hovered)
         g.fill(boxX, cy, boxX + boxW, cy + Metrics.BOX_H, wellBg())
@@ -1093,7 +1095,8 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null) 
         val capturing = capturingKeyId == row.id
         val key = row.key()
         val clash = row.id != "friends" && key >= 0 && (used[key] ?: 0) > 1
-        g.drawString(font, trim(row.label, rowW - boxW - 8), rowX, cy + 5, if (key >= 0) ClientUi.TEXT else ClientUi.MUTED, false)
+        if (capturing) g.drawString(font, trim("Esc = no key", rowW - boxW - 8), rowX, cy + 5, ClientUi.ACCENT_B, false)
+        else g.drawString(font, trim(row.label, rowW - boxW - 8), rowX, cy + 5, if (key >= 0) ClientUi.TEXT else ClientUi.MUTED, false)
         val hovered = mouseX in boxX..(boxX + boxW) && mouseY in cy..(cy + Metrics.BOX_H) && mouseY in contentRect[1]..contentRect[3]
         val anim = ClientUi.hover("key:${row.id}", hovered)
         g.fill(boxX, cy, boxX + boxW, cy + Metrics.BOX_H, wellBg())

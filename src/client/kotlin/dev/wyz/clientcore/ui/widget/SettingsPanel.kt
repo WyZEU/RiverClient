@@ -180,7 +180,8 @@ class SettingsPanel(private val settingsProvider: () -> List<Setting>) {
             is KeybindSetting -> {
                 val capturing = capturingLabel == setting.label
                 val hovered = mouseY in y..(y + 18) && mouseX in x..(x + w)
-                g.drawString(font, trim(font, setting.label, w - 84), x, y + 5, ClientUi.MUTED, false)
+                if (capturing) g.drawString(font, trim(font, "Esc = no key", w - 84), x, y + 5, ClientUi.ACCENT_B, false)
+                else g.drawString(font, trim(font, setting.label, w - 84), x, y + 5, ClientUi.MUTED, false)
                 val label = if (capturing) "press a key" else InputNames.keyName(setting.get())
                 val boxW = 78
                 val boxX = x + w - boxW
