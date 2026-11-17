@@ -185,13 +185,12 @@ object DevShot {
                 }
                 dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.LyricsModule>("lyrics")?.settings()
                     ?.filterIsInstance<dev.wyz.clientcore.module.settings.BoolSetting>()
-                    ?.filter { it.label == "In the world" }?.forEach { it.set(true) }
+                    ?.filter { it.label == "In the world" || it.label == "On screen" }?.forEach { it.set(true) }
                 // Keep a whole real line in view so the capture also exercises world text.
                 dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.LyricsModule>("lyrics")?.settings()
                     ?.filterIsInstance<dev.wyz.clientcore.module.settings.ChoiceSetting>()?.forEach {
                         if (it.label == "Show") it.set("Lines")
                         if (it.label == "Layout") it.set("Center")
-                        if (it.label == "On screen") it.set(if (name == "world-media-bar") "Spotify bar" else "Own bar")
                     }
                 val music = dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.NowPlayingModule>("now_playing")
                 // The controls audit clicks the full player's buttons; the compact bar only shows them once opened.
