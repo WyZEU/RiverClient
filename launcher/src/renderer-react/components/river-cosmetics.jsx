@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Ban, Check, Loader2, Sparkles } from "lucide-react";
+import { Ban, Check, Loader2 } from "lucide-react";
 import { api } from "../lib/useStatus";
 import { cn } from "../lib/utils";
 import { Switch } from "./ui/switch";
@@ -77,7 +77,7 @@ export function RiverCosmetics({ notify }) {
           from, in one line, without a panel or a picture. */}
       {state.plus ? (
         <div className="flex items-center gap-2 text-[11px] font-semibold text-plus">
-          <Sparkles className="size-3.5" />
+          <img src="../assets/river-plus-logo.png" alt="" className="size-4 shrink-0 object-contain" draggable={false} />
           {t("River Plus is active on this account.")}
         </div>
       ) : null}
