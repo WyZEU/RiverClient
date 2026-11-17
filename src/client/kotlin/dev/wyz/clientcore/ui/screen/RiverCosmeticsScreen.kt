@@ -3,6 +3,7 @@ package dev.wyz.clientcore.ui.screen
 import dev.wyz.clientcore.RiverRuntime
 import dev.wyz.clientcore.cosmetic.CapeEntitlements
 import dev.wyz.clientcore.cosmetic.RiverCape
+import dev.wyz.clientcore.cosmetic.AccessoryModels
 import dev.wyz.clientcore.module.ModuleRegistry
 import dev.wyz.clientcore.module.impl.CapeModule
 import dev.wyz.clientcore.nametag.RiverBadgeState
@@ -137,7 +138,7 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         val equippedIndex = if (cape.enabled) cape.styleIndex() else -1
         RiverIcons.draw(g, "shirt", px + 12, py + 11, 12, ClientUi.ACCENT_B)
         ClientUi.drawGradientTitle(g, font, "Cosmetics", px + 30, py + 13)
-        val wearing = if (equippedIndex >= 0) "Wearing ${RiverCape.LABELS.getOrNull(equippedIndex) ?: "a cape"}" else "No cape"
+        val wearing = if (accessoryTab()) "Local preview" else if (equippedIndex >= 0) "Wearing ${RiverCape.LABELS.getOrNull(equippedIndex) ?: "a cape"}" else "No cape"
         g.drawString(font, trim(wearing, pw - 100 - RiverText.boldWidth(font, "Cosmetics")), px + 30 + RiverText.boldWidth(font, "Cosmetics") + 8, py + 13, ClientUi.DIM, false)
         val closeX = px + pw - 28
         val closeHovered = mouseX in closeX..(closeX + 20) && mouseY in (py + 7)..(py + 27)
@@ -151,16 +152,19 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
 
         // Left column: the player, the cape's name and what it is, then the settings.
         val lx = px + 12
-        val lw = (pw * 0.22f).toInt().coerceIn(132, 200)
-        val settingsRows = if (plus) 1 else 0
+        val lw = if (accessoryTab()) (pw * 0.48f).toInt() else (pw * 0.22f).toInt().coerceIn(132, 200)
+        val settingsRows = if (plus && !accessoryTab()) 1 else 0
         val settingsY = py + ph - 14 - settingsRows * TOGGLE_STEP
         val infoY = settingsY - 36
         val prevY = py + HEADER_H + 8
         drawPlayerPreview(g, lx, prevY, lw, infoY - prevY - 8, cape)
-        drawCapeInfo(g, lx, infoY, lw, cape)
+        if (accessoryTab()) {
+            RiverText.drawBold(g, font, AccessoryModels.selectedName(if (tab == Tab.HEADWEAR) "head" else "wings"), lx + 4, infoY + 4, ClientUi.TEXT)
+            g.drawString(font, if (tab == Tab.HEADWEAR) "Headwear" else "Wings", lx + 4, infoY + 19, ClientUi.DIM, false)
+        } else drawCapeInfo(g, lx, infoY, lw, cape)
         var toggleY = settingsY
         // Cloth physics, a River Plus perk: the cape moves like fabric. Others see it too.
-        if (plus) {
+        if (plus && !accessoryTab()) {
             drawToggleRow(g, lx, toggleY, lw, "Cloth cape", cape.cloth(), mouseX, mouseY, "fx:cloth") { on ->
                 cape.setCloth(on)
                 RiverRuntime.saveConfig()
@@ -173,6 +177,10 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         val tabY = py + HEADER_H + 8
         drawTabs(g, rx, tabY, mouseX, mouseY)
         g.fill(rx, tabY + 21, rx + rw, tabY + 22, ClientUi.alpha(ClientUi.BORDER, 0.8f))
+        if (accessoryTab()) {
+            drawAccessories(g, rx, tabY + 32, rw, py + ph - 16, mouseX, mouseY)
+            return
+        }
 
         // A code cape nobody has redeemed is not listed at all: its name is the code, so even a
         // dimmed card would give it away. Plus capes do show, locked, with their Plus tag
@@ -241,14 +249,19 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
     }
 
     /** Which tab a cape belongs to. Plus capes show in every tab that lists them. */
-    private enum class Tab(val label: String) { ALL("All"), FREE("Free"), PLUS("River Plus") }
+    private enum class Tab(val label: String) { ALL("All"), FREE("Free"), PLUS("River Plus"), HEADWEAR("Headwear"), WINGS("Wings") }
 
-    private var tab = Tab.ALL
+    private var tab = if (AccessoryModels.isEnabled()) {
+        if (System.getProperty("river.cosmetics.tab") == "wings") Tab.WINGS else Tab.HEADWEAR
+    } else Tab.ALL
+
+    private fun accessoryTab() = tab == Tab.HEADWEAR || tab == Tab.WINGS
 
     private fun inTab(style: String): Boolean = when (tab) {
         Tab.ALL -> true
         Tab.FREE -> style !in RiverCape.PLUS
         Tab.PLUS -> style in RiverCape.PLUS
+        Tab.HEADWEAR, Tab.WINGS -> false
     }
 
     private var cardsScroll = 0
@@ -288,7 +301,8 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
 
         // Slow auto-spin plus whatever the user dragged. Spin 0 faces the camera.
         val autoY = (System.currentTimeMillis() % 14400L) / 40f
-        val spin = manualRotY + autoY
+        val fixedAngle = if (dev.wyz.clientcore.dev.DevShot.active) System.getProperty("river.devshot.cosmeticAngle")?.toFloatOrNull() else null
+        val spin = manualRotY + (fixedAngle ?: if (accessoryTab()) (if (tab == Tab.WINGS) 155f else -25f) else autoY)
         val inset = 4
 
         val player = mcClient.player
@@ -503,6 +517,7 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         var tx = x
         for (t in Tab.values()) {
             if (t == Tab.PLUS && !dev.wyz.clientcore.cosmetic.RiverPlus.shown()) continue
+            if ((t == Tab.HEADWEAR || t == Tab.WINGS) && !AccessoryModels.isEnabled()) continue
             val w = font.width(t.label) + 16
             val hovered = mouseX in tx..(tx + w) && mouseY in y..(y + 20)
             val active = tab == t
@@ -512,9 +527,43 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
             hit(tx, y, w, 20) {
                 tab = t
                 cardsScroll = 0
+                manualRotY = 0f
             }
             tx += w + 6
         }
+    }
+
+    private fun drawAccessories(g: GuiGraphics, x: Int, y: Int, w: Int, bottom: Int, mouseX: Int, mouseY: Int) {
+        cardsMaxScroll = 0
+        cardsRect = intArrayOf(0, 0, 0, 0)
+        val slot = if (tab == Tab.HEADWEAR) "head" else "wings"
+        val equipped = if (slot == "head") AccessoryModels.headId else AccessoryModels.wingsId
+        val options = listOf(null) + AccessoryModels.items.filter { it.slot == slot }
+        val rowHeight = min(58, ((bottom - y - 40) / options.size).coerceAtLeast(38))
+        for ((index, item) in options.withIndex()) {
+            val rowY = y + index * rowHeight
+            val selected = equipped == (item?.id ?: "none")
+            val hovered = mouseX in x until x + w && mouseY in rowY until rowY + rowHeight - 6
+            ClientUi.drawSectionCard(g, x, rowY, w, rowHeight - 6, if (hovered) 1f else 0f, selected)
+            val name = item?.name ?: "None"
+            RiverText.drawBold(g, font, name, x + 12, rowY + 10, if (selected) ClientUi.ACCENT_B else ClientUi.TEXT)
+            if (selected) g.drawString(font, "✓", x + w - 20, rowY + 10, ClientUi.ACCENT_B, false)
+            if (rowHeight >= 50) {
+                val detail = when (item?.id) {
+                    "rivercap" -> "A structured crown and cyan brim"
+                    "frostbeanie" -> "A ribbed cuff and soft pom-pom"
+                    "aurorawings" -> "Layered feathers in ice and turquoise"
+                    "emberwings" -> "Dark webbing with copper seams"
+                    else -> "No ${if (slot == "head") "headwear" else "wings"}"
+                }
+                g.drawString(font, trim(detail, w - 24), x + 12, rowY + 27, ClientUi.DIM, false)
+            }
+            hit(x, rowY, w, rowHeight - 6) {
+                if (slot == "head") AccessoryModels.headId = item?.id ?: "none" else AccessoryModels.wingsId = item?.id ?: "none"
+            }
+        }
+        g.drawString(font, "Visible on this client", x + 4, bottom - 22, ClientUi.DIM, false)
+        g.drawString(font, if (mcClient.player == null) "Join a world to preview" else if (slot == "head") "Hidden by helmets" else "Hidden with elytra", x + 4, bottom - 8, ClientUi.DIM, false)
     }
 
     /** The cape you are wearing, its name and whether it is free or River Plus. */

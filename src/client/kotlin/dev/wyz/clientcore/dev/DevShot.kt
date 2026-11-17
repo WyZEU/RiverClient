@@ -385,7 +385,25 @@ object DevShot {
                     println("[river] lyrics search-only " + (again as? dev.wyz.clientcore.lyrics.LyricsState.Ready)?.let { "ready ${it.lines.size} lines" } + " first=" + cleaned::class.simpleName)
                 }.start()
             }
-            "world-cosmetics" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverCosmeticsScreen(null))
+            "world-cosmetics" -> {
+                when (System.getProperty("river.devshot.cosmeticEquipment")) {
+                    "helmet" -> client.player?.connection?.sendCommand("item replace entity @s armor.head with minecraft:diamond_helmet")
+                    "elytra" -> client.player?.connection?.sendCommand("item replace entity @s armor.chest with minecraft:elytra")
+                    "chest" -> client.player?.connection?.sendCommand("item replace entity @s armor.chest with minecraft:diamond_chestplate")
+                }
+                client.setScreen(dev.wyz.clientcore.ui.screen.RiverCosmeticsScreen(null))
+            }
+            "world-accessories" -> {
+                client.setScreen(null)
+                client.options.cameraType = net.minecraft.client.CameraType.THIRD_PERSON_BACK
+//? if >=26.2 {
+/*                if (!client.gui.hud.isHidden) client.gui.hud.toggle()
+*///?} else {
+                client.options.hideGui = true
+//?}
+                client.player?.setYRot(20f)
+                client.player?.setXRot(7f)
+            }
             "world-content" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverContentBrowserScreen(null))
             "servers" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverServerBrowserScreen(null))
             "multiplayer" -> client.setScreen(net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(net.minecraft.client.gui.screens.TitleScreen()))

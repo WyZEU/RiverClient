@@ -12,6 +12,7 @@ object ClientCore : ClientModInitializer {
     override fun onInitializeClient() {
         // Network channels belong to mod startup, before any connection.
         dev.wyz.clientcore.safety.FreelookOptOut.register()
+        dev.wyz.clientcore.cosmetic.AccessoryLayer.register()
         RiverRuntime.initialize()
     }
 }
