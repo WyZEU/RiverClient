@@ -327,7 +327,7 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
             // anchor point, so the call is spelled out separately here.
             val tilt = Quaternionf().rotateX(Math.toRadians(rotX.toDouble()).toFloat())
             val pose = Quaternionf().rotateZ(Math.PI.toFloat())
-                .mul(Quaternionf().rotateY(Math.toRadians(spin.toDouble()).toFloat()))
+                .mul(Quaternionf().rotateY(Math.toRadians((spin + if (accessoryTab()) 180f else 0f).toDouble()).toFloat()))
             val scale = h / 3.1f
             InventoryScreen.renderEntityInInventory(
                 g, x + inset, y + inset, x + w - inset, y + h - inset,
@@ -349,7 +349,7 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
             // set it on directly here.
             val tilt = Quaternionf().rotateX(Math.toRadians(rotX.toDouble()).toFloat())
             val pose = Quaternionf().rotateZ(Math.PI.toFloat())
-                .mul(Quaternionf().rotateY(Math.toRadians(spin.toDouble()).toFloat()))
+                .mul(Quaternionf().rotateY(Math.toRadians((spin + if (accessoryTab()) 180f else 0f).toDouble()).toFloat()))
             val scale = h / 3.1f
             val anchorX = (x + w / 2).toFloat()
             val anchorY = (y + h - 14).toFloat()
