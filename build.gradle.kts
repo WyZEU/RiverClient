@@ -171,6 +171,11 @@ tasks.processResources {
 tasks.named<ProcessResources>("processClientResources") {
     inputs.property("pack_format", packFormat)
     inputs.property("pack_format_range", packFormatRange)
+    // These post effects use uniform blocks introduced in 1.21.6. Older clients
+    // use the lyric halo fallback and do not offer the saturation setting.
+    if (minecraftVersion in setOf("1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4", "1.21.5")) {
+        exclude("assets/clientcore/post_effect/**")
+    }
     filesMatching("pack.mcmeta") {
         expand("pack_format" to packFormat, "pack_format_range" to packFormatRange)
     }
