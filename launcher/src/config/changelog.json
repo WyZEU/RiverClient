@@ -8,6 +8,7 @@
     "Added: The standalone mod updates itself. It downloads the new version in the background, checks it is a real River release, and switches to it the next time you start Minecraft.",
     "Fixed: With FancyMenu installed, River's main menu no longer covers FancyMenu's custom menus.",
     "Changed: Every River player now has the River badge, and it is smaller, the height of the letters next to it. Cinematic mode hides everyone's badges on your screen; other players still see yours.",
-    "Changed: The None card in Cosmetics shows River's red X."
+    "Changed: The None card in Cosmetics shows River's red X.",
+    "Improved: Security. Links only ever open as web pages, the launcher window can no longer be sent to a website, and file actions stay inside River's own folders."
   ]
 }

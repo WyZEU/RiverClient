@@ -198,6 +198,45 @@ function portableExecutableFile() {
   return String(process.env.PORTABLE_EXECUTABLE_FILE || "").trim();
 }
 
+/**
+ * Links only ever open as web pages or e-mail. Page links come from outside (Modrinth and
+ * CurseForge results, server lists, changelogs), and the system will happily run other kinds
+ * of address (file:, protocol handlers of installed apps), so anything else is refused.
+ */
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return ["https:", "http:", "mailto:"].includes(url.protocol) ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function openExternalSafely(value) {
+  const url = safeExternalUrl(value);
+  if (!url) return false;
+  await shell.openExternal(url);
+  return true;
+}
+
+/*
+  Every launcher window shows River's own local pages and has the launcher API through its
+  preload. A window that navigated to a website would hand that site the same API, so no window
+  may leave its local page: links go to the browser, pop-ups are refused, web views too.
+*/
+app.on("web-contents-created", (_event, contents) => {
+  contents.on("will-navigate", (navigation, url) => {
+    if (url.startsWith("file:")) return;
+    navigation.preventDefault();
+    openExternalSafely(url).catch(() => {});
+  });
+  contents.setWindowOpenHandler(({ url }) => {
+    openExternalSafely(url).catch(() => {});
+    return { action: "deny" };
+  });
+  contents.on("will-attach-webview", (attach) => attach.preventDefault());
+});
+
 function launchDedicatedUpdaterProcess(update) {
   // The portable build cannot self-update. It runs from a temp extraction that holds
   // only the self-extracting exe and app.asar - no icudtl.dat, no .pak, no DLLs - so
@@ -207,7 +246,7 @@ function launchDedicatedUpdaterProcess(update) {
   // to the new portable download instead.
   if (portableExecutableFile() || !IS_WINDOWS) {
     const target = manualUpdateTarget(update, RIVER_WEBSITE_URL);
-    shell.openExternal(target).catch(() => {});
+    openExternalSafely(target).catch(() => {});
     const message = (IS_WINDOWS
       ? `River Client ${update?.latestVersion || ""} is ready. The portable build can't update itself, so the download has been opened in your browser - replace your current River Client.exe with it.`
       : `River Client ${update?.latestVersion || ""} is ready. River on ${IS_MAC ? "macOS" : "Linux"} can't update itself yet, so the download has been opened in your browser - replace your current copy with it.`
@@ -5342,15 +5381,22 @@ ipcMain.handle("launcher:clear-logs", () => {
   return { ok: true, message: `Cleared ${cleared} log file${cleared !== 1 ? "s" : ""}.` };
 });
 
+/** Only a file the log list itself offered: the page cannot name any other file to delete or copy. */
+function knownLogFile(filePath) {
+  const wanted = path.resolve(String(filePath || ""));
+  const files = getLogFiles(getStatus().instancePath) || [];
+  return files.some((file) => path.resolve(String(file?.path || file || "")) === wanted) ? wanted : "";
+}
+
 ipcMain.handle("launcher:delete-log-file", (_event, filePath) => {
-  const target = String(filePath || "");
+  const target = knownLogFile(filePath);
   if (!target || !fs.existsSync(target)) return { ok: false, message: "Log file not found." };
   fs.rmSync(target, { force: true });
   return { ok: true, message: `${path.basename(target)} deleted.` };
 });
 
 ipcMain.handle("launcher:export-log-file", async (_event, filePath) => {
-  const target = String(filePath || "");
+  const target = knownLogFile(filePath);
   if (!target || !fs.existsSync(target)) return { ok: false, message: "Log file not found." };
   const selection = await dialog.showSaveDialog(mainWindow, {
     title: "Export log file",
@@ -5392,9 +5438,15 @@ ipcMain.handle("launcher:open-folder", async (_event, folder) => {
   return true;
 });
 
+// Folders, and reports and logs as text. Opening any other file could start a program,
+// so the page cannot use this to run anything.
+const OPENABLE_FILES = new Set([".txt", ".log", ".json", ".png", ".jpg"]);
+
 ipcMain.handle("launcher:open-path", async (_event, targetPath) => {
   const target = String(targetPath || "");
   if (!target || !fs.existsSync(target)) return false;
+  const isFolder = fs.statSync(target).isDirectory();
+  if (!isFolder && !OPENABLE_FILES.has(path.extname(target).toLowerCase())) return false;
   await shell.openPath(target);
   return true;
 });
@@ -5890,6 +5942,8 @@ ipcMain.handle("launcher:set-mod-enabled", (_event, request, enabledArg) => {
 ipcMain.handle("launcher:remove-mod", (_event, request) => {
   const payload = typeof request === "object" && request !== null ? request : { file: request };
   const file = String(payload.file || "").trim();
+  // A plain file name in the mods folder, never a path that climbs out of it.
+  if (!file || file !== path.basename(file) || file === "." || file === "..") return { ok: false, message: "Mod file was not found." };
   if (isCoreClientMod(file)) return { ok: false, message: "River Client Core is required and cannot be removed." };
   const instancePath = resolveInstancePath(payload);
   if (!instancePath) return { ok: false, message: "Instance path was not found." };
@@ -5911,6 +5965,7 @@ ipcMain.handle("launcher:remove-content", (_event, request = {}) => {
   const info = contentTypeInfo(contentType);
   const file = String(request.file || "").trim();
   if (!file) return { ok: false, message: `No ${info.label} file was selected.` };
+  if (file !== path.basename(file) || file === "." || file === "..") return { ok: false, message: `${info.label} file was not found.` };
   if (contentType === "mod" && isCoreClientMod(file)) {
     return { ok: false, message: "River Client's in-game mod is required and cannot be removed." };
   }
@@ -6540,10 +6595,7 @@ ipcMain.handle("launcher:update-all-mods", async (_event, request = {}) => {
   return result;
 });
 
-ipcMain.handle("launcher:open-external", async (_event, url) => {
-  await shell.openExternal(url);
-  return true;
-});
+ipcMain.handle("launcher:open-external", async (_event, url) => openExternalSafely(url));
 
 /*
   River instances can run a newer Fabric Loader than the default, for mods that want one. River's
@@ -8984,7 +9036,7 @@ async function signInWithMicrosoft() {
       userCode: device.user_code,
       verificationUri: device.verification_uri
     });
-    if (device.verification_uri) await shell.openExternal(device.verification_uri);
+    if (device.verification_uri) await openExternalSafely(device.verification_uri);
     authSession.assertCurrent(attempt);
 
     emit("launcher:auth", {
