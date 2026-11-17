@@ -30,9 +30,14 @@ object CoverLookup {
     }
 
     /** The cover's path when it is already here, otherwise "" and a lookup starts. */
+    // The last song asked about and its key, so a song is hashed once rather than every poll.
+    private var lastSong = ""
+    private var lastKey = ""
+
     fun fileFor(title: String, artist: String): String {
         if (title.isBlank()) return ""
-        val key = keyOf(title, artist)
+        val song = title + "|" + artist
+        val key = if (song == lastSong) lastKey else keyOf(title, artist).also { lastSong = song; lastKey = it }
         val file = dir.resolve("$key.png")
         if (Files.isRegularFile(file)) return file.toString()
         val failedAt = tried[key]

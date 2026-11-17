@@ -426,7 +426,21 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
 
     // ------------------------------------------------------------------ compact bar
 
-    private fun compactText(t: Track): String = if (t.artist.isBlank()) t.title else "${t.title} - ${t.artist}"
+    // "Song - Artist", built once per song rather than every frame.
+    private var compactFor: Track? = null
+    private var compactLine = ""
+    private fun compactText(t: Track): String {
+        if (compactFor?.title != t.title || compactFor?.artist != t.artist) {
+            compactFor = t
+            compactLine = if (t.artist.isBlank()) t.title else "${t.title} - ${t.artist}"
+        }
+        return compactLine
+    }
+
+    // The song's lyrics, asked for a few times a second rather than every frame.
+    private var lyricsAskedAt = 0L
+    private var lyricsSong = ""
+    private var lyricsLines: List<dev.wyz.clientcore.lyrics.LyricLine>? = null
 
     private fun compactSize(client: Minecraft, t: Track, line: Pair<BarLine, Long>?): IntArray {
         val font = client.font
@@ -482,7 +496,14 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         val session = dev.wyz.clientcore.media.MediaSession.current()
         val pb = if (session != null) Playback(session.title, session.artist, session.album, (session.durationMs / 1000L).toInt(), session.positionMs, session.playing)
             else playback() ?: return null
-        val lines = (LyricsService.stateFor(pb.title, pb.artist, pb.album, pb.durationSec) as? LyricsState.Ready)?.lines ?: return null
+        val now = System.currentTimeMillis()
+        val song = pb.title + "|" + pb.artist + "|" + pb.durationSec
+        if (song != lyricsSong || now - lyricsAskedAt > 250L) {
+            lyricsSong = song
+            lyricsAskedAt = now
+            lyricsLines = (LyricsService.stateFor(pb.title, pb.artist, pb.album, pb.durationSec) as? LyricsState.Ready)?.lines
+        }
+        val lines = lyricsLines ?: return null
         val pos = pb.positionMs + lyrics.offsetMs()
         val index = LrcParser.indexAt(lines, pos)
         val l = lines.getOrNull(index) ?: return null
