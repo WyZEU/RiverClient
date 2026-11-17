@@ -599,7 +599,11 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null) 
         }
 
         // Name and description as one block centred in the card, the icon centred beside it.
-        val nameY = cy + (h - 23) / 2
+        // A description too long for one line takes a second instead of being cut off; the
+        // name and description then sit a little higher so the pair stays centred.
+        val descText = if (module.enabled && ServerSafety.cinematicMode) "Paused by cinematic mode" else module.description
+        val descLines = wrapTwo(descText, w - 54)
+        val nameY = cy + (h - (if (descLines.size > 1) 33 else 23)) / 2
         val descY = nameY + 14
         RiverIcons.draw(g, module.icon, x + 14, cy + (h - 16) / 2, 16, if (module.enabled) ClientUi.TEXT else ClientUi.MUTED)
 
@@ -623,27 +627,16 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null) 
             }
         }
 
-        val descColor: Int
-        val desc: String
-        when {
-            module.enabled && ServerSafety.cinematicMode -> {
-                desc = "Paused by cinematic mode"
-                descColor = ClientUi.WARNING
-            }
-            else -> {
-                desc = module.description
-                descColor = ClientUi.DIM
-            }
-        }
-        val descRoom = w - (textX - x) - 14
-        g.drawString(font, trim(desc, descRoom), textX, descY, descColor, false)
-        if (hovered && font.width(desc) > descRoom) {
+        val descColor = if (module.enabled && ServerSafety.cinematicMode) ClientUi.WARNING else ClientUi.DIM
+        descLines.forEachIndexed { i, line -> g.drawString(font, line, textX, descY + i * 10, descColor, false) }
+        // Longer still than two lines: the whole of it shows as a tooltip, as before.
+        if (hovered && descLines.joinToString(" ") != descText) {
             tipSeen = true
             if (tipFor != module.id) {
                 tipFor = module.id
                 tipSince = System.currentTimeMillis()
             }
-            tipText = desc
+            tipText = descText
         }
 
         // The toggle lines up with the name; hit boxes follow the same offset from y.
@@ -668,6 +661,36 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null) 
             RiverIcons.draw(g, "gear", gearX, nameY - 1, 11, ClientUi.alpha(gearColor, controls))
         }
         contentHit(gearX - 3, y + rowShift - 5, 16, 16) { openPanelFor(module) }
+    }
+
+    /** [text] in at most two lines of [room] pixels, words kept whole; the second line ends in an ellipsis if it is still too long. */
+    private fun wrapTwo(text: String, room: Int): List<String> {
+        if (room <= 0 || font.width(text) <= room) return listOf(text)
+        val words = text.split(' ')
+        // Break where the two lines come out most even, so no word is left alone on the second.
+        var best: List<String>? = null
+        var bestWidth = Int.MAX_VALUE
+        for (cut in 1 until words.size) {
+            val a = words.subList(0, cut).joinToString(" ")
+            val b = words.subList(cut, words.size).joinToString(" ")
+            val widest = maxOf(font.width(a), font.width(b))
+            if (widest <= room && widest < bestWidth) {
+                best = listOf(a, b)
+                bestWidth = widest
+            }
+        }
+        if (best != null) return best
+        var first = ""
+        var used = 0
+        for (word in words) {
+            val next = if (first.isEmpty()) word else "$first $word"
+            if (font.width(next) > room) break
+            first = next
+            used++
+        }
+        if (used == 0) return listOf(trim(text, room))
+        val rest = words.drop(used).joinToString(" ")
+        return if (rest.isEmpty()) listOf(first) else listOf(first, trim(rest, room))
     }
 
     private fun openPanelFor(module: Module) {
