@@ -38,7 +38,8 @@ object ClientKeybinds {
     private var menuWasDown = false
     private var menuArmed = false
     private var socialTriggeredWhileMenuHeld = false
-    private var zoomKeyWasDown = false
+    /** The zoom key the frame reader was last set up for, so it is only rebuilt when it changes. */
+    private var zoomKeyBound = Int.MIN_VALUE
     private var socialWasDown = false
     private var cinematicWasDown = false
 
@@ -149,18 +150,19 @@ object ClientKeybinds {
             ZoomController.smooth = cfg.smooth
             ZoomController.scrollToZoom = cfg.scrollToZoom
             ZoomController.reduceSensitivity = cfg.reduceSensitivity
-            val down = !typing && GLFW.glfwGetKey(window, zoom.holdKey()) == GLFW.GLFW_PRESS
-            if (cfg.toggle) {
-                if (down && !zoomKeyWasDown) ZoomController.zooming = !ZoomController.zooming
-                // Opening a screen ends a toggled zoom, as it would a held one.
-                if (typing) ZoomController.zooming = false
-            } else {
-                ZoomController.zooming = down
+            ZoomController.toggle = cfg.toggle
+            // The key itself is read every frame by ZoomController, not here at 20 ticks a second.
+            val key = zoom.holdKey()
+            if (key != zoomKeyBound) {
+                zoomKeyBound = key
+                ZoomController.keyDown = { client.screen == null && GLFW.glfwGetKey(window, key) == GLFW.GLFW_PRESS }
             }
-            zoomKeyWasDown = down
+            ZoomController.enabled = true
+            // Opening a screen ends a toggled zoom, as it would a held one.
+            if (typing && cfg.toggle) ZoomController.zooming = false
         } else {
+            ZoomController.enabled = false
             ZoomController.zooming = false
-            zoomKeyWasDown = false
         }
     }
 }
