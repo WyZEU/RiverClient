@@ -7363,7 +7363,9 @@ const RIVER_CAPES = [
   { id: "prism", label: "Prism", plus: true },
   // "My Cape" is a picture on the player's own PC; it is picked in game, not here.
   { id: "custom", label: "My Cape", local: true },
-  { id: "fox", label: "Fox" }
+  { id: "fox", label: "Fox" },
+  // For people boosting the River Discord, while they boost: claimed with /boostercape.
+  { id: "booster", label: "Booster" }
 ];
 
 function riverProfilePath(instancePath) {
@@ -7400,7 +7402,7 @@ ipcMain.handle("launcher:get-river-cosmetics", async () => {
 
   const base = "https://updates.riverclient.xyz/cosmetics";
   const uuid = String(readAuth()?.profile?.id || "");
-  const gated = [...((await fetchCosmeticList(`${base}/gated`, "gated")) || []), "axie", "casaeullo", "galaxy"];
+  const gated = [...((await fetchCosmeticList(`${base}/gated`, "gated")) || []), "axie", "casaeullo", "galaxy", "booster"];
   const owned = (uuid && await fetchCosmeticList(`${base}/owned?uuid=${encodeURIComponent(uuid)}`, "owned")) || [];
   const october = new Date().getMonth() === 9;
   const plus = Boolean(uuid && await fetch(`https://updates.riverclient.xyz/plus/status?uuid=${encodeURIComponent(uuid)}`).then((r) => r.json()).then((b) => b?.plus === true).catch(() => false));

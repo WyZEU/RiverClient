@@ -35,13 +35,13 @@ object RiverCape {
     private val BUILTIN_STYLES = listOf(
         "river", "axie", "hardcore", "eclipse", "eightball", "halloween", "casaeullo", "plus", "gilded",
         "ember", "forest", "sunset", "storm", "galaxy",
-        "royal", "prism", "custom", "fox"
+        "royal", "prism", "custom", "fox", "booster"
     )
 
     private val BUILTIN_LABELS = listOf(
         "River", "Axie", "Hardcore", "Eclipse", "8-Ball", "Halloween", "Casaeullo", "Plus", "Gilded",
         "Ember", "Forest", "Sunset", "Storm", "Galaxy",
-        "Royal", "Prism", "My Cape", "Fox"
+        "Royal", "Prism", "My Cape", "Fox", "Booster"
     )
 
     /**
@@ -205,7 +205,9 @@ object RiverCape {
         val self = Minecraft.getInstance().user.profileId
         if (uuid == self) {
             val module = ModuleRegistry.get<CapeModule>("cape") ?: return null
-            return if (module.active) module.selectedStyle().takeIf { available(it) } ?: STYLES[0] else null
+            // The Booster cape ends with the boost: once the server stops listing it as yours, you stop
+            // seeing it too, rather than keeping it on your own screen.
+            return if (module.active) module.selectedStyle().takeIf { available(it) && !(it == "booster" && CapeEntitlements.locked(it)) } ?: STYLES[0] else null
         }
         // Not checked against available(): that is about this player's own seasons. Whether
         // somebody else may wear a seasonal cape is decided by the server, which drops it from
