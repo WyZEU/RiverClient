@@ -3,7 +3,7 @@
   "title": "River Client 0.3.2",
   "summary": "A much smaller download.",
   "items": [
-    "Fixed: Freelook no longer turns on on Hypixel, which does not allow it. Pressing its key there says so once.",
+    "Fixed: Freelook no longer turns on on Hypixel or MCPVP.club, which do not allow it. Pressing its key there says so once.",
     "Fixed: A crash at start, \"Failed to load class file\", after which only Repair helped. The launcher could rewrite River's file while the game was starting; it now never touches it while the game runs, and replaces it in one step.",
     "Added: Minimize on the launch screen (or Esc) shrinks it into a small card, so you can use the launcher while the game starts.",
     "Improved: The Windows installer is back to about 230 MB instead of 1 GB. It carries River for Minecraft 1.21.11; other versions download the first time you play them.",

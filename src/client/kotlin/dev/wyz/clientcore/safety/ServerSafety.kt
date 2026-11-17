@@ -41,21 +41,25 @@ object ServerSafety {
     }
 
     /**
-     * Servers that do not allow freelook. Hypixel asked clients to keep it off in 2020 and
-     * treats it as a disallowed modification, so River does: it never turns on there.
+     * Servers that do not allow freelook, so River never turns it on there: by address (the
+     * domain and every subdomain), and by the brand a server sends, for anyone joining through an
+     * IP or a proxy. Hypixel asked clients to keep it off in 2020; MCPVP.club bans it too.
      */
-    private val noFreelookHosts = listOf("hypixel.net", "hypixel.io")
+    private class NoFreelook(val hosts: List<String>, val brand: String?)
 
-    /**
-     * Whether Freelook may run on the current connection. Off on Hypixel, recognised by its
-     * address or, for anyone joining through an IP or a proxy, by the brand the server sends.
-     */
+    private val noFreelook = listOf(
+        NoFreelook(listOf("hypixel.net", "hypixel.io"), "hypixel"),
+        NoFreelook(listOf("mcpvp.club"), "mcpvp")
+    )
+
+    /** Whether Freelook may run on the current connection. */
     fun freelookAllowed(client: Minecraft = Minecraft.getInstance()): Boolean {
         if (client.level == null || client.singleplayerServer != null) return true
         val host = client.currentServer?.ip?.substringBefore(':')?.trim()?.lowercase()?.removeSuffix(".").orEmpty()
-        if (noFreelookHosts.any { host == it || host.endsWith(".$it") }) return false
         val brand = runCatching { client.connection?.serverBrand() }.getOrNull().orEmpty().lowercase()
-        return !brand.contains("hypixel")
+        return noFreelook.none { rule ->
+            rule.hosts.any { host == it || host.endsWith(".$it") } || (rule.brand != null && brand.contains(rule.brand))
+        }
     }
 
     /** Cinematic mode: every module pauses and the watermark hides, for clean footage. */
