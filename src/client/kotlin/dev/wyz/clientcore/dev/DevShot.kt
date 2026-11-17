@@ -133,7 +133,7 @@ object DevShot {
             return
         }
         open(client, shots[index])
-        grabAt = now + 4500
+        grabAt = now + if (shots[index].startsWith("world-media-live")) 30_000 else 4500
     }
 
     private fun open(client: Minecraft, spec: String) {
@@ -154,7 +154,43 @@ object DevShot {
             client.setScreen(RiverMenuScreen(null, dev.wyz.clientcore.module.ModuleRegistry.get(name.removePrefix("world-mod-"))))
             return
         }
+        // A functional smoke pass in an isolated test world; no synthetic song or lyrics.
+        if (name.startsWith("world-audit-")) {
+            val registry = dev.wyz.clientcore.module.ModuleRegistry
+            val module = registry.get<dev.wyz.clientcore.module.Module>(name.removePrefix("world-audit-")) ?: error("Unknown audit module")
+            registry.all.forEach { it.enabled = false }
+            module.enabled = true
+            val settings = module.settings()
+            settings.forEach { setting ->
+                when (setting) {
+                    is dev.wyz.clientcore.module.settings.BoolSetting -> { val old = setting.get(); setting.set(!old); setting.set(old) }
+                    is dev.wyz.clientcore.module.settings.IntSetting -> { val old = setting.get(); setting.set(setting.min); setting.set(setting.max); setting.set(old) }
+                    is dev.wyz.clientcore.module.settings.ChoiceSetting -> { val old = setting.get(); setting.options.forEach(setting.set); setting.set(old) }
+                    is dev.wyz.clientcore.module.settings.ColorSetting -> { val old = setting.get(); setting.set(0xFF478AC9.toInt()); setting.set(old) }
+                    is dev.wyz.clientcore.module.settings.KeybindSetting -> { val old = setting.get(); setting.set(-1); setting.set(old) }
+                    else -> Unit // Actions can delete content or send messages; this pass does not invoke them.
+                }
+            }
+            dev.wyz.clientcore.config.ConfigService.save(config)
+            check(dev.wyz.clientcore.config.ConfigService.load().modules[module.id] == config.modules[module.id]) { "Profile roundtrip failed: ${module.id}" }
+            println("[river] module audit ${module.id}: ${settings.size} settings, enabled=${module.active}, profile roundtrip passed")
+            client.setScreen(RiverMenuScreen(null, module))
+            return
+        }
         when (name) {
+            "world-media-live" -> {
+                dev.wyz.clientcore.module.ModuleRegistry.all.forEach { it.enabled = it.id == "lyrics" || it.id == "now_playing" }
+                dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.LyricsModule>("lyrics")?.settings()
+                    ?.filterIsInstance<dev.wyz.clientcore.module.settings.BoolSetting>()
+                    ?.filter { it.label == "On screen" || it.label == "In the world" }?.forEach { it.set(true) }
+                // Keep a whole real line in view so the capture also exercises world text.
+                dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.LyricsModule>("lyrics")?.settings()
+                    ?.filterIsInstance<dev.wyz.clientcore.module.settings.ChoiceSetting>()?.forEach {
+                        if (it.label == "Show") it.set("Lines")
+                        if (it.label == "Layout") it.set("Center")
+                    }
+                client.setScreen(null)
+            }
             // Opened from the title screen, which is where a missing item component crashed 26.1.2.
             "river-menu" -> client.setScreen(RiverMenuScreen(null))
             "river-hud" -> client.setScreen(RiverHudEditorScreen(null))
@@ -729,6 +765,25 @@ object DevShot {
     private fun openWorld(client: Minecraft, name: String) {
         runCatching {
             val flows = Minecraft::class.java.methods.first { it.name == "createWorldOpenFlows" && it.parameterCount == 0 }.invoke(client)
+            if (java.lang.Boolean.getBoolean("river.devshot.createWorld") && !java.io.File(client.gameDirectory, "saves/$name/level.dat").exists()) {
+                val settingsClass = Class.forName("net.minecraft.world.level.LevelSettings")
+                val constructor = settingsClass.constructors.first { it.parameterCount == 7 }
+                val types = constructor.parameterTypes
+                val data = types[6].getField("DEFAULT").get(null)
+                val features = types[6].getMethod("enabledFeatures").invoke(data)
+                val rules = types[5].constructors.firstOrNull { it.parameterCount == 1 }?.newInstance(features)
+                    ?: types[5].getConstructor().newInstance()
+                val settings = constructor.newInstance(name, types[1].enumConstants.first { it.toString() == "CREATIVE" }, false,
+                    types[3].enumConstants.first { it.toString() == "PEACEFUL" }, true, rules, data)
+                val optionsClass = Class.forName("net.minecraft.world.level.levelgen.WorldOptions")
+                val options = optionsClass.getConstructor(Long::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType).newInstance(1L, false, false)
+                val presets = Class.forName("net.minecraft.world.level.levelgen.presets.WorldPresets")
+                val dimensions = presets.methods.first { it.name == "createFlatWorldDimensions" && it.parameterCount == 1 }
+                val factory = java.util.function.Function<Any, Any> { dimensions.invoke(null, it) }
+                flows.javaClass.methods.first { it.name == "createFreshLevel" && it.parameterCount == 5 }.invoke(flows, name, settings, options, factory, null)
+                println("[river] devshot creating test world $name")
+                return
+            }
             val open = flows.javaClass.methods.first {
                 it.name == "openWorld" && it.parameterCount == 2 && it.parameterTypes[0] == String::class.java
             }

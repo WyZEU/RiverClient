@@ -43,13 +43,12 @@ import dev.wyz.clientcore.compat.riverBlit
 /**
  * Now playing.
  *
- * The launcher's native helper reads the Windows media session and drops the track
- * JSON plus the real album cover into the file bridge; this only renders what it
- * finds. Shows the album art, track name and timestamp - no app branding text.
+ * Reads the launcher's file bridge or the game's platform media reader. Shows the
+ * available album art, track name and timestamp - no app branding text.
  *
  * When a menu is open (inventory, pause, etc.) it also shows previous / play-pause /
- * next controls; clicking one writes a command to the bridge that the launcher runs
- * against the media session. Purely a readout otherwise - server-safe.
+ * next controls; clicking one sends a command through the reader providing the
+ * displayed track. Purely a readout otherwise - server-safe.
  */
 class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your music", ModuleCategory.HUD, "spotify", 8, 244) {
 
@@ -159,9 +158,8 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
 
     /**
      * The song from the launcher's feed while it is fresh (the launcher started the game),
-     * otherwise straight from Windows through MediaSession, so the module also works when
-     * River was started some other way. That route has no album art; the Spotify mark shows
-     * instead.
+     * otherwise through MediaSession, so the module also works from other launchers.
+     * The macOS reader also supplies artwork; unavailable artwork uses the fallback mark.
      */
     private fun read(now: Long) {
         runCatching {
@@ -174,7 +172,8 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
                 dev.wyz.clientcore.media.MediaSession.current()?.let {
                     Track(
                         playing = it.playing, title = it.title, artist = it.artist, album = it.album,
-                        position = (it.positionMs / 1000L).toInt(), duration = (it.durationMs / 1000L).toInt()
+                        position = (it.positionMs / 1000L).toInt(), duration = (it.durationMs / 1000L).toInt(),
+                        artFile = it.artFile, source = it.source
                     )
                 }
             }

@@ -81,7 +81,9 @@ does not change a forced-update minimum. A missing, unreachable or invalidly
 signed Mac manifest reports an unavailable update check, with no Windows fallback.
 Quit River Client before dragging the replacement app into Applications;
 accounts and instances remain in the existing application-data directory.
-Windows media-session integration is not available on macOS.
+The in-game music panel and Lyrics use the macOS Now Playing session, including
+when the game is started without River Launcher. See [Mac music support](MACOS_MEDIA.md)
+for player requirements, verification and known limitations.
 
 ## Manual R2 publication
 
