@@ -957,6 +957,24 @@ export default {
       return new Response(result.body, { status: result.status, headers: adminHeaders });
     }
 
+    // The Discord bot's two calls for the Booster cape: a link code for a booster, and the
+    // list of who is boosting right now. Their own key (BOOSTER_ADMIN_KEY); with none set
+    // nobody gets in.
+    if (url.pathname === "/admin/booster/code" || url.pathname === "/admin/booster/sync") {
+      const { ok: authorised, lockedOut, headers: adminHeaders } = await adminGate(request, env, env.BOOSTER_ADMIN_KEY || "");
+      if (request.method === "OPTIONS") return new Response(null, { headers: adminHeaders });
+      if (!authorised) return new Response(lockedOut ? "Too many attempts." : "Unauthorized.", { status: lockedOut ? 429 : 401, headers: adminHeaders });
+      if (request.method !== "POST") return new Response("POST only.", { status: 405, headers: adminHeaders });
+      if (!env.COSMETICS_DO) return Response.json({ ok: false }, { status: 503, headers: adminHeaders });
+      const stub = env.COSMETICS_DO.get(env.COSMETICS_DO.idFromName("global"));
+      const result = await stub.fetch(`https://cosmetics${url.pathname === "/admin/booster/code" ? "/booster/code" : "/booster/sync"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(await request.json().catch(() => ({})))
+      });
+      return new Response(result.body, { status: result.status, headers: adminHeaders });
+    }
+
     /** Which cosmetics need redeeming at all, so the client can grey the right ones out. */
     if (url.pathname === "/cosmetics/gated") {
       return Response.json({ ok: true, gated: [...gatedCosmetics()] }, { headers });

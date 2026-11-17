@@ -36,6 +36,18 @@ export const GATED_COSMETICS = new Set(["axie", "casaeullo", "galaxy"]);
 export const PLUS_COSMETICS = new Set(["plus", "gilded", "royal", "prism"]);
 export const DAY_MS = 86_400_000;
 
+/*
+  The Booster cape: for people boosting the River Discord, for as long as they boost. A record
+  is `booster:<uuid> = { discordId, until, since }`. It is made when a booster redeems the
+  one-time code the Discord bot gave them (/boostercape), and the bot then sends the list of
+  everyone boosting every so often: whoever is on it gets `until` pushed a few days on, and
+  whoever is not loses the record at once. If the bot goes quiet the cape runs out by itself
+  after BOOSTER_GRACE_DAYS, so it can never outlive the boost by more than that.
+*/
+export const BOOSTER_COSMETICS = new Set(["booster"]);
+export const BOOSTER_GRACE_DAYS = 3;
+const BOOSTER_CODE_TTL_MS = 15 * 60 * 1000;
+
 export function plusActive(record, now = Date.now()) {
   return Boolean(record && Number(record.until) > now);
 }
@@ -45,7 +57,7 @@ export function plusActive(record, now = Date.now()) {
  * Halloween event is over, and from then on only to the players who earned it.
  */
 export function gatedCosmetics(now = Date.now()) {
-  const gated = new Set([...GATED_COSMETICS, ...PLUS_COSMETICS]);
+  const gated = new Set([...GATED_COSMETICS, ...PLUS_COSMETICS, ...BOOSTER_COSMETICS]);
   if (now >= HALLOWEEN_EVENT.endsAt) gated.add(HALLOWEEN_EVENT.cosmetic);
   return gated;
 }
@@ -153,8 +165,14 @@ export class Cosmetics {
 
   /** What a player may wear: what they redeemed or earned, plus the Plus capes while Plus is on. */
   async wearable(uuid, now = Date.now()) {
-    const owned = await this.ownedBy(uuid);
-    return plusActive(await this.plusRecord(uuid), now) ? [...new Set([...owned, ...PLUS_COSMETICS])] : owned;
+    const wearing = new Set(await this.ownedBy(uuid));
+    if (plusActive(await this.plusRecord(uuid), now)) for (const cape of PLUS_COSMETICS) wearing.add(cape);
+    if (plusActive(await this.boosterRecord(uuid), now)) for (const cape of BOOSTER_COSMETICS) wearing.add(cape);
+    return [...wearing];
+  }
+
+  async boosterRecord(uuid) {
+    return (await this.state.storage.get(`booster:${compactUuid(uuid)}`)) || null;
   }
 
   async checkRedeemLimit(visitor) {
@@ -207,6 +225,23 @@ export class Cosmetics {
         headers: { "Retry-After": String(retryAfter) }
       });
 
+      // A booster link code: one use, made for one Discord account, good for 15 minutes.
+      const boosterCode = await this.state.storage.get(`bcode:${code}`);
+      if (boosterCode) {
+        await this.state.storage.delete(`bcode:${code}`);
+        if (Number(boosterCode.expiresAt) < Date.now()) {
+          return Response.json({ ok: false, message: "That code has run out. Ask for a new one with /boostercape." }, { status: 410 });
+        }
+        const now = Date.now();
+        const compact = compactUuid(uuid);
+        // One Minecraft account per Discord account: linking again moves the cape.
+        const previous = await this.state.storage.get(`bdisc:${boosterCode.discordId}`);
+        if (previous && previous !== compact) await this.state.storage.delete(`booster:${previous}`);
+        await this.state.storage.put(`booster:${compact}`, { discordId: boosterCode.discordId, since: now, until: now + BOOSTER_GRACE_DAYS * DAY_MS });
+        await this.state.storage.put(`bdisc:${boosterCode.discordId}`, compact);
+        return Response.json({ ok: true, already: false, cosmetic: "booster" });
+      }
+
       const record = await this.state.storage.get(`code:${code}`);
       if (!record) return Response.json({ ok: false, message: "That code does not exist." }, { status: 404 });
       if (record.revoked) return Response.json({ ok: false, message: "That code is no longer active." }, { status: 410 });
@@ -239,6 +274,39 @@ export class Cosmetics {
       await this.state.storage.put(`own:${uuid}`, owned);
       await this.state.storage.put(`code:${code}`, record);
       return Response.json({ ok: true, already: false, cosmetic: record.cosmetic });
+    }
+
+    /*
+      Booster link codes and the booster list. Reached only through the worker's key-gated
+      routes. A code is made for one Discord account; redeeming it in game ties that account
+      to the Minecraft account doing the redeeming.
+    */
+    if (url.pathname === "/booster/code") {
+      const discordId = String(payload?.discordId || "").replace(/\D/g, "").slice(0, 24);
+      if (!discordId) return Response.json({ ok: false, message: "Need a Discord id." }, { status: 400 });
+      const code = `BOOST${randomCode(8)}`;
+      await this.state.storage.put(`bcode:${code}`, { discordId, expiresAt: Date.now() + BOOSTER_CODE_TTL_MS });
+      return Response.json({ ok: true, code, minutes: BOOSTER_CODE_TTL_MS / 60000 });
+    }
+
+    if (url.pathname === "/booster/sync") {
+      const ids = new Set((Array.isArray(payload?.discordIds) ? payload.discordIds : []).map((id) => String(id).replace(/\D/g, "")).filter(Boolean));
+      // A missing list must never be read as "nobody boosts": it would take every cape away.
+      if (!Array.isArray(payload?.discordIds)) return Response.json({ ok: false, message: "Need the list of boosters." }, { status: 400 });
+      const now = Date.now();
+      let kept = 0;
+      let removed = 0;
+      for (const [key, record] of await this.state.storage.list({ prefix: "booster:" })) {
+        if (ids.has(String(record?.discordId))) {
+          await this.state.storage.put(key, { ...record, until: now + BOOSTER_GRACE_DAYS * DAY_MS });
+          kept++;
+        } else {
+          await this.state.storage.delete(key);
+          await this.state.storage.delete(`bdisc:${record?.discordId}`);
+          removed++;
+        }
+      }
+      return Response.json({ ok: true, kept, removed });
     }
 
     if (url.pathname === "/owned") {
