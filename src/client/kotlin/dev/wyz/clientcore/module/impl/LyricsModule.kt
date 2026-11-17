@@ -62,6 +62,7 @@ class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you 
         val ALIGNS = listOf("Left", "Center", "Right")
         val ANIMATIONS = listOf("Fade", "Slide up", "None")
         val STYLES = listOf("Bar", "Plain")
+        val PLACES = listOf("Off", "Own bar", "Spotify bar")
     }
 
     /** The words in the world; LyricsWorldRenderer draws them. */
@@ -90,6 +91,8 @@ class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you 
 
     fun showWorld() = flag("ly_world", true)
     private fun showScreen() = flag("ly_screen", false)
+    /** The line being sung shows in the Spotify module's compact bar instead of the song name. */
+    fun inSpotifyBar() = flag("ly_in_bar", false)
     fun offsetMs() = scalar("ly_offset", 0).coerceIn(-3000, 3000)
     private fun lineMode() = scalar("ly_show", 0).coerceIn(0, 1) == 1
     private fun centered() = scalar("ly_layout", 0).coerceIn(0, 1) == 1
@@ -125,7 +128,11 @@ class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you 
         list.add(SectionSetting("Lyrics"))
         list.add(BoolSetting("In the world", { showWorld() }, { setFlag("ly_world", it) })
             .hint("Lyrics come from NetEase, KuGou and lrclib.net."))
-        list.add(BoolSetting("On screen", { showScreen() }, { setFlag("ly_screen", it) }))
+        list.add(ChoiceSetting("On screen", PLACES, { PLACES[if (inSpotifyBar()) 2 else if (showScreen()) 1 else 0] }, {
+            val place = PLACES.indexOf(it).coerceAtLeast(0)
+            setFlag("ly_screen", place == 1)
+            setFlag("ly_in_bar", place == 2)
+        }).hint("Spotify bar puts the line being sung in place of the song name."))
         list.add(IntSetting("Sync offset", -3000, 3000, { offsetMs() }, { setScalar("ly_offset", it) }, " ms")
             .hint("Raise it if the words come late."))
 

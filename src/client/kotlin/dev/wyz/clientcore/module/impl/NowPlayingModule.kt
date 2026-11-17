@@ -147,7 +147,6 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         list.add(SectionSetting("Now Playing"))
         list.add(BoolSetting("Compact", { flag("np_compact", true) }, { setFlag("np_compact", it) })
             .hint("A small bar. Hover or click it in a menu for the full player."))
-        list.add(BoolSetting("Lyrics in the bar", { flag("np_lyrics", true) }, { setFlag("np_lyrics", it) }))
         list.add(BoolSetting("Album art", { flag("np_art", true) }, { setFlag("np_art", it) }))
         list.add(BoolSetting("Progress bar", { flag("np_progress", true) }, { setFlag("np_progress", it) }))
         list.add(BoolSetting("Times", { flag("np_times", true) }, { setFlag("np_times", it) }))
@@ -203,7 +202,8 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
                 }
             }
             if (t == null) { track = null; return }
-            track = t
+            // No cover from the player: the song's cover from the iTunes lookup, once it has it.
+            track = if (t.artFile.isBlank() && flag("np_art", true)) t.copy(artFile = dev.wyz.clientcore.media.CoverLookup.fileFor(t.title, t.artist)) else t
             readAtMs = now
             if (t != null) {
                 val id = "${t.title}|${t.artist}|${t.duration}"
@@ -449,13 +449,15 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
 
     /** The lyric line being sung now with where the song is, or null when there is none to show. */
     private fun lyricLine(): Pair<BarLine, Long>? {
-        if (!flag("np_lyrics", true)) return null
+        // Only when Lyrics are on and set to show in this bar (Lyrics > On screen > Spotify bar).
+        val lyrics = ModuleRegistry.get<LyricsModule>("lyrics") ?: return null
+        if (!lyrics.enabled || !lyrics.inSpotifyBar()) return null
         // The same song source as the Lyrics module, so both share one fetched lyrics entry.
         val session = dev.wyz.clientcore.media.MediaSession.current()
         val pb = if (session != null) Playback(session.title, session.artist, session.album, (session.durationMs / 1000L).toInt(), session.positionMs, session.playing)
             else playback() ?: return null
         val lines = (LyricsService.stateFor(pb.title, pb.artist, pb.album, pb.durationSec) as? LyricsState.Ready)?.lines ?: return null
-        val pos = pb.positionMs + (ModuleRegistry.get<LyricsModule>("lyrics")?.offsetMs() ?: 0)
+        val pos = pb.positionMs + lyrics.offsetMs()
         val index = LrcParser.indexAt(lines, pos)
         val l = lines.getOrNull(index) ?: return null
         if (l.text.isBlank()) return null

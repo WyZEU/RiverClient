@@ -134,7 +134,7 @@ object DevShot {
             return
         }
         open(client, shots[index])
-        grabAt = now + if (shots[index].startsWith("world-media-live") || shots[index].startsWith("world-media-lyrics-only")) 30_000 else 4500
+        grabAt = now + if (shots[index].startsWith("world-media-live") || shots[index].startsWith("world-media-bar") || shots[index].startsWith("world-media-lyrics-only")) 30_000 else 4500
     }
 
     private fun open(client: Minecraft, spec: String) {
@@ -179,18 +179,19 @@ object DevShot {
             return
         }
         when (name) {
-            "world-media-live", "world-media-lyrics-only", "world-media-controls", "world-media-open" -> {
+            "world-media-live", "world-media-lyrics-only", "world-media-controls", "world-media-open", "world-media-bar" -> {
                 dev.wyz.clientcore.module.ModuleRegistry.all.forEach {
                     it.enabled = it.id == "lyrics" || (it.id == "now_playing" && name != "world-media-lyrics-only")
                 }
                 dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.LyricsModule>("lyrics")?.settings()
                     ?.filterIsInstance<dev.wyz.clientcore.module.settings.BoolSetting>()
-                    ?.filter { it.label == "On screen" || it.label == "In the world" }?.forEach { it.set(true) }
+                    ?.filter { it.label == "In the world" }?.forEach { it.set(true) }
                 // Keep a whole real line in view so the capture also exercises world text.
                 dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.LyricsModule>("lyrics")?.settings()
                     ?.filterIsInstance<dev.wyz.clientcore.module.settings.ChoiceSetting>()?.forEach {
                         if (it.label == "Show") it.set("Lines")
                         if (it.label == "Layout") it.set("Center")
+                        if (it.label == "On screen") it.set(if (name == "world-media-bar") "Spotify bar" else "Own bar")
                     }
                 val music = dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.NowPlayingModule>("now_playing")
                 // The controls audit clicks the full player's buttons; the compact bar only shows them once opened.
