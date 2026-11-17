@@ -64,7 +64,7 @@ function fixture(t, platform = "darwin") {
     for (const name of ["authPath", "readAuth", "isStoredAuth", "normalizeAuth", "normalizeCapeEntry", "writeAuth", "clearAuth",
       "hasUsableMinecraftToken", "withAuthRefreshError", "profilesPath", "readProfiles", "isStoredProfiles", "writeProfiles", "updateSavedAuth",
       "riverSessionFile", "readStoredRiverSession", "isStoredRiverSession", "storeRiverSession", "forgetRiverSession", "failRiverSignIn", "riverSignIn",
-      "riverPlusActive", "getStatus", "emitStatus", "signInWithMicrosoft", "refreshMicrosoftSession", "ensureFreshAuth"]) {
+      "riverPlusActive", "safeExternalUrl", "openExternalSafely", "getStatus", "emitStatus", "signInWithMicrosoft", "refreshMicrosoftSession", "ensureFreshAuth"]) {
       const match = new RegExp(`(?:async )?function ${name}\\(`).exec(source);
       assert.ok(match, name);
       const firstLineEnd = source.indexOf("\n", match.index);

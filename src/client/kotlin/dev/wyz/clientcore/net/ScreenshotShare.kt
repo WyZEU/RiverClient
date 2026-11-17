@@ -57,6 +57,9 @@ object ScreenshotShare {
         val contents = message.contents as? TranslatableContents ?: return message
         if (contents.key != "screenshot.success") return message
         val name = (contents.args.firstOrNull() as? Component)?.string ?: return message
+        // A server can send this same message with any name, so only a plain image file name
+        // in the screenshots folder gets the buttons, never a path out of it.
+        if (!Regex("^[A-Za-z0-9 _.()-]{1,120}\\.(png|jpg)$").matches(name) || name.contains("..")) return message
         val file = File(File(Minecraft.getInstance().gameDirectory, "screenshots"), name)
         if (!file.isFile) return message
 
