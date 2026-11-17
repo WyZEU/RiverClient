@@ -173,6 +173,13 @@ object RiverIcons {
         }
 
         when (icon) {
+            "music" -> {
+                rect(4f, 2f, 1f, 7f)
+                rect(8f, 1f, 1f, 7f)
+                rect(4f, 1f, 5f, 2f)
+                rect(2f, 8f, 3f, 2f)
+                rect(6f, 7f, 3f, 2f)
+            }
             // --- categories
             "monitor" -> { frame(1f, 2f, 10f, 7f); rect(4f, 10f, 4f, 1f); rect(5.5f, 9f, 1f, 1f) }
             "eye" -> { rect(2f, 5f, 8f, 3f); rect(3f, 4f, 6f, 5f); rect(5f, 5.5f, 2f, 2f) }

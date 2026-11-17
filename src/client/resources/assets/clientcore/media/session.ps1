@@ -28,6 +28,7 @@ try {
 }
 
 $commandFile = Join-Path $PSScriptRoot 'command.txt'
+$jamFile = Join-Path $PSScriptRoot 'jam-command.json'
 $lastTrack = ''
 $chosenApp = ''
 # For players that report no timeline: how long this song has been playing, as far as can be seen.
@@ -74,6 +75,22 @@ while ($true) {
             $timeline = $session.GetTimelineProperties()
             $playing = $session.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing'
             $now = [DateTimeOffset]::UtcNow
+            if (Test-Path $jamFile) {
+                try {
+                    $jam = Get-Content $jamFile -Raw | ConvertFrom-Json
+                    Remove-Item $jamFile -Force
+                    if ($chosenApp -match 'Spotify' -and $jam.title -ceq [string]$props.Title -and $jam.artist -ceq [string]$props.Artist -and
+                        [Math]::Abs($now.ToUnixTimeMilliseconds() - [int64]$jam.at) -lt 5000 -and $jam.positionMs -ge 0 -and $jam.positionMs -le 86400000) {
+                        $currentPosition = $timeline.Position.TotalMilliseconds
+                        if ($playing) { $currentPosition += ($now - $timeline.LastUpdatedTime).TotalMilliseconds }
+                        if ([Math]::Abs($currentPosition - [int64]$jam.positionMs) -gt 1500) {
+                            [void](Await ($session.TryChangePlaybackPositionAsync(([int64]$jam.positionMs * 10000))) ([bool]))
+                        }
+                        if ($jam.playing -eq $true -and -not $playing) { [void](Await ($session.TryPlayAsync()) ([bool])) }
+                        if ($jam.playing -eq $false -and $playing) { [void](Await ($session.TryPauseAsync()) ([bool])) }
+                    }
+                } catch {}
+            }
 
             # Spotify does not always update its timeline when the next song starts, so for a
             # moment the old song's position is still reported. A position from before the
@@ -107,6 +124,7 @@ while ($true) {
                 title      = [string]$props.Title
                 artist     = [string]$props.Artist
                 album      = [string]$props.AlbumTitle
+                source     = $chosenApp
                 positionMs = [int64]$position
                 durationMs = [int64]$songLength
             } | ConvertTo-Json -Compress

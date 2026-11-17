@@ -52,6 +52,8 @@ jobs:
         run: |
           ELECTRON_RUN_AS_NODE=1 launcher/dist/linux-unpacked/river-client -e 'const assert = require("node:assert/strict"); const pkg = require(process.cwd() + "/launcher/dist/linux-unpacked/resources/app.asar/package.json"); assert.equal(pkg.version, require("./launcher/package.json").riverVersion); console.log("Linux Electron", process.versions.electron, "version", pkg.version);'
           node launcher/scripts/linux-release-artifact.js
+      - name: Upgrade the current public Linux client and verify login across restart
+        run: node launcher/tests/linux-upgrade.cjs launcher/dist/River-Client-Linux.tar.gz
       - name: Retain the verified Linux build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

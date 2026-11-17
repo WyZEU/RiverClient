@@ -1,7 +1,10 @@
 package dev.wyz.clientcore.lyrics
 
 import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.Font
 import net.minecraft.core.BlockPos
+import net.minecraft.locale.Language
+import net.minecraft.network.chat.Component
 import net.minecraft.world.phys.Vec3
 import kotlin.math.abs
 import kotlin.math.asin
@@ -51,6 +54,35 @@ class LyricScene {
         val driftSeed: Float
     ) {
         var fadeAt = Long.MAX_VALUE
+        internal val layouts = arrayOfNulls<TextLayout>(LyricFonts.NAMES.size)
+    }
+
+    class TextLayout(val plain: Array<Component>, val bold: Array<Component>, val widths: IntArray,
+                     val boldWidths: IntArray, val space: Int, val width: Int)
+
+    private class Measured(val text: Component, val width: Int)
+    private val measured = HashMap<String, Array<Measured>>()
+    private var measuredFont: Font? = null
+    private var measuredLanguage: Language? = null
+
+    private fun prepareWord(font: Font, word: String) = measured.getOrPut(word) {
+        Array(LyricFonts.NAMES.size * 2) { i ->
+            val text = LyricFonts.styled(word, i / 2, i % 2 != 0)
+            Measured(text, font.width(text))
+        }
+    }
+
+    /** Only prepared glyphs reach the world renderer; resource reloads are warmed on the tick. */
+    fun layout(piece: Piece, face: Int): TextLayout? {
+        if (measuredLanguage !== Language.getInstance() || measuredFont !== Minecraft.getInstance().font) return null
+        piece.layouts[face]?.let { return it }
+        val words = piece.words.map { measured[it] ?: return null }
+        val space = measured[" "]?.get(face * 2)?.width ?: return null
+        val widths = IntArray(words.size) { words[it][face * 2].width }
+        return TextLayout(Array(words.size) { words[it][face * 2].text },
+            Array(words.size) { words[it][face * 2 + 1].text }, widths,
+            IntArray(words.size) { words[it][face * 2 + 1].width }, space,
+            widths.sum() + space * (words.size - 1)).also { piece.layouts[face] = it }
     }
 
     private class Pending(val word: String, val sungAt: Long, val heldUntil: Long, val fadeAt: Long, val index: Int)
@@ -107,6 +139,9 @@ class LyricScene {
     fun clear() {
         pieces.clear()
         pending.clear()
+        measured.clear()
+        followPos = null
+        lastFollowNs = 0L
     }
 
     /**
@@ -118,11 +153,23 @@ class LyricScene {
      */
     fun warmGlyphs(client: Minecraft) {
         val font = client.font
-        for (face in LyricFonts.NAMES.indices) for (bold in booleanArrayOf(false, true)) {
-            font.width(LyricFonts.styled(" ", face, bold))
-            for (p in pending) font.width(LyricFonts.styled(p.word, face, bold))
-            for (piece in pieces) for (w in piece.words) font.width(LyricFonts.styled(w, face, bold))
+        val language = Language.getInstance()
+        // Language is replaced with every resource reload, including a font-pack change.
+        if (measuredFont !== font || measuredLanguage !== language) {
+            measured.clear()
+            pieces.forEach { it.layouts.fill(null) }
+            measuredFont = font
+            measuredLanguage = language
         }
+        if (measured.size > 512) {
+            val live = hashSetOf(" ")
+            pending.forEach { live += it.word }
+            pieces.forEach { live.addAll(it.words) }
+            measured.keys.retainAll(live)
+        }
+        prepareWord(font, " ")
+        for (p in pending) prepareWord(font, p.word)
+        for (piece in pieces) for (word in piece.words) prepareWord(font, word)
     }
 
     /** Lets everything up there fade out (a new line, a pause, the song changed). */
@@ -173,6 +220,8 @@ class LyricScene {
         }
         if (raw.isEmpty()) return
         val words = raw.map { if (config.uppercase) it.uppercase() else it }.toTypedArray()
+        warmGlyphs(client)
+        words.forEach { prepareWord(client.font, it) }
         val eye = player.getEyePosition(1f)
         val look = player.getViewVector(1f)
         val yaw = yawOf(look)
@@ -199,8 +248,8 @@ class LyricScene {
                 // Words in a row ahead, each appearing as it is sung, the whole row fitted to the view.
                 val font = client.font
                 val stretch = LyricFonts.stretch(config.face)
-                val space = font.width(LyricFonts.styled(" ", config.face, false)).toFloat()
-                val widths = words.map { font.width(LyricFonts.styled(it, config.face, false)).toFloat() }
+                val space = measured.getValue(" ")[config.face * 2].width.toFloat()
+                val widths = words.map { measured.getValue(it)[config.face * 2].width.toFloat() }
                 val total = widths.sum() + space * (words.size - 1)
                 val center = inFront(client, eye, centerPos(eye, pitch, yaw, config))
                 val right = Vec3.directionFromRotation(0f, yaw + 90f)
@@ -383,9 +432,8 @@ class LyricScene {
     }
 
     private fun textWidth(client: Minecraft, words: Array<String>, face: Int): Int {
-        val font = client.font
-        val space = font.width(LyricFonts.styled(" ", face, false))
-        return words.sumOf { font.width(LyricFonts.styled(it, face, false)) } + space * (words.size - 1)
+        val space = measured.getValue(" ")[face * 2].width
+        return words.sumOf { measured.getValue(it)[face * 2].width } + space * (words.size - 1)
     }
 
     private fun horizontalFov(client: Minecraft): Double {

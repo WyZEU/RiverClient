@@ -9884,9 +9884,11 @@ async function installLauncherUpdate(forcedUpdate = null) {
     return { ok: true, message: "River Client is already up to date." };
   }
   if (!app.isPackaged) return { ok: false, message: "Package updates only run in the installed launcher build." };
+  if (IS_LINUX) return installLinuxLauncherUpdate();
   if (!isUpdaterMode) {
     try {
-      launchDedicatedUpdaterProcess(update);
+      const started = launchDedicatedUpdaterProcess(update);
+      if (!started.ok) return started;
       appIsQuitting = true;
       setTimeout(() => {
         try { app.quit(); } catch {}
@@ -10060,6 +10062,50 @@ async function installLauncherUpdate(forcedUpdate = null) {
   }, 120);
   try { app.quit(); } catch {}
   return { ok: true, message: "River Client is restarting to finish the update." };
+}
+
+let linuxUpdateRunning = false;
+async function installLinuxLauncherUpdate() {
+  if (linuxUpdateRunning) return { ok: false, message: "An update is already running." };
+  linuxUpdateRunning = true;
+  let downloadDir;
+  try {
+    // Re-read and verify the signed manifest; the updater handoff is not a trust source.
+    const manifest = await fetchRemoteUpdateManifest();
+    if (!manifest || !verifyManifest(manifest.payload)) throw new Error("The release signature could not be verified.");
+    if (compareVersions(manifest.payload.version, readBuildVersion()) <= 0) return { ok: true, message: "River Client is already up to date." };
+    const { linuxPackage, prepareLinuxUpdate } = require("./linux-update.js");
+    const expected = linuxPackage(manifest.payload);
+    const installDir = ofs.realpathSync(path.dirname(app.getPath("exe")));
+    ofs.accessSync(path.dirname(installDir), ofs.constants.W_OK);
+    downloadDir = ofs.mkdtempSync(path.join(os.tmpdir(), "river-linux-download-"));
+    const archive = path.join(downloadDir, "River-Client-Linux.tar.gz");
+    await downloadUpdatePackage(expected.url, archive, { totalBytes: expected.size });
+    emitActivity({ title: "Updating River Client", detail: "Verifying Linux files...", current: 3, total: 5 });
+    const job = await prepareLinuxUpdate({ archive, installDir, expected });
+    const helper = path.join(job.work, "apply.js");
+    const jobFile = path.join(job.work, "job.json");
+    ofs.writeFileSync(helper, fs.readFileSync(path.join(__dirname, "linux-update.js")), { mode: 0o600 });
+    ofs.writeFileSync(jobFile, JSON.stringify(job), { mode: 0o600 });
+    const child = spawn(app.getPath("exe"), [helper, jobFile], {
+      cwd: job.work, detached: true, stdio: "ignore", env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" }
+    });
+    await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
+    child.unref();
+    emitActivity({ title: "Updating River Client", detail: "Restarting River Client...", current: 5, total: 5 });
+    appIsQuitting = true;
+    setTimeout(() => app.quit(), 120);
+    return { ok: true, message: "River Client is restarting to finish the update." };
+  } catch (error) {
+    const message = error.code === "EACCES" || error.code === "EPERM"
+      ? "The Linux installation folder is read-only. Move River to a writable folder or replace it manually."
+      : `Linux update failed: ${error.message}`;
+    emitActivity({ title: "Updating River Client", detail: message, current: 1, total: 1, done: true, error: true });
+    return { ok: false, message };
+  } finally {
+    if (downloadDir) ofs.rmSync(downloadDir, { recursive: true, force: true });
+    linuxUpdateRunning = false;
+  }
 }
 
 /** Preview-only: animates a fake update so the updater window can be inspected without a real release. */
@@ -11877,6 +11923,7 @@ const pvpPresetMods = [
 ];
 
 const optimizationSuiteMods = [
+  { name: "BadOptimizations", query: "BadOptimizations", slug: "badoptimizations", optional: true, gameVersions: ["1.21.11"] },
   { name: "Sodium", query: "Sodium", slug: "sodium", optional: false },
   { name: "Lithium", query: "Lithium", slug: "lithium", optional: false },
   { name: "FerriteCore", query: "FerriteCore", slug: "ferrite-core", optional: false },
@@ -12440,6 +12487,10 @@ async function ensureOptimizationSuite(instancePath, gameVersion, loader = "fabr
   const visited = new Set();
   for (let index = 0; index < optimizationSuiteMods.length; index += 1) {
     const mod = optimizationSuiteMods[index];
+    if (mod.gameVersions && !mod.gameVersions.includes(gameVersion)) {
+      skipped.push(`${mod.name}: not verified for ${gameVersion}`);
+      continue;
+    }
     emitActivity({
       title: "Installing performance mods",
       detail: `Installing ${mod.name}...`,

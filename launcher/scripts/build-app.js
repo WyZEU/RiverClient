@@ -34,6 +34,7 @@ if (process.env.RIVER_RELEASE_BUILD === "1") {
 fs.writeFileSync(buildVersionPath, JSON.stringify(buildVersion, null, 2));
 // PowerShell helper for the now-playing feed: a data file, not something esbuild bundles.
 fs.copyFileSync(path.join(root, "src", "now-playing.ps1"), path.join(out, "now-playing.ps1"));
+fs.copyFileSync(path.join(root, "src", "linux-update.js"), path.join(out, "linux-update.js"));
 // Now-playing native helper: extracts media-session metadata AND album art (the .ps1
 // fallback cannot get artwork). Recompile from source when csc is available so the
 // binary stays in sync; otherwise ship the checked-in prebuilt exe as-is.

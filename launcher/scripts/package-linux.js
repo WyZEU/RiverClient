@@ -51,8 +51,10 @@ missing system library. On Debian and Ubuntu:
 
     sudo apt install libgtk-3-0 libnss3 libasound2 libgbm1
 
-River downloads Java 21 for you if it does not find one. Updates are manual for now:
-River tells you when a new version is out and opens the download page.
+River downloads the required Java version if it does not find one. Updates install from
+River when this folder and its parent are writable. The previous copy stays in the
+adjacent .river-update-* folder for recovery. Accounts and game instances are preserved.
+For a read-only installation, extract the new archive and replace the launcher manually.
 
 Problems: https://discord.riverclient.xyz
 `;

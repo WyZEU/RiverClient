@@ -26,6 +26,7 @@ import { MOJANG_PLAYER_CERTIFICATE_KEYS } from "./mojang-keys.js";
 import { BLOCKED_MESSAGE, isBlocked } from "./blocklist.js";
 import { HALLOWEEN_EVENT, advanceEventPlay, eventStatus } from "./events.js";
 import { grantCosmetic, plusOf } from "./cosmetics.js";
+import { MusicJams } from "./music-jam.js";
 
 const MAX_FRIENDS = 200;
 const MAX_REQUESTS = 100;
@@ -40,6 +41,12 @@ const PENDING_AUTH_TTL_MS = 2 * 60 * 1000;
 /** A user counts as online this long after their last heartbeat. */
 const ONLINE_WINDOW_MS = 60 * 1000;
 const ACTION_LIMITS = {
+  "/jam/create": [[3, 60_000]],
+  "/jam/invite": [[8, 60_000]],
+  "/jam/join": [[8, 60_000]],
+  "/jam/leave": [[8, 60_000]],
+  "/jam/state": [[6, 60_000]],
+  "/jam/publish": [[8, 10_000], [60, 60_000]],
   "/dm/send": [[8, 10_000], [60, 5 * 60_000]],
   "/friends/request": [[5, 60_000], [20, 60 * 60_000]],
   "/report": [[3, 10 * 60_000], [10, 24 * 60 * 60_000]]
@@ -584,6 +591,7 @@ export class Social {
     /** Verified UUID and action -> timestamps. No IP or message text is stored here. */
     this.actionHits = new Map();
     this.now = () => Date.now();
+    this.jamQueue = Promise.resolve();
   }
 
   actionRetryAfter(uuid, route) {
@@ -677,7 +685,25 @@ export class Social {
     if (route === "/auth/begin") return json({ ok: true, ...(await this.store.beginAuth()) });
 
     let body = {};
-    if (request.method === "POST") body = await request.json().catch(() => ({}));
+    if (request.method === "POST") {
+      if (route.startsWith("/jam/")) {
+        const reader = request.body?.getReader();
+        let bytes = 0;
+        const chunks = [];
+        if (reader) while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          bytes += value.length;
+          if (bytes > 96_000) { await reader.cancel(); return fail("Music Jam message is too large.", 413); }
+          chunks.push(value);
+        }
+        const data = new Uint8Array(bytes);
+        let offset = 0;
+        for (const chunk of chunks) { data.set(chunk, offset); offset += chunk.length; }
+        try { body = JSON.parse(new TextDecoder().decode(data)); } catch { return fail("Invalid Music Jam message.", 400); }
+        if (!body || typeof body !== "object" || Array.isArray(body)) return fail("Invalid Music Jam message.", 400);
+      } else body = await request.json().catch(() => ({}));
+    }
 
     if (route === "/auth/complete") {
       const result = await this.store.completeAuth(String(body.name || ""), {
@@ -713,6 +739,26 @@ export class Social {
     );
 
     const target = normalizeUuid(body.uuid);
+
+    if (route.startsWith("/jam/")) {
+      if (request.method !== "POST") return fail("Expected POST.", 405);
+      if (JSON.stringify(body).length > 70_000) return fail("Music Jam message is too large.", 413);
+      const operation = this.jamQueue.then(async () => {
+        let notices = [];
+        const run = async (storage) => {
+          notices = [];
+          const store = Object.assign(Object.create(this.store), { storage });
+          return new MusicJams(store, (uuid, payload) => notices.push([uuid, payload]), () => this.now()).handle(route, session, body);
+        };
+        const storage = this.store.storage;
+        const result = storage.transaction ? await storage.transaction(run) : await run(storage);
+        for (const [uuid, payload] of notices) this.push(uuid, payload);
+        return result;
+      });
+      this.jamQueue = operation.catch(() => {});
+      try { return json(await operation); }
+      catch (error) { return fail(error.message); }
+    }
 
     switch (route) {
       // Lets the worker resolve a session to a verified UUID (used for tester builds).

@@ -143,6 +143,7 @@ object RiverRuntime {
         // Friends presence has to tick while you play, not only while the menu is open,
         // or everyone actually in a game shows as offline to their friends.
         dev.wyz.clientcore.net.RiverSocial.tick(client)
+        dev.wyz.clientcore.media.MusicJam.tick(client)
         dev.wyz.clientcore.ui.SeasonEvent.tick(client)
         dev.wyz.clientcore.ui.FriendMessageToasts.tick(client)
         dev.wyz.clientcore.ui.tooltip.ContainerTooltips.tick(client)
@@ -174,6 +175,7 @@ object RiverRuntime {
 
     fun shutdown() {
         if (!initialized) return
+        dev.wyz.clientcore.media.MusicJam.clear()
         PresenceService.stop()
         ConfigService.save(config)
     }

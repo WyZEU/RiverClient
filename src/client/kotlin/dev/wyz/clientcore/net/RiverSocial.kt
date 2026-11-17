@@ -187,6 +187,7 @@ object RiverSocial {
     }
 
     fun signOut() {
+        dev.wyz.clientcore.media.MusicJam.resetAccount()
         closeSocket()
         token = ""
         selfUuid = ""
@@ -246,6 +247,7 @@ object RiverSocial {
                         socket = ws
                         socketOpenedAt = System.currentTimeMillis()
                         lastPing = socketOpenedAt
+                        Minecraft.getInstance().execute { dev.wyz.clientcore.media.MusicJam.refresh() }
                     }
                 }
         } catch (_: Throwable) {
@@ -291,6 +293,12 @@ object RiverSocial {
               this is the last part of it.
             */
             socketText.append(data)
+            if (socketText.length > 128_000) {
+                socketText.setLength(0)
+                if (socket === webSocket) { socket = null; scheduleReconnect() }
+                webSocket.abort()
+                return null
+            }
             if (last) {
                 val whole = socketText.toString()
                 socketText.setLength(0)
@@ -324,6 +332,9 @@ object RiverSocial {
             return
         }
         when (payload.get("type")?.asString) {
+            "jam", "jam-invite", "jam-ended" -> Minecraft.getInstance().execute {
+                dev.wyz.clientcore.media.MusicJam.receive(payload)
+            }
             "dm" -> {
                 val message = payload.getAsJsonObject("message") ?: return
                 val notice = Message(
@@ -661,6 +672,11 @@ object RiverSocial {
     }
 
     // ------------------------------------------------------------------ transport
+
+    fun jamRequest(route: String, body: JsonObject, onDone: (JsonObject?) -> Unit) {
+        require(route.startsWith("/jam/"))
+        call(route, body, onDone)
+    }
 
     /** Runs [route] off-thread and delivers the response on the client main thread. */
     private fun call(route: String, body: JsonObject, onDone: (JsonObject?) -> Unit) {

@@ -307,6 +307,12 @@ object DevShot {
                     ?.startDemo(lines = name == "world-lyrics-lines", screen = name == "world-lyrics-screen", song = System.getProperty("river.devshot.song"))
             }
             // The aurora and shooting stars forced on, with the view tilted up toward them.
+            "world-jam" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverMusicJamScreen(null))
+            "world-jam-host", "world-jam-guest" -> {
+                PreviewData.start()
+                dev.wyz.clientcore.media.MusicJam.preview(name == "world-jam-host")
+                client.setScreen(dev.wyz.clientcore.ui.screen.RiverMusicJamScreen(null))
+            }
             "world-sky", "world-sky-up", "world-sky-south" -> {
                 client.setScreen(null)
                 client.player?.connection?.sendCommand("time set midnight")
@@ -387,7 +393,20 @@ object DevShot {
             }
             "world-cosmetics" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverCosmeticsScreen(null))
             "world-content" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverContentBrowserScreen(null))
-            "servers" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverServerBrowserScreen(null))
+            "servers", "world-servers" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverServerBrowserScreen(client.screen))
+            "world-lighting-noon", "world-lighting-night", "world-lighting-fullbright", "world-lighting-reset" -> {
+                client.setScreen(null)
+                val time = dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.TimeChangerModule>("time_changer")!!
+                val fullbright = dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.FullbrightModule>("fullbright")!!
+                val sky = dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.SkyEffectsModule>("sky_effects")!!
+                time.enabled = name != "world-lighting-reset"
+                time.setTimeForDevShot(if (name == "world-lighting-noon") 6000 else 18000)
+                fullbright.enabled = name == "world-lighting-fullbright"
+                sky.enabled = name != "world-lighting-reset"
+                client.player?.setYRot(180f)
+                client.player?.setXRot(-25f)
+                println("[river] lighting check $name: time=${time.overrideDayTime()}, fullbright=${fullbright.enabled}, sky=${sky.enabled}")
+            }
             "multiplayer" -> client.setScreen(net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(net.minecraft.client.gui.screens.TitleScreen()))
             "world-hud" -> {
                 client.setScreen(null)
@@ -641,6 +660,7 @@ object DevShot {
     private var benchApplied = ""
 
     private fun applyFeatureBlock(label: String) {
+        if (System.getProperty("river.bench.night") == "true") Minecraft.getInstance().player?.connection?.sendCommand("time set midnight")
         val modules = dev.wyz.clientcore.module.ModuleRegistry.all
         val config = dev.wyz.clientcore.RiverRuntime.config
         val saved = benchSaved ?: modules.associate { it.id to it.enabled }.also {
@@ -705,12 +725,14 @@ object DevShot {
             // -Driver.bench.night=true: measure at midnight, where the sky effects actually draw.
             if (System.getProperty("river.bench.night") == "true") client.player?.connection?.sendCommand("time set midnight")
             benchBlocks = if (benchFeatures != null) {
-                benchBlockMs = 4_000L
+                benchBlockMs = (System.getProperty("river.bench.blockSeconds")?.toLongOrNull()?.coerceIn(4, 30) ?: 4) * 1000L
                 val known = dev.wyz.clientcore.module.ModuleRegistry.all.filter { !it.comingSoon }.map { it.id }
                 // "all" gives every module a block; a comma list (stats,coordinates) only those.
                 val ids = if (benchFeatures == "all") known else benchFeatures.split(',').filter { it in known }
-                val once = listOf("none", "all", "all-noglass") + ids
-                val repeats = if (ids.isEmpty()) ((seconds * 1000L) / (benchBlockMs * once.size)).toInt().coerceAtLeast(2) else 2
+                val once = if (System.getProperty("river.bench.paired") == "true") ids.flatMap { listOf("none", it) }
+                    else listOf("none", "all", "all-noglass") + ids
+                val repeats = System.getProperty("river.bench.repeats")?.toIntOrNull()?.coerceIn(2, 10)
+                    ?: if (ids.isEmpty()) ((seconds * 1000L) / (benchBlockMs * once.size)).toInt().coerceAtLeast(2) else 2
                 List(repeats) { once }.flatten()
             } else if (benchPerModule) {
                 benchBlockMs = 6_000L
@@ -776,8 +798,10 @@ object DevShot {
                 val cost = if (label == "none" || noneMedian <= 0) "" else "%.3f ms/frame".format(1000 / median - 1000 / noneMedian)
                 appendLine(String.format("%-18s %6d %6d %6d  %s", label, avg.toInt(), sorted[sorted.size / 2], sorted.first(), cost))
             }
-            val perLabelSeconds = benchBlockMs / 1000.0 * benchBlocks.count { it == "all" }
-            appendLine("render-thread alloc MB/s: all ${"%.1f".format((benchAlloc["all"] ?: 0) / 1048576.0 / perLabelSeconds)}, none ${"%.1f".format((benchAlloc["none"] ?: 0) / 1048576.0 / perLabelSeconds)}")
+            for (label in benchBlocks.distinct()) {
+                val perLabelSeconds = benchBlockMs / 1000.0 * benchBlocks.count { it == label }
+                appendLine("render-thread alloc MB/s: $label ${"%.1f".format((benchAlloc[label] ?: 0) / 1048576.0 / perLabelSeconds)}")
+            }
             appendLine("gc collections=$gcCollections gc ms=$gcMs")
         }
         val dir = java.io.File(client.gameDirectory, "bench").apply { mkdirs() }

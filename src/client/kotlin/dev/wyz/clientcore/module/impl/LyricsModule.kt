@@ -150,6 +150,9 @@ class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you 
     // ------------------------------------------------------------------ the song
 
     private fun song(now: Long): Song? {
+        if (dev.wyz.clientcore.media.MusicJam.following) return dev.wyz.clientcore.media.MusicJam.playback()?.let {
+            Song(it.title, it.artist, it.album, (it.durationMs / 1000).toInt(), it.positionMs, it.playing)
+        }
         if (demoStart != 0L) return demoSong?.let { Song(it.title, it.artist, it.album, it.durationSec, it.positionMs + now - demoStart, true) }
             ?: Song("River Light", "Demo", "", 180, now - demoStart, true)
         MediaSession.current()?.let {
@@ -177,7 +180,8 @@ class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you 
             currentIndex = -1
             scene.fadeAll(now)
         }
-        state = LyricsService.stateFor(pb.title, pb.artist, pb.album, pb.durationSec)
+        state = dev.wyz.clientcore.media.MusicJam.lyrics()?.let { LyricsState.Ready(it) }
+            ?: LyricsService.stateFor(pb.title, pb.artist, pb.album, pb.durationSec)
         lines = (state as? LyricsState.Ready)?.lines.orEmpty()
 
         val position = pb.positionMs + offsetMs()
