@@ -40,6 +40,24 @@ object ServerSafety {
         return cachedKey
     }
 
+    /**
+     * Servers that do not allow freelook. Hypixel asked clients to keep it off in 2020 and
+     * treats it as a disallowed modification, so River does: it never turns on there.
+     */
+    private val noFreelookHosts = listOf("hypixel.net", "hypixel.io")
+
+    /**
+     * Whether Freelook may run on the current connection. Off on Hypixel, recognised by its
+     * address or, for anyone joining through an IP or a proxy, by the brand the server sends.
+     */
+    fun freelookAllowed(client: Minecraft = Minecraft.getInstance()): Boolean {
+        if (client.level == null || client.singleplayerServer != null) return true
+        val host = client.currentServer?.ip?.substringBefore(':')?.trim()?.lowercase()?.removeSuffix(".").orEmpty()
+        if (noFreelookHosts.any { host == it || host.endsWith(".$it") }) return false
+        val brand = runCatching { client.connection?.serverBrand() }.getOrNull().orEmpty().lowercase()
+        return !brand.contains("hypixel")
+    }
+
     /** Cinematic mode: every module pauses and the watermark hides, for clean footage. */
     var cinematicMode: Boolean
         get() = ClientCore.config.cinematicMode

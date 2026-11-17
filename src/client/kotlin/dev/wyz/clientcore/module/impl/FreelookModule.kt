@@ -36,6 +36,10 @@ class FreelookModule : Module("freelook", "Freelook", "Hold to look around witho
     }
 
     private var keyWasDown = false
+
+    /** The server Freelook was last explained on, so the note is not repeated. */
+
+    private var toldOn: String? = null
     private var toggledOn = false
 
     /** Called every tick regardless of enabled state so releasing/disabling always restores the camera. */
@@ -56,11 +60,23 @@ class FreelookModule : Module("freelook", "Freelook", "Hold to look around witho
             toggledOn = false
             held
         }
+        val pressedNow = held && !keyWasDown
         keyWasDown = held
-        if (active && on && client.player != null) {
+        val allowed = dev.wyz.clientcore.safety.ServerSafety.freelookAllowed(client)
+        if (!allowed && on) toggledOn = false
+        if (active && on && allowed && client.player != null) {
             FreelookController.begin(client)
         } else {
             FreelookController.end(client)
+        }
+        // Said once per server, the first time the key is pressed where Freelook is not allowed.
+        val server = dev.wyz.clientcore.safety.ServerSafety.currentServerKey(client)
+        if (active && pressedNow && !allowed && server != null && server != toldOn) {
+            toldOn = server
+            client.gui.chat.addMessage(
+                net.minecraft.network.chat.Component.literal("[River] ").withStyle(net.minecraft.ChatFormatting.AQUA)
+                    .append(net.minecraft.network.chat.Component.literal("Freelook is off on this server. It does not allow it.").withStyle(net.minecraft.ChatFormatting.GRAY))
+            )
         }
     }
 }
