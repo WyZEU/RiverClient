@@ -119,16 +119,16 @@ class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you 
             .hint("Raise it if the words come late."))
 
         if (showWorld()) {
-            list.add(SectionSetting("Text"))
+            list.add(SectionSetting("Lyric text"))
             list.add(ChoiceSetting("Show", SHOW, { SHOW[if (lineMode()) 1 else 0] }, { setScalar("ly_show", SHOW.indexOf(it).coerceAtLeast(0)) }))
             list.add(ChoiceSetting("Layout", LAYOUTS, { LAYOUTS[if (centered()) 1 else 0] }, { setScalar("ly_layout", LAYOUTS.indexOf(it).coerceAtLeast(0)) }))
             list.add(ChoiceSetting("Font", LyricFonts.NAMES, { LyricFonts.NAMES[face()] }, { setScalar("ly_font", LyricFonts.NAMES.indexOf(it).coerceAtLeast(0)) }))
             list.add(BoolSetting("Uppercase", { uppercase() }, { setFlag("ly_upper", it) }))
-            list.add(IntSetting("Size", 50, 250, { sizePercent() }, { setScalar("ly_size", it) }, "%"))
-            list.add(ColorSetting("Text color", false, { textColor() or 0xFF000000.toInt() }, { setScalar("ly_wcolor", it and 0xFFFFFF) }))
+            list.add(IntSetting("Lyric size", 50, 250, { sizePercent() }, { setScalar("ly_size", it) }, "%"))
+            list.add(ColorSetting("Lyric color", false, { textColor() or 0xFF000000.toInt() }, { setScalar("ly_wcolor", it and 0xFFFFFF) }))
 
-            list.add(SectionSetting("Look"))
-            list.add(IntSetting("Opacity", 10, 100, { (opacity() * 100).toInt() }, { setScalar("ly_opacity", it) }, "%"))
+            list.add(SectionSetting("Lyric look"))
+            list.add(IntSetting("Lyric opacity", 10, 100, { (opacity() * 100).toInt() }, { setScalar("ly_opacity", it) }, "%"))
             list.add(IntSetting("Glow", 0, 100, { (glow() * 100).toInt() }, { setScalar("ly_glow", it) }, "%"))
             if (glow() > 0f) {
                 list.add(ColorSetting("Glow color", false, { glowColor() or 0xFF000000.toInt() }, { setScalar("ly_gcolor", it and 0xFFFFFF) }))
@@ -138,7 +138,7 @@ class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you 
             list.add(IntSetting("Bounce", 0, 100, { (bounce() * 100).toInt() }, { setScalar("ly_bounce", it) }, "%"))
             list.add(BoolSetting("Flicker", { flicker() }, { setFlag("ly_flicker", it) }))
 
-            list.add(SectionSetting("Placement"))
+            list.add(SectionSetting("Lyric placement"))
             list.add(IntSetting("Closest", 2, 12, { near() }, { setScalar("ly_near", it); if (far() < it) setScalar("ly_far", it) }, " blocks"))
             list.add(IntSetting("Farthest", 2, 16, { far() }, { setScalar("ly_far", it); if (near() > it) setScalar("ly_near", it) }, " blocks"))
             list.add(BoolSetting("Follow you", { follow() }, { setFlag("ly_follow", it) }))

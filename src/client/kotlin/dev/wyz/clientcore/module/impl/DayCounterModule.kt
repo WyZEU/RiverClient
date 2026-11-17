@@ -7,7 +7,7 @@ import net.minecraft.client.Minecraft
  * Which in-game day it is. Counted from the world's age rather than its time of day,
  * so sleeping or /time set doesn't change it: it's how many days the world has run.
  */
-class DayCounterModule : RowsHudModule("day_counter", "Day Counter", "How many in-game days the world has run", "item:minecraft:clock", 8, 508) {
+class DayCounterModule : RowsHudModule("day_counter", "Day Counter", "How many in-game days the world has run", "sun", 8, 508) {
 
     override fun rows(client: Minecraft): List<Pair<String, String>> {
         val level = client.level ?: return emptyList()

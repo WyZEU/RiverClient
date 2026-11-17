@@ -44,7 +44,10 @@ class PotionHudModule : Module("potion_hud", "Potion HUD", "Active effects and t
 
     override fun addModuleSettings(list: MutableList<Setting>) {
         list.add(SectionSetting("Potion HUD"))
-        list.add(ChoiceSetting("Style", listOf(MODE_ICONS, MODE_TEXT), { mutablePotionHud().displayMode }, { mutablePotionHud().displayMode = it }))
+        // Shown as "Icons" / "Text"; saved as the lowercase mode the config has always used.
+        list.add(ChoiceSetting("Style", listOf("Icons", "Text"),
+            { if (mutablePotionHud().displayMode == MODE_TEXT) "Text" else "Icons" },
+            { mutablePotionHud().displayMode = if (it == "Text") MODE_TEXT else MODE_ICONS }))
         list.add(BoolSetting("Show timer", { mutablePotionHud().showTimer }, { mutablePotionHud().showTimer = it }))
         list.add(BoolSetting("Show level", { mutablePotionHud().showAmplifier }, { mutablePotionHud().showAmplifier = it }))
         list.add(BoolSetting("Hide vanilla icons", { mutablePotionHud().hideVanilla }, { mutablePotionHud().hideVanilla = it }))

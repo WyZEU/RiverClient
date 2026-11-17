@@ -16,7 +16,7 @@ import net.minecraft.network.chat.Component
  * for the ones that have room for it, and a smooth way in. GuiMixin and BossHealthOverlayMixin
  * wrap the vanilla drawing with these; the sidebar's settings live in ScoreboardModule.
  */
-class GameHudModule : Module("game_hud", "Game HUD", "Size, background and animation of vanilla HUD parts", ModuleCategory.VISUAL, "item:minecraft:name_tag", 8, 396, false) {
+class GameHudModule : Module("game_hud", "Game HUD", "Size, background and animation of vanilla HUD parts", ModuleCategory.VISUAL, "layout", 8, 396, false) {
     override val editorProfile: ModuleEditorProfile = ModuleEditorProfile.MINIMAL
     override fun acceptsDraggablePosition(): Boolean = false
     override fun showPositionControlsInEditor(): Boolean = false

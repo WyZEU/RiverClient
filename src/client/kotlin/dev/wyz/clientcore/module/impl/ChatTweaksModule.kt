@@ -24,7 +24,7 @@ import net.minecraft.sounds.SoundEvents
  * Chat quality of life: timestamps on every message, a ping sound when your
  * name is mentioned, and a longer scrollback. Nothing is sent or automated.
  */
-class ChatTweaksModule : Module("chat_tweaks", "Chat Tweaks", "Timestamps, mention sound, history, filters", ModuleCategory.UTILITY, "item:minecraft:writable_book", 8, 388, false) {
+class ChatTweaksModule : Module("chat_tweaks", "Chat Tweaks", "Timestamps, mention sound, history, filters", ModuleCategory.UTILITY, "chat", 8, 388, false) {
     override val editorProfile: ModuleEditorProfile = ModuleEditorProfile.MINIMAL
     override fun acceptsDraggablePosition(): Boolean = false
     override fun showPositionControlsInEditor(): Boolean = false

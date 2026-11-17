@@ -31,7 +31,7 @@ import net.minecraft.client.gui.GuiGraphics
  * Items glide between slots when they move, and buttons on inventories that run a chat command
  * you set. A button only sends its command when you press it; nothing is automated.
  */
-class InventoryToolsModule : Module("inventory_tools", "Inventory Tools", "Items glide between slots, plus command buttons", ModuleCategory.UTILITY, "item:minecraft:chest", 8, 492, false) {
+class InventoryToolsModule : Module("inventory_tools", "Inventory Tools", "Items glide between slots, plus command buttons", ModuleCategory.UTILITY, "item:minecraft:hopper", 8, 492, false) {
     override val editorProfile: ModuleEditorProfile = ModuleEditorProfile.MINIMAL
     override fun acceptsDraggablePosition(): Boolean = false
     override fun showPositionControlsInEditor(): Boolean = false

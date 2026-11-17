@@ -217,6 +217,22 @@ object DevShot {
             }
             // Opened from the title screen, which is where a missing item component crashed 26.1.2.
             "river-menu" -> client.setScreen(RiverMenuScreen(null))
+            // Every module's settings panel as text, to check each one is its own and not a copy.
+            "settings-dump" -> {
+                for (module in dev.wyz.clientcore.module.ModuleRegistry.all) {
+                    val rows = module.settings().joinToString(" | ") { setting ->
+                        when (setting) {
+                            is dev.wyz.clientcore.module.settings.SectionSetting -> "## ${setting.label}"
+                            is dev.wyz.clientcore.module.settings.BoolSetting -> "${setting.label}=${setting.get()}"
+                            is dev.wyz.clientcore.module.settings.IntSetting -> "${setting.label}=${setting.get()}"
+                            is dev.wyz.clientcore.module.settings.ChoiceSetting -> "${setting.label}=${setting.get()}"
+                            is dev.wyz.clientcore.module.settings.ColorSetting -> "${setting.label}=#${Integer.toHexString(setting.get())}"
+                            else -> "${setting.label}(${setting.javaClass.simpleName.removeSuffix("Setting")})"
+                        }
+                    }
+                    println("[river] settings ${module.id} (${module.displayName}; ${module.category}; icon=${module.icon}; menu=${module.showInMenu}; on=${module.enabled}; at=${module.x},${module.y}) :: $rows")
+                }
+            }
             "river-hud" -> client.setScreen(RiverHudEditorScreen(null))
             "friends-signedout" -> {
                 RiverSocial.stopPreview()

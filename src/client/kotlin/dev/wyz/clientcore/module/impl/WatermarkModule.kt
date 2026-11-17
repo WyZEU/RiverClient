@@ -5,6 +5,7 @@ import dev.wyz.clientcore.module.Module
 import dev.wyz.clientcore.module.ModuleCategory
 import dev.wyz.clientcore.module.ModuleEditorProfile
 import dev.wyz.clientcore.module.settings.ChoiceSetting
+import dev.wyz.clientcore.module.settings.SectionSetting
 import dev.wyz.clientcore.module.settings.Setting
 
 /**
@@ -21,6 +22,7 @@ class WatermarkModule : Module("watermark", "Watermark", "River logo in the corn
     private val corners = listOf("Top left", "Top right", "Bottom left", "Bottom right")
 
     override fun addModuleSettings(list: MutableList<Setting>) {
+        list.add(SectionSetting("Watermark"))
         list.add(ChoiceSetting(
             "Corner",
             corners,
