@@ -18,6 +18,38 @@ public abstract class PauseScreenMixin extends Screen {
         super(title);
     }
 
+    /** River's pause menu replaces this one: skip vanilla's setup (RiverPauseScreen.takeOver). */
+    @Inject(method = "init", at = @At("HEAD"), cancellable = true)
+    private void clientcore$riverPauseMenu(CallbackInfo ci) {
+        if (dev.wyz.clientcore.ui.screen.RiverPauseScreen.takeOver((PauseScreen) (Object) this)) {
+            ci.cancel();
+        }
+    }
+
+    // For the moment before River's menu takes its place, this one draws nothing at all, so
+    // vanilla's blur and title never flash up first.
+//? if >=26.1 {
+/*    @Inject(method = "extractRenderState", at = @At("HEAD"), cancellable = true, require = 0)
+    private void clientcore$quietWhileSwapping(net.minecraft.client.gui.GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+        if (dev.wyz.clientcore.ui.screen.RiverPauseScreen.isSwapping(this)) ci.cancel();
+    }
+
+    @Inject(method = "extractBackground", at = @At("HEAD"), cancellable = true, require = 0)
+    private void clientcore$noBackgroundWhileSwapping(net.minecraft.client.gui.GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+        if (dev.wyz.clientcore.ui.screen.RiverPauseScreen.isSwapping(this)) ci.cancel();
+    }
+*///?} else {
+    @Inject(method = "render", at = @At("HEAD"), cancellable = true, require = 0)
+    private void clientcore$quietWhileSwapping(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+        if (dev.wyz.clientcore.ui.screen.RiverPauseScreen.isSwapping(this)) ci.cancel();
+    }
+
+    @Inject(method = "renderBackground", at = @At("HEAD"), cancellable = true, require = 0)
+    private void clientcore$noBackgroundWhileSwapping(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+        if (dev.wyz.clientcore.ui.screen.RiverPauseScreen.isSwapping(this)) ci.cancel();
+    }
+//?}
+
     @Inject(method = "init", at = @At("TAIL"))
     private void clientcore$addPauseButton(CallbackInfo ci) {
         Component disconnectKey = Component.translatable("menu.disconnect");

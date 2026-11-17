@@ -705,6 +705,27 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
 
     private fun hit(b: IntArray, mx: Double, my: Double) = mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]
 
+    /** The cover of what is playing and its size, for River's pause menu; null without one. */
+    fun coverForMenu(): Triple<McId, Int, Int>? {
+        val t = track ?: return null
+        if (!flag("np_art", true)) return null
+        val id = cover(t.artFile) ?: return null
+        return Triple(id, coverW, coverH)
+    }
+
+    /** Runs a media key (prev, playpause or next) from River's pause menu. */
+    fun control(action: String) = writeCommand(action)
+
+    /** One media control glyph in an [BTN] px box at (x, y), for River's pause menu. */
+    fun drawControl(g: GuiGraphics, action: String, x: Int, y: Int, playing: Boolean) {
+        val box = intArrayOf(x, y, x + BTN, y + BTN)
+        when (action) {
+            "prev" -> drawPrev(g, box)
+            "next" -> drawNext(g, box)
+            else -> if (playing) drawPause(g, box) else drawPlay(g, box)
+        }
+    }
+
     private fun writeCommand(action: String) {
         // Without the launcher the media keys go through River's own reader.
         if (fromSession && dev.wyz.clientcore.media.MediaSession.command(action)) return

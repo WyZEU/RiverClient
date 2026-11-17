@@ -128,6 +128,8 @@ object RiverRuntime {
         ClientKeybinds.tick(client)
         dev.wyz.clientcore.net.PremiumGate.tick(client)
         TotemPopTracker.tick(client)
+        // Puts the perspective and HUD back if the pause view is still up with no menu or world.
+        dev.wyz.clientcore.ui.pause.PauseCamera.check(client)
         dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.HitColorModule>("hit_color")?.sync(client)
         dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.FogModule>("fog")?.syncSaturation(client)
         ReconnectState.capture(client)

@@ -49,6 +49,10 @@ public abstract class CameraMixin {
 *///?}
 
     private void clientcore$orbit(Entity entity, float partialTick) {
+        // River's pause menu has its own view of you, and it wins over Freelook.
+        if (dev.wyz.clientcore.ui.pause.PauseCamera.place((CameraInvoker) this, entity, partialTick)) {
+            return;
+        }
         if (!FreelookController.getActive() || entity == null) {
             return;
         }

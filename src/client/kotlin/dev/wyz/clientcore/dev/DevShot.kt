@@ -134,7 +134,12 @@ object DevShot {
             return
         }
         open(client, shots[index])
-        grabAt = now + if (shots[index].startsWith("world-media-live") || shots[index].startsWith("world-media-bar") || shots[index].startsWith("world-media-lyrics-only")) 30_000 else 4500
+        grabAt = now + when {
+            shots[index].startsWith("world-media-live") || shots[index].startsWith("world-media-bar") || shots[index].startsWith("world-media-lyrics-only") -> 30_000
+            // Mid-swing: the pause camera a quarter of a second after the menu opened.
+            shots[index].startsWith("world-pause-intro") -> 250
+            else -> 4500
+        }
     }
 
     private fun open(client: Minecraft, spec: String) {
@@ -179,7 +184,7 @@ object DevShot {
             return
         }
         when (name) {
-            "world-media-live", "world-media-lyrics-only", "world-media-controls", "world-media-open", "world-media-bar" -> {
+            "world-media-live", "world-media-lyrics-only", "world-media-controls", "world-media-open", "world-media-bar", "world-pause", "world-pause-intro" -> {
                 dev.wyz.clientcore.module.ModuleRegistry.all.forEach {
                     it.enabled = it.id == "lyrics" || (it.id == "now_playing" && name != "world-media-lyrics-only")
                 }
@@ -196,7 +201,11 @@ object DevShot {
                 // The controls audit clicks the full player's buttons; the compact bar only shows them once opened.
                 music?.settings()?.filterIsInstance<dev.wyz.clientcore.module.settings.BoolSetting>()
                     ?.firstOrNull { it.label == "Compact" }?.set(name != "world-media-controls")
-                if (name == "world-media-open") {
+                // The controls audit clicks the Spotify panel drawn over vanilla's pause menu.
+                dev.wyz.clientcore.ui.screen.RiverPauseScreen.vanillaForTest = name == "world-media-controls"
+                if (name == "world-pause" || name == "world-pause-intro") {
+                    client.setScreen(net.minecraft.client.gui.screens.PauseScreen(true))
+                } else if (name == "world-media-open") {
                     music?.javaClass?.getDeclaredField("pinned")?.apply { isAccessible = true }?.setBoolean(music, true)
                     client.setScreen(net.minecraft.client.gui.screens.PauseScreen(true))
                 } else if (name == "world-media-controls") {

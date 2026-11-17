@@ -25,6 +25,10 @@ data class ClientCoreConfig(
     var trueFullscreen: Boolean = false,
     /** River's main menu in place of vanilla's. */
     var riverMainMenu: Boolean = true,
+    /** River's pause menu (your player in third person beside it) instead of vanilla's. */
+    var riverPauseMenu: Boolean = true,
+    /** The pause menu swings the camera round to show your player. */
+    var pauseCamera: Boolean = true,
     /** Inventory Tools buttons, each "/command" or "Label=/command". */
     var inventoryButtons: MutableList<String>? = null,
     /** Frosted glass behind River's panels, HUD and popups (see ui.Glass). */

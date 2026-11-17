@@ -1498,6 +1498,22 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null) 
         }
         cy = toggleRow(
             g, x, cy, w, mouseX, mouseY,
+            "River pause menu", RiverRuntime.config.riverPauseMenu, "pause_menu"
+        ) {
+            RiverRuntime.config.riverPauseMenu = !RiverRuntime.config.riverPauseMenu
+            saveNow()
+        }
+        if (RiverRuntime.config.riverPauseMenu) {
+            cy = toggleRow(
+                g, x, cy, w, mouseX, mouseY,
+                "Pause menu camera", RiverRuntime.config.pauseCamera, "pause_camera"
+            ) {
+                RiverRuntime.config.pauseCamera = !RiverRuntime.config.pauseCamera
+                saveNow()
+            }
+        }
+        cy = toggleRow(
+            g, x, cy, w, mouseX, mouseY,
             "Exclusive full screen", RiverRuntime.config.trueFullscreen, "true_fullscreen"
         ) {
             RiverRuntime.config.trueFullscreen = !RiverRuntime.config.trueFullscreen
