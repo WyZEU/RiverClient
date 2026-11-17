@@ -139,17 +139,17 @@ object RiverMainMenu {
         }
     }
 
-    private const val BTN_W = 212
-    private const val BTN_H = 22
-    private const val BTN_GAP = 5
-    private const val QUIT_EXTRA_GAP = 10
-    private const val ICON_BTN = 22
+    internal const val BTN_W = 212
+    internal const val BTN_H = 22
+    internal const val BTN_GAP = 5
+    internal const val QUIT_EXTRA_GAP = 10
+    internal const val ICON_BTN = 22
 
     /** Horizontal gap between the icon buttons. */
-    private const val ICON_GAP = 6
+    internal const val ICON_GAP = 6
 
     /** Vertical gap between Quit and the icon row under it. */
-    private const val ICON_ROW_GAP = 10
+    internal const val ICON_ROW_GAP = 10
 
     /** Deliberate offset from dead centre, so the column sits just below the middle. */
     private const val COLUMN_NUDGE = 10
@@ -425,8 +425,25 @@ object RiverMainMenu {
         dev.wyz.clientcore.net.ModUpdateCheck.renderMainMenu(client, g, sw)
     }
 
+    /** A splash line for River's pause menu, from the same set as the title screen's. */
+    internal fun randomSplash(): String {
+        val seasonal = SeasonalFx.splashes()
+        return if (seasonal.isNotEmpty() && Math.random() < 0.85) seasonal.random() else splashes.random()
+    }
+
+    /** The RIVER title art (seasonal when it is the season) and its size, for River's pause menu. */
+//? if >=1.21.11 {
+    internal fun titleArt(): Triple<Identifier, Int, Int>? {
+//?} else {
+/*    internal fun titleArt(): Triple<ResourceLocation, Int, Int>? {
+*///?}
+        ensureTextures()
+        val tex = (if (SeasonalFx.halloween()) titleHalloweenTex ?: titleTex else titleTex) ?: return null
+        return Triple(tex, titleW, titleH)
+    }
+
     /** Bouncing yellow splash, angled off the corner of the title (vanilla-style). */
-    private fun drawSplash(g: GuiGraphics, font: net.minecraft.client.gui.Font, anchorX: Int, anchorY: Int) {
+    internal fun drawSplash(g: GuiGraphics, font: net.minecraft.client.gui.Font, anchorX: Int, anchorY: Int, splash: String = this.splash) {
         val t = (System.currentTimeMillis() % 1000L) / 1000f
         // Long lines shrink as vanilla's do, so they stay off the buttons under the title.
         val pulse = (1.25f - abs(sin(t * (Math.PI.toFloat() * 2f))) * 0.1f) * (100f / (font.width(splash) + 32)).coerceAtMost(1f)
@@ -450,7 +467,7 @@ object RiverMainMenu {
 *///?}
     }
 
-    private fun drawButton(
+    internal fun drawButton(
         g: GuiGraphics, font: net.minecraft.client.gui.Font, label: String,
         x: Int, y: Int, w: Int, hovered: Boolean, fadeIn: Float,
         isQuit: Boolean, primary: Boolean
@@ -506,9 +523,15 @@ object RiverMainMenu {
     private fun drawIconButton(
         g: GuiGraphics, font: net.minecraft.client.gui.Font, button: IconButton,
         x: Int, y: Int, hovered: Boolean, fadeIn: Float
+    ) = drawIconButton(g, font, button.tooltip, button.icon, x, y, hovered, fadeIn)
+
+    /** One square icon button with its tooltip; a null [icon] is the River logo. */
+    internal fun drawIconButton(
+        g: GuiGraphics, font: net.minecraft.client.gui.Font, tooltip: String, icon: String?,
+        x: Int, y: Int, hovered: Boolean, fadeIn: Float
     ) {
         if (fadeIn <= 0.02f) return
-        val anim = ClientUi.hover("mainmenu:icon:${button.tooltip}", hovered)
+        val anim = ClientUi.hover("mainmenu:icon:$tooltip", hovered)
         val bg = ClientUi.mix(0xB0090C12.toInt(), 0xC0141A26.toInt(), anim)
         ClientUi.fillRounded(g, x, y, ICON_BTN, ICON_BTN, ClientUi.RADIUS_BUTTON, ClientUi.alpha(bg, fadeIn))
         val border = if (anim > 0.01f) ClientUi.alpha(ClientUi.ACCENT_B, anim * fadeIn) else ClientUi.alpha(0x40FFFFFF, fadeIn)
@@ -518,9 +541,9 @@ object RiverMainMenu {
         val ix = x + (ICON_BTN - size) / 2
         val iy = y + (ICON_BTN - size) / 2
         val logo = SeasonalFx.halloweenLogo() ?: logoTex
-        if (button.icon != null) {
+        if (icon != null) {
             val tint = ClientUi.alpha(ClientUi.mix(0xFFD7DCE6.toInt(), 0xFFFFFFFF.toInt(), anim), fadeIn)
-            RiverIcons.draw(g, button.icon, ix, iy, size, tint)
+            RiverIcons.draw(g, icon, ix, iy, size, tint)
         } else if (logo != null) {
             // The logo is full-colour art, so it only gets an alpha fade, not a tint.
             val tint = ((fadeIn * 255f).roundToInt().coerceIn(0, 255) shl 24) or 0xFFFFFF
@@ -535,11 +558,11 @@ object RiverMainMenu {
 
         // Tooltip under the button, centred on it and clamped to the screen.
         if (anim > 0.5f) {
-            val tw = font.width(button.tooltip)
+            val tw = font.width(tooltip)
             val tx = (x + (ICON_BTN - tw) / 2).coerceIn(4, (g.guiWidth() - tw - 4).coerceAtLeast(4))
             val ty = y + ICON_BTN + 4
             ClientUi.fillRounded(g, tx - 4, ty - 3, tw + 8, font.lineHeight + 5, ClientUi.RADIUS_CARD, ClientUi.alpha(0xE0090C12.toInt(), anim))
-            g.drawString(font, button.tooltip, tx, ty, ClientUi.alpha(0xFFFFFFFF.toInt(), anim), true)
+            g.drawString(font, tooltip, tx, ty, ClientUi.alpha(0xFFFFFFFF.toInt(), anim), true)
         }
     }
 

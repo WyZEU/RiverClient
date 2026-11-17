@@ -1,16 +1,9 @@
 package dev.wyz.clientcore.ui.screen
 
 import dev.wyz.clientcore.RiverRuntime
-import dev.wyz.clientcore.compat.McId
 import dev.wyz.clientcore.compat.riverBlit
-import dev.wyz.clientcore.module.ModuleRegistry
-import dev.wyz.clientcore.module.impl.NowPlayingModule
 import dev.wyz.clientcore.ui.ClientUi
-import dev.wyz.clientcore.ui.Glass
-import dev.wyz.clientcore.ui.PlayerHeads
-import dev.wyz.clientcore.ui.RiverIcons
 import dev.wyz.clientcore.ui.RiverScreen
-import dev.wyz.clientcore.ui.RiverShapes
 import dev.wyz.clientcore.ui.menu.RiverMainMenu
 import dev.wyz.clientcore.ui.pause.PauseCamera
 import net.fabricmc.loader.api.FabricLoader
@@ -95,26 +88,13 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
         @JvmStatic
         fun isSwapping(screen: Any): Boolean = swapping?.get() === screen
 
-        private var logo: Triple<McId, Int, Int>? = null
-        private var logoTried = false
-        private fun logo(): Triple<McId, Int, Int>? {
-            if (!logoTried) {
-                logoTried = true
-                logo = RiverMainMenu.loadTexture("/assets/clientcore/textures/watermark_logo.png", "river_pause_logo")
-            }
-            return logo
-        }
-
-        private const val COLUMN = 236
-        private const val ROW = 22
     }
 
     /** One of vanilla's pause menu buttons, as this menu shows it. */
-    private class Action(val button: AbstractButton, val key: String, val label: String, val icon: String)
+    private class Action(val button: AbstractButton, val key: String, val label: String)
 
     private var actions: List<Action> = emptyList()
     private var disconnect: AbstractButton? = null
-    private var hasMore = false
     private val hits = ArrayList<Hit>()
     /** A click target; [sound] is false for vanilla's buttons, which play their own. */
     private class Hit(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val sound: Boolean = true, val onClick: () -> Unit)
@@ -154,23 +134,22 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
                 key == "menu.disconnect" || key == "menu.returnToMenu" -> leave = button
                 // River's own button: this menu already has River's places along the top.
                 label == "River Client" -> {}
-                key == "menu.options" -> list += Action(button, key, label, "gear")
-                key == "gui.advancements" -> list += Action(button, key, label, "star")
-                key == "gui.stats" -> list += Action(button, key, label, "list")
-                key == "menu.shareToLan" -> list += Action(button, key, label, "wifi")
-                key == "menu.server_links" -> list += Action(button, key, label, "flag")
-                key == "options.worldOptions.button" -> list += Action(button, key, label, "wrench")
-                key.startsWith("menu.custom_options") -> list += Action(button, key, label, "tool")
-                key == "menu.playerReporting" -> list += Action(button, key, label, "shield")
+                key == "menu.options" -> list += Action(button, key, label)
+                key == "gui.advancements" -> list += Action(button, key, label)
+                key == "gui.stats" -> list += Action(button, key, label)
+                key == "menu.shareToLan" -> list += Action(button, key, label)
+                key == "menu.server_links" -> list += Action(button, key, label)
+                key == "options.worldOptions.button" -> list += Action(button, key, label)
+                key.startsWith("menu.custom_options") -> list += Action(button, key, label)
+                key == "menu.playerReporting" -> list += Action(button, key, label)
                 // Feedback and bug reports live under More, as they do on most menus.
                 key == "menu.feedback" || key == "menu.sendFeedback" || key == "menu.reportBugs" -> {}
                 // Anything else is another mod's button: shown here, a few at most (the rest under More).
-                else -> if (list.count { it.key == "" } < 3) list += Action(button, "", label, "box")
+                else -> if (list.count { it.key == "" } < 3) list += Action(button, "", label)
             }
         }
         actions = list
         disconnect = leave
-        hasMore = true
     }
 
     /** Presses one of vanilla's buttons the way Enter would: its own click sound, its own action. */
@@ -200,6 +179,15 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
 
     // ------------------------------------------------------------------ drawing
 
+    /*
+      River's own look: the title screen's. The RIVER art with its splash, the same buttons
+      (Back to Game in the accent, pairs side by side, the way out set apart in red) and the
+      same row of square icon buttons, here down the left of the screen, with your player
+      turning slowly on the right (PauseCamera).
+    */
+
+    override fun capsGuiScale(): Boolean = false
+
 //? if >=26.1 {
 /*    override fun extractBackground(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
 *///?} else {
@@ -214,217 +202,152 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
     override fun render(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
 //?}
         ClientUi.beginFrame()
+        ClientUi.menuFrame = false
         hits.clear()
         val client = minecraft ?: return
-        val t = ((System.currentTimeMillis() - openedAt) / 220f).coerceIn(0f, 1f)
-        val appear = 1f - (1f - t) * (1f - t) * (1f - t)
+        val font = client.font
+        val elapsed = (System.currentTimeMillis() - openedAt).coerceAtLeast(0L)
+        val x = maxOf(14, (width * 0.07f).toInt())
+        val w = minOf(RiverMainMenu.BTN_W, width - x * 2)
 
-        drawShade(g, appear)
-        if (appear < 0.04f) return
-        drawTopBar(g, client, mouseX, mouseY, appear)
-        drawColumn(g, client, mouseX, mouseY, appear)
-        drawChips(g, client, mouseX, mouseY, appear)
-    }
+        drawShade(g, x + w, ease(elapsed / 260f))
 
-    private fun a(color: Int, appear: Float) = ClientUi.alpha(color, appear)
+        // Lay the column out first so it can be fitted to the window, then draw it.
+        val rows = buttonRows()
+        val buttonsH = rows.size * RiverMainMenu.BTN_H + (rows.size - 1) * RiverMainMenu.BTN_GAP
+        val tailH = (if (disconnect != null) RiverMainMenu.QUIT_EXTRA_GAP + RiverMainMenu.BTN_H else 0) +
+            RiverMainMenu.ICON_ROW_GAP + RiverMainMenu.ICON_BTN
+        val art = RiverMainMenu.titleArt()
+        val spare = height - 24 - (buttonsH + tailH + 34)
+        val artW = if (art == null) 0 else minOf((w * 0.8f).toInt(), ((spare - 8) * art.second / art.third.coerceAtLeast(1)).coerceAtLeast(0))
+        val artH = if (art == null || artW < 60) 0 else artW * art.third / art.second
+        val total = (if (artH > 0) artH + 8 else 0) + 30 + buttonsH + tailH
+        var y = maxOf(8, (height - total) / 2)
 
-    /** Darkens the right side for the menu and the top and bottom edges for the bars; the rest stays clear. */
-    private fun drawShade(g: GuiGraphics, appear: Float) {
-        // Fully dark from just left of the menu to the edge, fading out toward the middle in
-        // two-pixel steps (fine enough that no band shows, at about a hundred fills).
-        val full = width - 44 - COLUMN - 28
-        val start = minOf((width * 0.36f).toInt(), full - 60)
-        var x0 = start
-        while (x0 < full) {
-            val p = (x0 - start + 1f) / (full - start)
-            val eased = p * p * (3f - 2f * p)
-            g.fill(x0, 0, minOf(full, x0 + 2), height, shade(0.88f * eased * appear))
-            x0 += 2
-        }
-        g.fill(full, 0, width, height, shade(0.88f * appear))
-        g.fillGradient(0, 0, width, 64, shade(0.72f * appear), shade(0f))
-        g.fillGradient(0, height - 72, width, height, shade(0f), shade(0.6f * appear))
-    }
-
-    private fun shade(alpha: Float): Int = ((alpha.coerceIn(0f, 1f) * 255).toInt() shl 24) or 0x0B0C10
-
-    private fun drawTopBar(g: GuiGraphics, client: Minecraft, mouseX: Int, mouseY: Int, appear: Float) {
-        // River, top left.
-        val logo = logo()
-        if (logo != null) g.riverBlit(logo.first, 22, 13, 0f, 0f, 16, 16, logo.second, logo.third, logo.second, logo.third)
-        g.drawString(font, "River Client", 44, 17, a(ClientUi.TEXT, appear), false)
-
-        // Where to go, across the middle.
-        val tabs = listOf<Pair<String, (() -> Unit)?>>(
-            "Game" to null,
-            "Modules" to { client.setScreen(RiverMenuScreen(this)) },
-            "Wardrobe" to { client.setScreen(RiverCosmeticsScreen(this)) },
-            "Friends" to { client.setScreen(RiverFriendsScreen(this)) }
-        )
-        val gap = 24
-        val total = tabs.sumOf { font.width(it.first) } + gap * (tabs.size - 1)
-        var tx = (width - total) / 2
-        val ty = 17
-        for ((label, open) in tabs) {
-            val w = font.width(label)
-            val hovered = open != null && mouseX in (tx - 6)..(tx + w + 6) && mouseY in (ty - 6)..(ty + 14)
-            val glow = ClientUi.hover("pause-tab:$label", hovered)
-            val color = if (open == null) ClientUi.TEXT else ClientUi.mix(ClientUi.MUTED, ClientUi.TEXT, glow)
-            g.drawString(font, label, tx, ty, a(color, appear), false)
-            if (open == null) {
-                ClientUi.fillRounded(g, tx + w / 2 - 7, ty + 13, 14, 2, 1, a(ClientUi.ACCENT_B, appear))
-            } else {
-                hits += Hit(tx - 6, ty - 6, tx + w + 6, ty + 14, onClick = open)
-            }
-            tx += w + gap
+        // The title art and its splash, as on the title screen.
+        if (art != null && artH > 0) {
+            val tIn = ease((elapsed - 40L) / 420f)
+            val ty = y - ((1f - tIn) * 10f).toInt()
+            val tint = ((tIn * 255f).toInt().coerceIn(0, 255) shl 24) or 0xFFFFFF
+            g.riverBlit(art.first, x, ty, 0f, 0f, artW, artH, art.second, art.third, art.second, art.third, tint)
+            // Higher up the art's side than on the title screen: here a line of text sits under the art.
+            if (tIn > 0.95f) RiverMainMenu.drawSplash(g, font, x + artW + 4, ty + artH * 3 / 5, splash)
+            y += artH + 8
         }
 
-        // You, top right.
-        val name = client.user.name
-        val nameW = font.width(name)
-        val headX = width - 22 - 16
-        PlayerHeads.draw(g, client.player?.uuid?.toString() ?: "", name, headX, 13, 16, alpha = appear)
-        g.drawString(font, name, headX - 8 - nameW, 17, a(ClientUi.TEXT, appear), false)
-    }
-
-    private fun drawColumn(g: GuiGraphics, client: Minecraft, mouseX: Int, mouseY: Int, appear: Float) {
-        val x = width - 44 - COLUMN
-        val listH = actions.size * ROW + (if (hasMore) ROW else 0)
-        val total = 12 + 22 + 12 + 12 + 14 + 30 + 10 + listH + 13 + 26
-        var y = maxOf(56, (height - total) / 2) + ((1f - appear) * 6f).toInt()
-
-        // Where you are.
+        // Where you are, in two quiet lines.
         val place = place(client)
-        g.drawString(font, place.kind, x, y, a(ClientUi.MUTED, appear), false)
-        y += 12
-        ClientUi.withTransform(g, x.toFloat(), y.toFloat(), 1.6f) {
-            g.drawString(font, trim(place.title, (COLUMN / 1.6f).toInt()), 0, 0, a(ClientUi.TEXT, appear), false)
+        val infoIn = ease((elapsed - 90L) / 320f)
+        if (infoIn > 0.02f) {
+            val title = trim(font, place.title, w - font.width("  ·  ${place.kind}"))
+            g.drawString(font, title, x, y, ClientUi.alpha(0xFFFFFFFF.toInt(), infoIn), true)
+            g.drawString(font, "  ·  ${place.kind}", x + font.width(title), y, ClientUi.alpha(0xFFB9C0D2.toInt(), infoIn), true)
+            val dot = if (place.paused) ClientUi.POSITIVE else ClientUi.WARNING
+            g.fill(x + 1, y + 13, x + 5, y + 17, ClientUi.alpha(dot, infoIn))
+            val status = listOf(if (place.paused) "Paused" else "Still running", place.detail).filter { it.isNotEmpty() }.joinToString("  ·  ")
+            g.drawString(font, trim(font, status, w - 9), x + 9, y + 11, ClientUi.alpha(0xFFB9C0D2.toInt(), infoIn), true)
         }
-        y += 22
-        if (place.detail.isNotEmpty()) g.drawString(font, trim(place.detail, COLUMN), x, y, a(ClientUi.MUTED, appear), false)
-        y += 12
-        val dot = if (place.paused) ClientUi.POSITIVE else ClientUi.WARNING
-        if (RiverShapes.available) RiverShapes.circle(g, x.toFloat(), y + 2.5f, 5f, a(dot, appear))
-        else g.fill(x, y + 2, x + 5, y + 7, a(dot, appear))
-        g.drawString(font, if (place.paused) "Paused" else "Still running", x + 10, y, a(ClientUi.MUTED, appear), false)
-        y += 14 + 12
+        y += 30
 
-        // Back to the game: the one thing most people came here for.
-        run {
-            val h = 30
-            val hovered = mouseX in x..(x + COLUMN) && mouseY in y..(y + h)
-            val glow = ClientUi.hover("pause-back", hovered)
-            val fill = ClientUi.mix(ClientUi.ACCENT_A, ClientUi.over(ClientUi.alpha(ClientUi.LIFT, 0.14f), ClientUi.ACCENT_A), glow)
-            ClientUi.fillRounded(g, x, y, COLUMN, h, ClientUi.RADIUS_BUTTON, a(fill, appear))
-            val label = Component.translatable("menu.returnToGame").string
-            g.drawString(font, label, x + (COLUMN - font.width(label)) / 2, y + (h - 8) / 2, a(ClientUi.TEXT, appear), false)
-            hits += Hit(x, y, x + COLUMN, y + h) { backToGame() }
-            y += h + 10
+        // The buttons: rows of one or two, in the title screen's style.
+        var index = 0
+        for (row in rows) {
+            val cellW = (w - (row.size - 1) * RiverMainMenu.BTN_GAP) / row.size
+            row.forEachIndexed { slot, entry ->
+                val bIn = ease((elapsed - 120L - index * 35L) / 340f)
+                val bx = x + slot * (cellW + RiverMainMenu.BTN_GAP)
+                val by = y + ((1f - bIn) * 8f).toInt()
+                val enabled = entry.button?.active != false
+                val hovered = enabled && mouseX in bx..(bx + cellW) && mouseY in by..(by + RiverMainMenu.BTN_H)
+                RiverMainMenu.drawButton(g, font, entry.label, bx, by, cellW, hovered, bIn * (if (enabled) 1f else 0.45f), isQuit = false, primary = entry.primary)
+                if (enabled) hits += Hit(bx, by, bx + cellW, by + RiverMainMenu.BTN_H, entry.button == null, entry.onClick)
+                index++
+            }
+            y += RiverMainMenu.BTN_H + RiverMainMenu.BTN_GAP
         }
+        y -= RiverMainMenu.BTN_GAP
 
-        // Vanilla's actions, then More.
-        for (action in actions) {
-            row(g, x, y, mouseX, mouseY, appear, "pause-row:${action.key}:${action.label}", action.icon, action.label, action.button.active, sound = false) { press(action.button) }
-            y += ROW
-        }
-        if (hasMore) {
-            row(g, x, y, mouseX, mouseY, appear, "pause-row:more", "layout", "More", true) { showVanillaMenu() }
-            y += ROW
-        }
-
-        // Leaving, set apart and red.
-        y += 6
-        g.fill(x, y, x + COLUMN, y + 1, a(ClientUi.alpha(ClientUi.BORDER, 0.8f), appear))
-        y += 7
+        // The way out, set apart and red on hover, as Quit is on the title screen.
         val leave = disconnect
         if (leave != null) {
-            val h = 26
-            val hovered = mouseX in x..(x + COLUMN) && mouseY in y..(y + h) && leave.active
-            val glow = ClientUi.hover("pause-leave", hovered)
-            ClientUi.fillRounded(g, x, y, COLUMN, h, ClientUi.RADIUS_BUTTON, a(ClientUi.alpha(ClientUi.DANGER, 0.10f + 0.10f * glow), appear))
-            val label = leave.message.string
-            RiverIcons.draw(g, "x", x + 10, y + (h - 9) / 2, 9, a(ClientUi.DANGER, appear))
-            g.drawString(font, trim(label, COLUMN - 34), x + 26, y + (h - 8) / 2, a(ClientUi.DANGER, appear), false)
-            hits += Hit(x, y, x + COLUMN, y + h, sound = false) { press(leave) }
+            y += RiverMainMenu.QUIT_EXTRA_GAP
+            val bIn = ease((elapsed - 120L - index * 35L) / 340f)
+            val by = y + ((1f - bIn) * 8f).toInt()
+            val hovered = leave.active && mouseX in x..(x + w) && mouseY in by..(by + RiverMainMenu.BTN_H)
+            RiverMainMenu.drawButton(g, font, leave.message.string, x, by, w, hovered, bIn, isQuit = true, primary = false)
+            if (leave.active) hits += Hit(x, by, x + w, by + RiverMainMenu.BTN_H, sound = false) { press(leave) }
+            y += RiverMainMenu.BTN_H
+            index++
         }
+
+        // River's own places, as the title screen's icon row: the River menu, Wardrobe, Friends, and More.
+        y += RiverMainMenu.ICON_ROW_GAP
+        val icons = listOf<Triple<String, String?, () -> Unit>>(
+            Triple("River Client", null) { client.setScreen(RiverMenuScreen(this)) },
+            Triple("Wardrobe", "shirt") { client.setScreen(RiverCosmeticsScreen(this)) },
+            Triple("Friends", "users") { client.setScreen(RiverFriendsScreen(this)) },
+            Triple("More options", "more") { showVanillaMenu() }
+        )
+        val iconIn = ease((elapsed - 120L - index * 35L) / 340f)
+        icons.forEachIndexed { i, (tooltip, icon, open) ->
+            val bx = x + i * (RiverMainMenu.ICON_BTN + RiverMainMenu.ICON_GAP)
+            val by = y + ((1f - iconIn) * 8f).toInt()
+            val hovered = mouseX in bx..(bx + RiverMainMenu.ICON_BTN) && mouseY in by..(by + RiverMainMenu.ICON_BTN)
+            RiverMainMenu.drawIconButton(g, font, tooltip, icon, bx, by, hovered, iconIn)
+            hits += Hit(bx, by, bx + RiverMainMenu.ICON_BTN, by + RiverMainMenu.ICON_BTN, onClick = open)
+        }
+
+        // Corner labels, as on the title screen: River on the left, the frame rate on the right.
+        ClientUi.fillRounded(g, 6, height - 13, 2, 9, 1, ClientUi.ACCENT_B)
+        g.drawString(font, "River Client", 12, height - 12, 0xE6C7CDDC.toInt(), true)
+        val fps = "${client.fps} FPS"
+        g.drawString(font, fps, width - 6 - font.width(fps), height - 12, 0xB3B9C0D2.toInt(), true)
+
+        // Your music, where you put it on the HUD, with its controls (this screen draws instead
+        // of Screen.render, so River's usual overlay hook does not reach it).
+        dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.NowPlayingModule>("now_playing")?.renderMenu(client, g)
     }
 
-    private fun row(g: GuiGraphics, x: Int, y: Int, mouseX: Int, mouseY: Int, appear: Float, id: String, icon: String, label: String, active: Boolean, sound: Boolean = true, onClick: () -> Unit) {
-        val hovered = active && mouseX in x..(x + COLUMN) && mouseY in y..(y + ROW - 2)
-        val glow = ClientUi.hover(id, hovered)
-        if (glow > 0.01f) ClientUi.fillRounded(g, x, y, COLUMN, ROW - 2, ClientUi.RADIUS_BUTTON, a(ClientUi.alpha(ClientUi.LIFT, 0.07f * glow), appear))
-        val color = when {
-            !active -> ClientUi.DIM
-            else -> ClientUi.mix(ClientUi.MUTED, ClientUi.TEXT, 0.55f + 0.45f * glow)
-        }
-        RiverIcons.draw(g, icon, x + 8, y + (ROW - 2 - 11) / 2, 11, a(color, appear))
-        g.drawString(font, trim(label, COLUMN - 36), x + 26, y + (ROW - 2 - 8) / 2, a(color, appear), false)
-        if (active) hits += Hit(x, y, x + COLUMN, y + ROW - 2, sound, onClick)
+    /** One button in the column: vanilla's (pressed as vanilla would) or River's own. */
+    private class Entry(val label: String, val primary: Boolean, val button: AbstractButton?, val onClick: () -> Unit)
+
+    /** Back to Game on its own, then vanilla's actions two to a row. */
+    private fun buttonRows(): List<List<Entry>> {
+        val rows = ArrayList<List<Entry>>()
+        rows += listOf(Entry(Component.translatable("menu.returnToGame").string, true, null) { backToGame() })
+        actions.map { action -> Entry(action.label, false, action.button) { press(action.button) } }
+            .chunked(2).forEach { rows += it }
+        return rows
     }
 
-    /** The bottom left: you, the frame rate, and what is playing. */
-    private fun drawChips(g: GuiGraphics, client: Minecraft, mouseX: Int, mouseY: Int, appear: Float) {
-        val h = 30
-        val y = height - 22 - h
-        var x = 22
+    private val splash: String = RiverMainMenu.randomSplash()
 
-        // You.
-        run {
-            val name = client.user.name
-            val w = 10 + 18 + 7 + maxOf(font.width(name), font.width("You")) + 12
-            chip(g, x, y, w, h, appear)
-            PlayerHeads.draw(g, client.player?.uuid?.toString() ?: "", name, x + 10, y + 6, 18, alpha = appear)
-            g.drawString(font, name, x + 35, y + 6, a(ClientUi.TEXT, appear), false)
-            g.drawString(font, "You", x + 35, y + 17, a(ClientUi.DIM, appear), false)
-            x += w + 8
-        }
-
-        // The frame rate.
-        run {
-            val fps = client.fps.coerceAtLeast(0)
-            val top = "$fps FPS"
-            val bottom = if (fps > 0) "%.1f ms".format(1000f / fps) else "-"
-            val w = 12 + maxOf(font.width(top), font.width(bottom)) + 12
-            chip(g, x, y, w, h, appear)
-            g.drawString(font, top, x + 12, y + 6, a(ClientUi.TEXT, appear), false)
-            g.drawString(font, bottom, x + 12, y + 17, a(ClientUi.DIM, appear), false)
-            x += w + 8
-        }
-
-        // What is playing, with its keys, when the Spotify module is on.
-        val music = ModuleRegistry.get<NowPlayingModule>("now_playing")?.takeIf { it.active } ?: return
-        val playback = music.playback() ?: return
-        run {
-            val textW = maxOf(font.width(playback.title), font.width(playback.artist)).coerceIn(60, 130)
-            val w = 8 + 22 + 8 + textW + 10 + 3 * 15 + 6
-            chip(g, x, y, w, h, appear)
-            val cover = music.coverForMenu()
-            if (cover != null) {
-                g.riverBlit(cover.first, x + 8, y + 4, 0f, 0f, 22, 22, cover.second, cover.third, cover.second, cover.third)
-            } else {
-                ClientUi.fillRounded(g, x + 8, y + 4, 22, 22, 3, a(ClientUi.PANEL_ALT, appear))
-                RiverIcons.draw(g, "spotify", x + 12, y + 8, 14, a(0xFF1DB954.toInt(), appear))
-            }
-            val tx = x + 38
-            g.drawString(font, trim(playback.title, textW), tx, y + 6, a(ClientUi.TEXT, appear), false)
-            g.drawString(font, trim(playback.artist, textW), tx, y + 17, a(ClientUi.DIM, appear), false)
-            var cx = tx + textW + 10
-            for (action in listOf("prev", "playpause", "next")) {
-                val hovered = mouseX in (cx - 2)..(cx + 13) && mouseY in (y + 7)..(y + 24)
-                val glow = ClientUi.hover("pause-media:$action", hovered)
-                if (glow > 0.01f) ClientUi.fillRounded(g, cx - 2, y + 7, 15, 16, 3, a(ClientUi.alpha(ClientUi.LIFT, 0.10f * glow), appear))
-                music.drawControl(g, action, cx, y + 10, playback.playing)
-                hits += Hit(cx - 2, y + 7, cx + 13, y + 24) { music.control(action) }
-                cx += 15
-            }
-        }
+    private fun ease(t: Float): Float {
+        val c = t.coerceIn(0f, 1f)
+        return 1f - (1f - c) * (1f - c) * (1f - c)
     }
 
-    private fun chip(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, appear: Float) {
-        if (!Glass.surface(g, x, y, w, h, 8, ClientUi.alpha(ClientUi.PANEL, 0.82f * appear), ClientUi.PANEL, 0.55f * appear, false)) {
-            ClientUi.fillRounded(g, x, y, w, h, 8, a(ClientUi.alpha(ClientUi.PANEL, 0.82f), appear))
+    /** Darkens the left side behind the column, fading out toward your player; the rest stays clear. */
+    private fun drawShade(g: GuiGraphics, columnRight: Int, appear: Float) {
+        if (appear < 0.02f) return
+        val end = minOf(width, columnRight + 110)
+        var x0 = 0
+        while (x0 < end) {
+            val p = 1f - x0.toFloat() / end
+            val eased = p * p * (3f - 2f * p)
+            g.fill(x0, 0, minOf(end, x0 + 2), height, shade(0.66f * eased * appear))
+            x0 += 2
         }
-        ClientUi.drawRoundedBorder(g, x, y, w, h, 8, a(ClientUi.alpha(ClientUi.LIFT, 0.08f), appear))
+        g.fillGradient(0, height - 48, width, height, shade(0f), shade(0.45f * appear))
+    }
+
+    private fun shade(alpha: Float): Int = ((alpha.coerceIn(0f, 1f) * 255).toInt() shl 24) or 0x07090D
+
+    private fun trim(font: net.minecraft.client.gui.Font, text: String, maxWidth: Int): String {
+        if (maxWidth <= 0 || font.width(text) <= maxWidth) return text
+        var out = text
+        while (out.isNotEmpty() && font.width("$out...") > maxWidth) out = out.dropLast(1)
+        return "$out..."
     }
 
     // ------------------------------------------------------------------ where you are
@@ -455,12 +378,6 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
         return Place(if (realm) "Realms" else "Multiplayer", title, detail, false)
     }
 
-    private fun trim(text: String, maxWidth: Int): String {
-        if (font.width(text) <= maxWidth) return text
-        var out = text
-        while (out.isNotEmpty() && font.width("$out...") > maxWidth) out = out.dropLast(1)
-        return "$out..."
-    }
 
     // ------------------------------------------------------------------ input
 

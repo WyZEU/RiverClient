@@ -14,8 +14,8 @@ import kotlin.math.tan
 
 /**
  * The camera behind River's pause menu: it swings out of your head and round to the front,
- * so you see your own player on the left of the screen with the menu on the right, and
- * drifts a little while the menu is open.
+ * so you see your own player on the right of the screen beside the menu, and then circles you
+ * slowly, like a turntable, for as long as the menu is open (not with animations off).
  *
  * It borrows two transient options for the time it is up, both put back exactly as they were:
  * the perspective (so your player is drawn at all) and hideGui (so the hotbar and HUD are out
@@ -33,11 +33,13 @@ object PauseCamera {
     private const val INTRO = 0.55
     /** How far away the camera settles, in blocks (less when a wall is in the way). */
     private const val DISTANCE = 3.3f
-    /** How far round from straight in front the camera sits, toward your right hand. */
-    private const val SIDE = 28.0
-    private const val PITCH = 9.0f
-    /** Where across the screen your player ends up, leaving the right side to the menu. */
-    private const val PLAYER_AT = 0.34
+    /** How far round from straight in front the camera first settles, toward your left hand. */
+    private const val SIDE = -28.0
+    private const val PITCH = 10.0f
+    /** Where across the screen your player ends up, leaving the left side to the menu. */
+    private const val PLAYER_AT = 0.67
+    /** The turntable: degrees a second the camera circles you once it has settled. */
+    private const val ORBIT = 7.0
 
     private var startedAt = 0L
     private var savedType: CameraType? = null
@@ -109,14 +111,15 @@ object PauseCamera {
         val t = (seconds / INTRO).coerceIn(0.0, 1.0)
         val e = 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t)
 
-        // Swings from behind (your own view) round past your right shoulder to in front of you.
-        val drift = sin(seconds * 0.32) * 4.0 * e
+        // Swings from behind (your own view) round past your left shoulder to in front of you,
+        // then keeps circling. The circling eases in with the swing, so it never jerks.
+        val animate = dev.wyz.clientcore.RiverRuntime.configOrNull()?.uiAnimations != false
+        val orbit = if (animate) seconds * ORBIT * e else 0.0
         val yaw = entity.getViewYRot(partialTick).toDouble()
-        // From behind that is a turn the short way round by your right side; from the front
-        // camera it is only the last few degrees.
-        val endTurn = if (startTurn == 180.0) 180.0 + SIDE else SIDE - 180.0
-        val turn = startTurn + (endTurn - startTurn) * e + drift
-        val pitch = Mth.lerp(e.toFloat(), entity.getViewXRot(partialTick), PITCH + (sin(seconds * 0.21) * 1.2 * e).toFloat())
+        val endTurn = 180.0 + SIDE
+        val turn = startTurn + (endTurn - startTurn) * e + orbit
+        val bob = if (animate) (sin(seconds * 0.21) * 1.2 * e).toFloat() else 0f
+        val pitch = Mth.lerp(e.toFloat(), entity.getViewXRot(partialTick), PITCH + bob)
         val distance = Mth.lerp(e.toFloat(), startDistance, DISTANCE)
 
         // Out of your head far enough to see yourself: switch to third person so the model draws.

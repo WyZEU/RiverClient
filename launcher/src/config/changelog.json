@@ -10,7 +10,7 @@
     "Improved: The Mac and Linux downloads are smaller for the same reason.",
     "Added: The standalone mod updates itself. It downloads the new version in the background, checks it is a real River release, and switches to it the next time you start Minecraft.",
     "Fixed: With FancyMenu installed, River's main menu no longer covers FancyMenu's custom menus.",
-    "Added: A new pause menu. The camera swings round to show your player, with where you are, Back to Game and the game's own options beside it, and your frame rate and music along the bottom. More shows the game's menu with every mod's buttons. Settings has River pause menu and Pause menu camera to turn either off.",
+    "Added: A new pause menu in the style of River's title screen, with your player beside it while the camera slowly circles them. Your music stays on screen with its controls, and the square buttons open River's menu, Wardrobe, Friends and the game's own pause menu with every mod's buttons. Settings has River pause menu and Pause menu camera to turn either off.",
     "Improved: Zoom eases in and out like a camera, scrolling to zoom further glides instead of jumping, the zoom key reacts the moment you press it, and the mouse slows to match.",
     "Changed: The Spotify module is now a small bar with the song's album cover and its name. Hover or click it in a menu for the full player with its controls.",
     "Changed: Lyrics are part of the Spotify module now. Turn them on in its settings; On screen shows the line being sung in the Spotify bar in place of the song name. The separate lyrics bar is gone.",

@@ -346,8 +346,9 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         renderTrack(client, graphics)
     }
 
+    // River's own screens draw their own things, except the pause menu, which shows your music.
     private fun overMenu(client: Minecraft): Boolean = client.screen != null && client.screen !is ChatScreen &&
-        client.screen !is dev.wyz.clientcore.ui.RiverScreen
+        (client.screen !is dev.wyz.clientcore.ui.RiverScreen || client.screen is dev.wyz.clientcore.ui.screen.RiverPauseScreen)
 
     /** Screen backgrounds blur the HUD; draw usable controls after that background. */
     fun renderMenu(client: Minecraft, graphics: GuiGraphics) {
@@ -355,9 +356,10 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         if (!active || !overMenu(client) || client.level == null || client.player == null) return
         if (dev.wyz.clientcore.dev.DevShot.hudHidden || dev.wyz.clientcore.hud.HudRenderer.inReplay()) return
 //? if >=26.2 {
-/*        if (client.gui.hud.isHidden()) return
+/*        if (client.gui.hud.isHidden() && !dev.wyz.clientcore.ui.pause.PauseCamera.active) return
 *///?} else {
-        if (client.options.hideGui) return
+        // The pause menu's camera hides the HUD itself; the music stays.
+        if (client.options.hideGui && !dev.wyz.clientcore.ui.pause.PauseCamera.active) return
 //?}
         renderScaled(graphics) { renderTrack(client, graphics) }
     }
