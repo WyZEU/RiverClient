@@ -117,6 +117,7 @@ object DevShot {
         // One step at a time: open a shot, give it time to settle, capture it, and only move
         // on once the capture has been written (it is read back from the GPU asynchronously).
         if (index >= 0 && grabAt != 0L) {
+            if (shots[index].startsWith("world-media-controls") && !mediaControls(client, now)) return
             if (now < grabAt) return
             if (recording(shots[index]) && !record(client, shots[index])) return
             grabAt = 0L
@@ -133,7 +134,7 @@ object DevShot {
             return
         }
         open(client, shots[index])
-        grabAt = now + 4500
+        grabAt = now + if (shots[index].startsWith("world-media-live") || shots[index].startsWith("world-media-lyrics-only")) 30_000 else 4500
     }
 
     private fun open(client: Minecraft, spec: String) {
@@ -154,7 +155,50 @@ object DevShot {
             client.setScreen(RiverMenuScreen(null, dev.wyz.clientcore.module.ModuleRegistry.get(name.removePrefix("world-mod-"))))
             return
         }
+        // A functional smoke pass in an isolated test world; no synthetic song or lyrics.
+        if (name.startsWith("world-audit-")) {
+            val registry = dev.wyz.clientcore.module.ModuleRegistry
+            val module = registry.get<dev.wyz.clientcore.module.Module>(name.removePrefix("world-audit-")) ?: error("Unknown audit module")
+            registry.all.forEach { it.enabled = false }
+            module.enabled = true
+            val settings = module.settings()
+            settings.forEach { setting ->
+                when (setting) {
+                    is dev.wyz.clientcore.module.settings.BoolSetting -> { val old = setting.get(); setting.set(!old); setting.set(old) }
+                    is dev.wyz.clientcore.module.settings.IntSetting -> { val old = setting.get(); setting.set(setting.min); setting.set(setting.max); setting.set(old) }
+                    is dev.wyz.clientcore.module.settings.ChoiceSetting -> { val old = setting.get(); setting.options.forEach(setting.set); setting.set(old) }
+                    is dev.wyz.clientcore.module.settings.ColorSetting -> { val old = setting.get(); setting.set(0xFF478AC9.toInt()); setting.set(old) }
+                    is dev.wyz.clientcore.module.settings.KeybindSetting -> { val old = setting.get(); setting.set(-1); setting.set(old) }
+                    else -> Unit // Actions can delete content or send messages; this pass does not invoke them.
+                }
+            }
+            dev.wyz.clientcore.config.ConfigService.save(config)
+            check(dev.wyz.clientcore.config.ConfigService.load().modules[module.id] == config.modules[module.id]) { "Profile roundtrip failed: ${module.id}" }
+            println("[river] module audit ${module.id}: ${settings.size} settings, enabled=${module.active}, profile roundtrip passed")
+            client.setScreen(RiverMenuScreen(null, module))
+            return
+        }
         when (name) {
+            "world-media-live", "world-media-lyrics-only", "world-media-controls" -> {
+                dev.wyz.clientcore.module.ModuleRegistry.all.forEach {
+                    it.enabled = it.id == "lyrics" || (it.id == "now_playing" && name != "world-media-lyrics-only")
+                }
+                dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.LyricsModule>("lyrics")?.settings()
+                    ?.filterIsInstance<dev.wyz.clientcore.module.settings.BoolSetting>()
+                    ?.filter { it.label == "On screen" || it.label == "In the world" }?.forEach { it.set(true) }
+                // Keep a whole real line in view so the capture also exercises world text.
+                dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.LyricsModule>("lyrics")?.settings()
+                    ?.filterIsInstance<dev.wyz.clientcore.module.settings.ChoiceSetting>()?.forEach {
+                        if (it.label == "Show") it.set("Lines")
+                        if (it.label == "Layout") it.set("Center")
+                    }
+                if (name == "world-media-controls") {
+                    mediaStep = 0
+                    mediaStepAt = System.currentTimeMillis()
+                    dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.NowPlayingModule>("now_playing")?.editorSetScalePercent(150)
+                    client.setScreen(net.minecraft.client.gui.screens.PauseScreen(true))
+                } else client.setScreen(null)
+            }
             // Opened from the title screen, which is where a missing item component crashed 26.1.2.
             "river-menu" -> client.setScreen(RiverMenuScreen(null))
             "river-hud" -> client.setScreen(RiverHudEditorScreen(null))
@@ -729,12 +773,41 @@ object DevShot {
     private fun openWorld(client: Minecraft, name: String) {
         runCatching {
             val flows = Minecraft::class.java.methods.first { it.name == "createWorldOpenFlows" && it.parameterCount == 0 }.invoke(client)
+            if (java.lang.Boolean.getBoolean("river.devshot.createWorld") && !java.io.File(client.gameDirectory, "saves/$name/level.dat").exists()) {
+                val settingsClass = Class.forName("net.minecraft.world.level.LevelSettings")
+                val constructor = settingsClass.constructors.first { it.parameterCount == 7 || it.parameterCount == 5 }
+                val types = constructor.parameterTypes
+                val data = types.last().getField("DEFAULT").get(null)
+                val creative = types[1].enumConstants.first { it.toString() == "CREATIVE" }
+                val settings = if (types.size == 7) {
+                    val features = types.last().getMethod("enabledFeatures").invoke(data)
+                    val rules = types[5].constructors.firstOrNull { it.parameterCount == 1 && it.parameterTypes[0].isInstance(features) }?.newInstance(features)
+                        ?: types[5].getConstructor().newInstance()
+                    constructor.newInstance(name, creative, false, types[3].enumConstants.first { it.toString() == "PEACEFUL" }, true, rules, data)
+                } else {
+                    val difficulty = types[2].constructors.first { it.parameterCount == 3 }
+                    val peaceful = difficulty.parameterTypes[0].enumConstants.first { it.toString() == "PEACEFUL" }
+                    constructor.newInstance(name, creative, difficulty.newInstance(peaceful, false, false), true, data)
+                }
+                val optionsClass = Class.forName("net.minecraft.world.level.levelgen.WorldOptions")
+                val options = optionsClass.getConstructor(Long::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType).newInstance(1L, false, false)
+                val presets = Class.forName("net.minecraft.world.level.levelgen.presets.WorldPresets")
+                val dimensions = presets.methods.firstOrNull { it.name == "createFlatWorldDimensions" && it.parameterCount == 1 }
+                    ?: presets.methods.first { it.name == "createNormalWorldDimensions" && it.parameterCount == 1 }
+                val factory = java.util.function.Function<Any, Any> { dimensions.invoke(null, it) }
+                flows.javaClass.methods.first { it.name == "createFreshLevel" && it.parameterCount == 5 }.invoke(flows, name, settings, options, factory, null)
+                println("[river] devshot creating test world $name")
+                return
+            }
             val open = flows.javaClass.methods.first {
                 it.name == "openWorld" && it.parameterCount == 2 && it.parameterTypes[0] == String::class.java
             }
             open.invoke(flows, name, Runnable { println("[river] bench: opening $name was cancelled") })
             println("[river] bench opening $name")
-        }.onFailure { println("[river] bench could not open $name: $it") }
+        }.onFailure {
+            println("[river] bench could not open $name: $it")
+            if (shots.isNotEmpty()) throw it
+        }
     }
 
     /**
@@ -773,6 +846,80 @@ object DevShot {
         instance.javaClass.methods.first { it.name == "set" && it.parameterCount == 1 }.invoke(instance, volume)
         old
     }.getOrNull()
+
+    private var mediaStep = 0
+    private var mediaStepAt = 0L
+    private var mediaTitle = ""
+    private var mediaPausedAt = 0L
+    private var mediaPosition = 0L
+
+    /** Exercises rendered HUD hitboxes and the real session; the player must already be playing. */
+    private fun mediaControls(client: Minecraft, now: Long): Boolean {
+        if (mediaStep == 6) return true
+        check(now - mediaStepAt < 20_000L) { "Media control audit timed out at step $mediaStep" }
+        val track = dev.wyz.clientcore.media.MediaSession.current() ?: return false
+        val module = dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.NowPlayingModule>("now_playing") ?: error("Music module missing")
+        fun field(name: String): Any = module.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(module)
+        fun click(name: String) {
+            check(field("controlsShown") == true) { "Music controls are not rendered" }
+            val box = field(name) as IntArray
+            check(box[2] > box[0] && box[3] > box[1]) { "Empty music control hitbox" }
+            val mx = module.x + ((box[0] + box[2]) / 2.0 - module.x) * module.scaleFactor()
+            val my = module.y + ((box[1] + box[3]) / 2.0 - module.y) * module.scaleFactor()
+            val window = client.window
+            fun windowValue(vararg names: String): Number = window.javaClass.methods.first {
+                it.name in names && it.parameterCount == 0
+            }.invoke(window) as Number
+            val mouse = client.mouseHandler
+            mouse.javaClass.getDeclaredField("xpos").apply { isAccessible = true }.setDouble(mouse, mx * windowValue("getScreenWidth", "screenWidth").toDouble() / window.guiScaledWidth)
+            mouse.javaClass.getDeclaredField("ypos").apply { isAccessible = true }.setDouble(mouse, my * windowValue("getScreenHeight", "screenHeight").toDouble() / window.guiScaledHeight)
+            val press = mouse.javaClass.declaredMethods.first { it.name == "onButton" || it.name == "onPress" }.apply { isAccessible = true }
+            val handle = windowValue("handle", "getWindow").toLong()
+            if (press.parameterCount == 3) {
+                val info = press.parameterTypes[1].getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).newInstance(0, 0)
+                press.invoke(mouse, handle, info, 1)
+                press.invoke(mouse, handle, info, 0)
+            } else {
+                press.invoke(mouse, handle, 0, 1, 0)
+                press.invoke(mouse, handle, 0, 0, 0)
+            }
+            mediaStepAt = now
+        }
+        when (mediaStep) {
+            0 -> if (track.playing && track.artFile.isNotBlank() && field("controlsShown") == true) {
+                mediaTitle = track.title
+                click("playBox")
+                mediaStep = 1
+            }
+            1 -> if (!track.playing && now - mediaStepAt > 2000L) {
+                mediaPosition = track.positionMs
+                mediaPausedAt = now
+                mediaStep = 2
+            }
+            2 -> if (now - mediaPausedAt > 2000L) {
+                check(!track.playing && kotlin.math.abs(track.positionMs - mediaPosition) < 250L) { "Paused music clock moved" }
+                println("[river] media controls: HUD pause and frozen clock passed")
+                click("playBox")
+                mediaStep = 3
+            }
+            3 -> if (track.playing && track.positionMs > mediaPosition + 750L) {
+                println("[river] media controls: HUD resume passed")
+                click("nextBox")
+                mediaStep = 4
+            }
+            4 -> if (track.title != mediaTitle && track.artFile.isNotBlank() && module.playback()?.title == track.title) {
+                println("[river] media controls: HUD next passed (${track.title})")
+                click("prevBox")
+                mediaStep = 5
+            }
+            5 -> if (track.title == mediaTitle && track.playing) {
+                println("[river] media controls: HUD previous passed ($mediaTitle)")
+                mediaStep = 6
+                grabAt = now + 4500L
+            }
+        }
+        return false
+    }
 
     private fun finish(client: Minecraft) {
         mutedFrom?.takeIf { !it.isNaN() }?.let { setMasterVolume(client, it) }

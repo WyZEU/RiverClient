@@ -29,11 +29,6 @@ import net.minecraft.resources.Identifier
 //?} else {
 /*import net.minecraft.resources.ResourceLocation
 *///?}
-//? if >=26.3 {
-/*import dev.wyz.clientcore.compat.GLFW
-*///?} else {
-import org.lwjgl.glfw.GLFW
-//?}
 import java.io.ByteArrayInputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -43,13 +38,12 @@ import dev.wyz.clientcore.compat.riverBlit
 /**
  * Now playing.
  *
- * The launcher's native helper reads the Windows media session and drops the track
- * JSON plus the real album cover into the file bridge; this only renders what it
- * finds. Shows the album art, track name and timestamp - no app branding text.
+ * Reads the launcher's file bridge or the game's platform media reader. Shows the
+ * available album art, track name and timestamp - no app branding text.
  *
  * When a menu is open (inventory, pause, etc.) it also shows previous / play-pause /
- * next controls; clicking one writes a command to the bridge that the launcher runs
- * against the media session. Purely a readout otherwise - server-safe.
+ * next controls; clicking one sends a command through the reader providing the
+ * displayed track. Purely a readout otherwise - server-safe.
  */
 class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your music", ModuleCategory.HUD, "spotify", 8, 244) {
 
@@ -120,7 +114,6 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
     private var playBox = intArrayOf(0, 0, 0, 0)
     private var nextBox = intArrayOf(0, 0, 0, 0)
     private var controlsShown = false
-    private var wasMouseDown = false
 
     private val bridgeDir: Path by lazy { DesktopBridge.riverDataRoot().resolve("River Client").resolve("bridge") }
     private val bridgeFile: Path by lazy { bridgeDir.resolve("nowplaying.json") }
@@ -159,9 +152,8 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
 
     /**
      * The song from the launcher's feed while it is fresh (the launcher started the game),
-     * otherwise straight from Windows through MediaSession, so the module also works when
-     * River was started some other way. That route has no album art; the Spotify mark shows
-     * instead.
+     * otherwise through MediaSession, so the module also works from other launchers.
+     * The macOS reader also supplies artwork; unavailable artwork uses the fallback mark.
      */
     private fun read(now: Long) {
         runCatching {
@@ -174,7 +166,8 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
                 dev.wyz.clientcore.media.MediaSession.current()?.let {
                     Track(
                         playing = it.playing, title = it.title, artist = it.artist, album = it.album,
-                        position = (it.positionMs / 1000L).toInt(), duration = (it.durationMs / 1000L).toInt()
+                        position = (it.positionMs / 1000L).toInt(), duration = (it.durationMs / 1000L).toInt(),
+                        artFile = it.artFile, source = it.source
                     )
                 }
             }
@@ -305,6 +298,28 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
     }
 
     override fun render(client: Minecraft, graphics: GuiGraphics, tickDelta: Float) {
+        if (overMenu(client)) return
+        renderTrack(client, graphics)
+    }
+
+    private fun overMenu(client: Minecraft): Boolean = client.screen != null && client.screen !is ChatScreen &&
+        client.screen !is dev.wyz.clientcore.ui.RiverScreen
+
+    /** Screen backgrounds blur the HUD; draw usable controls after that background. */
+    fun renderMenu(client: Minecraft, graphics: GuiGraphics) {
+        controlsShown = false
+        if (!active || !overMenu(client) || client.level == null || client.player == null) return
+        if (dev.wyz.clientcore.dev.DevShot.hudHidden || dev.wyz.clientcore.hud.HudRenderer.inReplay()) return
+//? if >=26.2 {
+/*        if (client.gui.hud.isHidden()) return
+*///?} else {
+        if (client.options.hideGui) return
+//?}
+        renderScaled(graphics) { renderTrack(client, graphics) }
+    }
+
+    private fun renderTrack(client: Minecraft, graphics: GuiGraphics) {
+        controlsShown = false
         poll()
         val t = track ?: return
         if (t.title.isBlank()) return
@@ -325,7 +340,7 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
         val showBar = flag("np_progress", true) && t.duration > 0
         val showTimes = flag("np_times", true) && t.duration > 0
         // Controls only when a real menu is open (not chat), and enabled.
-        val inMenu = client.screen != null && client.screen !is ChatScreen
+        val inMenu = overMenu(client)
         val showControls = inMenu && flag("np_controls", true)
 
         val art = if (showArt) cover(t.artFile) else null
@@ -390,35 +405,20 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
         controlsShown = showControls
         if (showControls) {
             drawControls(graphics, font, tx, ty + 1, t)
-            pollControlClick(client)
         }
     }
 
-    /**
-     * Detects a fresh left-click over one of the control buttons. The HUD keeps
-     * drawing behind an open menu, so we can read the real cursor here without a
-     * Screen mixin - we just watch for the up->down edge and test the hitboxes in
-     * GUI-scaled space.
-     */
-    private fun pollControlClick(client: Minecraft) {
+    /** Consumes a menu click before a button underneath the panel can receive it. */
+    fun onMenuClick(client: Minecraft): Boolean {
+        if (!active || !overMenu(client)) return false
 //? if >=1.21.9 {
-        val down = GLFW.glfwGetMouseButton(client.window.handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
+        val mx = client.mouseHandler.getScaledXPos(client.window)
+        val my = client.mouseHandler.getScaledYPos(client.window)
 //?} else {
-/*        val down = GLFW.glfwGetMouseButton(client.window.getWindow(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
+/*        val mx = client.mouseHandler.xpos() * client.window.guiScaledWidth / client.window.screenWidth
+        val my = client.mouseHandler.ypos() * client.window.guiScaledHeight / client.window.screenHeight
 *///?}
-        if (down && !wasMouseDown) {
-//? if >=1.21.9 {
-            val mx = client.mouseHandler.getScaledXPos(client.window)
-            val my = client.mouseHandler.getScaledYPos(client.window)
-//?} else {
-/*            // 1.21.4's MouseHandler only exposes raw window-pixel xpos()/ypos(); scale to
-            // GUI space manually (the window,-scoped scaled accessors are a later addition).
-            val mx = client.mouseHandler.xpos() / client.window.guiScale
-            val my = client.mouseHandler.ypos() / client.window.guiScale
-*///?}
-            onControlClick(mx, my)
-        }
-        wasMouseDown = down
+        return onControlClick(mx, my)
     }
 
     /** Prev / play-pause / next, drawn as simple glyphs; hitboxes captured for clicks. */
@@ -464,8 +464,10 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing from your
      * Tests a click against the control buttons. Returns true if a control was hit
      * (and writes the command to the bridge for the launcher to run).
      */
-    private fun onControlClick(mx: Double, my: Double): Boolean {
+    private fun onControlClick(screenX: Double, screenY: Double): Boolean {
         if (!controlsShown) return false
+        val mx = x + (screenX - x) / scaleFactor()
+        val my = y + (screenY - y) / scaleFactor()
         val action = when {
             hit(prevBox, mx, my) -> "prev"
             hit(playBox, mx, my) -> "playpause"
