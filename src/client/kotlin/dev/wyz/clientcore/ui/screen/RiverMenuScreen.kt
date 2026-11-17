@@ -1439,10 +1439,13 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null) 
             if (row.isNotEmpty()) rowsOfChips.add(row)
         }
 
+        // Glass, Animations, River main menu, River pause menu, its camera (only while the
+        // pause menu is on) and Exclusive full screen. The card is as tall as what is drawn.
+        fun themeToggleCount() = if (RiverRuntime.config.riverPauseMenu) 6 else 5
         val styleCols = if (contentW < 300) 2 else 4
         val styleRows = 4 / styleCols
         val cardH = Metrics.HEADER_ROW + Metrics.NOTE_ROW + rowsOfChips.size * chipRowH +
-            styleRows * (STYLE_CARD_H + 6) + (if (customActive) 70 else 0) + Metrics.TOGGLE_ROW * 4 + 4
+            styleRows * (STYLE_CARD_H + 6) + (if (customActive) 70 else 0) + Metrics.TOGGLE_ROW * themeToggleCount() + 4
         ClientUi.drawSectionCard(g, x, y, w, cardH)
         var cy = sectionHeader(g, "palette", "Theme", x, y, w)
         cy = drawStyleCards(g, x + Metrics.PAD, cy, contentW, styleCols, mouseX, mouseY)
