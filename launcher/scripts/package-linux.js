@@ -55,6 +55,8 @@ River downloads the required Java version if it does not find one. Updates insta
 River when this folder and its parent are writable. The previous copy stays in the
 adjacent .river-update-* folder for recovery. Accounts and game instances are preserved.
 For a read-only installation, extract the new archive and replace the launcher manually.
+Older Linux versions still use their manual update flow. Replace that launcher once to
+enable in-app updates; keep the existing account and instance folders.
 
 Problems: https://discord.riverclient.xyz
 `;
