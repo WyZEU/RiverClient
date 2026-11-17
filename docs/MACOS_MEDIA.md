@@ -13,17 +13,19 @@ player, not a required River dependency. Browser support depends on the browser
 and its media-session settings.
 
 The panel shows the system's active player. Previous, play/pause and next are
-available while a game menu is open. Ads, live streams and free account limits
+available in regular game menus, including pause and inventory. The panel draws
+above the blurred background, and its buttons follow the HUD scale setting.
+Clicks on those buttons are consumed before reaching the menu underneath.
+Ads, live streams and free account limits
 may restrict those controls. Track metadata and playback position also feed
 Lyrics, independently of whether the music panel is enabled. Lyrics still need
 a matching timed text from a lyrics provider; an instrumental or missing text
 does not indicate a broken media reader.
 
 Album art is optional. The reader accepts embedded image data and HTTPS artwork
-URLs from the Apple, Spotify and YouTube image CDNs. Some players only expose an
-opaque artwork identifier, so the panel retains its existing fallback image.
-In particular, the tested YouTube Music desktop version exposed metadata and
-playback controls but no usable cover data.
+URLs from the Apple, Spotify and YouTube image CDNs. For players that expose only
+an opaque artwork identifier, it requests the image from that player's system
+session. Missing or invalid artwork uses the panel's existing fallback image.
 
 ## Implementation
 
@@ -44,6 +46,10 @@ Each game process has its own command and cover directory. Commands and covers
 are written atomically. Cover downloads happen on artwork changes, outside the
 render thread, with a two-second timeout and image size limits. There is no
 network polling for playback state and no connection to a player account API.
+Native cover requests are asynchronous, with at most one outstanding request.
+Their callbacks run on the helper's main queue and are retained until completion.
+A response for a previous track or player is discarded. An unresponsive artwork
+request does not stop metadata, the playback clock or controls.
 
 ## Verification
 
@@ -64,10 +70,15 @@ Check paused-track hiding, missing artwork and a song without lyrics as well.
 Developer captures run hidden and muted. Use a disposable game directory with
 `-Driver.devshot=world-media-live -Driver.bench.world=<test-world>` to capture
 real playback after allowing time for the lyrics lookup. Add
-`-Driver.devshot.createWorld=true` to create a missing flat test world.
+`-Driver.devshot.createWorld=true` to create a missing test world.
 `world-audit-<module-id>` captures a module after exercising its settings and
 checking a profile save/load round trip. This smoke test does not invoke action
 buttons or replace manual checks of keybinds, multiplayer and external services.
+`world-media-lyrics-only` verifies real lyrics with the music panel disabled.
+`world-media-controls` opens a menu and exercises the rendered panel hitboxes for
+pause, resume, next and previous, checking the real system session after each.
+It requires an already playing track with artwork and a queue containing a
+different next track. These controls change playback in the user's music app.
 Use `-Driver.mixinAudit=true` when booting each supported Minecraft version.
 
 Native runtime verification must be recorded with the macOS version, architecture,

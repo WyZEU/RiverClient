@@ -20,14 +20,21 @@ public abstract class MouseHandlerMixin {
 
     /** Every in-game mouse press, for CPS. action 1 is a press; 0 is a release. */
 //? if >=1.21.9 {
-    @Inject(method = "onButton", at = @At("HEAD"))
+    @Inject(method = "onButton", at = @At("HEAD"), cancellable = true)
     private void clientcore$countClick(long window, net.minecraft.client.input.MouseButtonInfo info, int action, CallbackInfo ci) {
         int button = info.button();
 //?} else {
-    /*@Inject(method = "onPress", at = @At("HEAD"))
+    /*@Inject(method = "onPress", at = @At("HEAD"), cancellable = true)
     private void clientcore$countClick(long window, int button, int action, int mods, CallbackInfo ci) {
 *///?}
         if (action != 1) return;
+        if (button == 0) {
+            dev.wyz.clientcore.module.impl.NowPlayingModule music = dev.wyz.clientcore.module.ModuleRegistry.INSTANCE.get("now_playing");
+            if (music != null && music.onMenuClick(this.minecraft)) {
+                ci.cancel();
+                return;
+            }
+        }
 //? if >=26.2 {
         /*if (this.minecraft.gui.screen() != null) return;
 *///?} else {

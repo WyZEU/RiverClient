@@ -160,6 +160,9 @@ object RiverRuntime {
     fun renderScreen(client: Minecraft, screen: Screen?, graphics: GuiGraphics, mouseX: Int, mouseY: Int, tickDelta: Float) {
         initialize()
         if (screen != null) dev.wyz.clientcore.ui.SeasonEvent.renderScreen(client, screen, graphics)
+        if (screen != null && screen === client.screen) {
+            ModuleRegistry.get<dev.wyz.clientcore.module.impl.NowPlayingModule>("now_playing")?.renderMenu(client, graphics)
+        }
         // Watermark shows over regular menus (pause, inventory, ...) but never on the
         // main menu, River's own screens, or the multiplayer server list - there its
         // top-right corner overlaps server pings and other clients' overlays.

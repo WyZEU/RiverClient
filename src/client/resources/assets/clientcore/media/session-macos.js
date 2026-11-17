@@ -38,6 +38,7 @@ function run(args) {
     if (!request || request.isNil()) return JSON.stringify({ error: true });
     ObjC.bindFunction("MRMediaRemoteSendCommand", ["bool", ["int", "id"]]);
     ObjC.bindFunction("MRMediaRemoteRegisterForNowPlayingNotifications", ["void", ["id"]]);
+    ObjC.bindFunction("objc_msgSend", ["void", ["id", "selector", "id", "id"]]);
     $.MRMediaRemoteRegisterForNowPlayingNotifications($.NSOperationQueue.mainQueue.underlyingQueue);
     ObjC.bindFunction("kill", ["int", ["int", "int"]]);
 
@@ -47,7 +48,7 @@ function run(args) {
     if (streaming && (!Number.isInteger(parent) || parent <= 1 || !dir)) return JSON.stringify({ error: true });
     var output = $.NSFileHandle.fileHandleWithStandardOutput;
     var files = $.NSFileManager.defaultManager;
-    var coverKey = "", coverFile = "", pendingArt = null;
+    var coverKey = "", coverFile = "", pendingArt = null, nativeArt = null;
 
     function present(value) { return value && !value.isNil(); }
     function value(dict, key) {
@@ -64,42 +65,83 @@ function run(args) {
             var client = player.client;
             source = String(client.processIdentifier) + ":" + (present(client.bundleIdentifier) ? ObjC.unwrap(client.bundleIdentifier) : "");
         }
-        pendingArt = null;
         if (present(item) && present(item.nowPlayingInfo)) {
             var info = item.nowPlayingInfo;
             ["Title", "Artist", "Album", "Duration", "ElapsedTime", "PlaybackRate", "Timestamp"].forEach(function(key) {
                 fields[key] = value(info, key);
             });
             var data = info.objectForKey("kMRMediaRemoteNowPlayingInfoArtworkData");
-            var key = source + "|" + fields.Title + "|" + fields.Artist + "|" + value(info, "ArtworkIdentifier") + "|" + (present(data) ? data.length : 0);
+            var key = JSON.stringify([source, fields.Title, fields.Artist, fields.Album, value(info, "ArtworkIdentifier"), present(data) ? data.length : 0]);
             if (key !== coverKey) {
                 coverKey = key;
                 coverFile = "";
-                pendingArt = { data: data, url: artworkUrl(value(info, "ArtworkIdentifier")) };
+                pendingArt = { key: key, player: player, data: data, url: artworkUrl(value(info, "ArtworkIdentifier")), checked: false };
             }
         } else {
             coverKey = "";
             coverFile = "";
+            pendingArt = null;
         }
         var result = mediaSnapshot(fields, !!request.localIsPlaying, source, Date.now());
         result.artFile = coverFile;
         return result;
     }
-    function saveArt(art) {
-        if (!art) return;
+    function writeArt(data) {
         try {
-            var data = art.data;
-            if (!present(data) && art.url) {
-                var req = $.NSURLRequest.requestWithURLCachePolicyTimeoutInterval($.NSURL.URLWithString(art.url), 0, 2);
-                data = $.NSURLConnection.sendSynchronousRequestReturningResponseError(req, null, null);
-            }
-            if (!present(data) || data.length > 4 * 1024 * 1024) return;
+            if (!present(data) || data.length > 4 * 1024 * 1024) return false;
             var bitmap = $.NSBitmapImageRep.imageRepWithData(data);
-            if (!present(bitmap) || bitmap.pixelsWide > 2048 || bitmap.pixelsHigh > 2048) return;
+            if (!present(bitmap) || bitmap.pixelsWide > 2048 || bitmap.pixelsHigh > 2048) return false;
             var png = bitmap.representationUsingTypeProperties(4, $({}));
             var path = dir + "/artwork.png";
-            if (present(png) && png.writeToFileAtomically(path, true)) coverFile = path;
-        } catch (_) { /* Artwork is optional; keep the playback clock running. */ }
+            if (present(png) && png.writeToFileAtomically(path, true)) { coverFile = path; return true; }
+        } catch (_) { /* Ignore missing or invalid artwork. */ }
+        return false;
+    }
+    function saveArt() {
+        if (nativeArt && nativeArt.done) {
+            if (nativeArt.key === coverKey) writeArt(nativeArt.data);
+            // Break the callback/holder cycle once native code has finished with the block.
+            nativeArt.data = nativeArt.callback = nativeArt.block = nativeArt.holder = nativeArt.request = null;
+            nativeArt = null;
+        }
+        var art = pendingArt;
+        if (!art) return;
+        if (!art.checked) {
+            art.checked = true;
+            try {
+                var data = art.data;
+                if (!present(data) && art.url) {
+                    var req = $.NSURLRequest.requestWithURLCachePolicyTimeoutInterval($.NSURL.URLWithString(art.url), 0, 2);
+                    data = $.NSURLConnection.sendSynchronousRequestReturningResponseError(req, null, null);
+                }
+                if (writeArt(data)) { pendingArt = null; return; }
+            } catch (_) { /* Try the player's native artwork next. */ }
+        }
+        // Keep at most one native request alive. A late response cannot replace a new track's cover.
+        if (nativeArt) return;
+        pendingArt = null;
+        try {
+            var job = { key: art.key, done: false, data: null };
+            job.request = request.alloc.initWithPlayerPath(art.player);
+            var selector = $.NSSelectorFromString("requestNowPlayingItemArtworkOnQueue:completion:");
+            if (!job.request.respondsToSelector(selector)) return;
+            job.callback = ObjC.block(["void", ["id", "id"]], function(image, error) {
+                try {
+                    if (!present(error) && present(image)) {
+                        job.data = image.respondsToSelector($.NSSelectorFromString("imageData")) ? image.imageData : image;
+                    }
+                } catch (_) { /* Artwork is optional. */ }
+                job.done = true;
+            });
+            // Foundation supplies the object-valued block ABI missing from the private framework.
+            job.holder = $.NSPredicate.predicateWithBlock(job.callback);
+            job.block = job.holder.valueForKey("block");
+            nativeArt = job;
+            $.objc_msgSend(job.request, selector, $.NSOperationQueue.mainQueue.underlyingQueue, job.block);
+        } catch (_) {
+            if (job) job.data = job.callback = job.block = job.holder = job.request = null;
+            nativeArt = null;
+        }
     }
     function drain(snapshot) {
         var path = dir + "/command.json";
@@ -118,7 +160,7 @@ function run(args) {
             var snapshot = sample();
             drain(snapshot);
             output.writeData($(JSON.stringify(snapshot) + "\n").dataUsingEncoding($.NSUTF8StringEncoding));
-            saveArt(pendingArt);
+            saveArt();
         } catch (_) {
             output.writeData($('{"error":true}\n').dataUsingEncoding($.NSUTF8StringEncoding));
             return;
