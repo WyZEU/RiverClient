@@ -56,7 +56,7 @@ import kotlin.math.roundToInt
  * how the HUD editor's cog gets here - the editor no longer carries its own copy of the
  * settings UI in the middle of the screen.
  */
-class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null) : Screen(Component.literal("River Client")), RiverScreen {
+class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null, openSettings: Boolean = false) : Screen(Component.literal("River Client")), RiverScreen {
 
     private enum class Page(val label: String, val icon: String, val category: ModuleCategory?) {
         FAVORITES("Favorites", "star", null),
@@ -71,7 +71,7 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null) 
 
     private enum class ProfileEdit { NONE, CREATE, RENAME }
 
-    private var page = focusModule?.let { m -> Page.entries.firstOrNull { it.category == m.category } } ?: lastPage ?: Page.HUD
+    private var page = if (openSettings) Page.SETTINGS else focusModule?.let { m -> Page.entries.firstOrNull { it.category == m.category } } ?: lastPage ?: Page.HUD
     /** Only the modules that are on, picked with the chips in the header. */
     private var onlyOn = false
     /*

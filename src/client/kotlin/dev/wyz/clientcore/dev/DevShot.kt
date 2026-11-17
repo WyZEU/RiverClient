@@ -217,6 +217,7 @@ object DevShot {
             }
             // Opened from the title screen, which is where a missing item component crashed 26.1.2.
             "river-menu" -> client.setScreen(RiverMenuScreen(null))
+            "river-settings" -> client.setScreen(RiverMenuScreen(null, openSettings = true))
             // Every module's settings panel as text, to check each one is its own and not a copy.
             "settings-dump" -> {
                 for (module in dev.wyz.clientcore.module.ModuleRegistry.all) {
