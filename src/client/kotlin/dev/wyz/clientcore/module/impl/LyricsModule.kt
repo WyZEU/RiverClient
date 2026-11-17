@@ -373,18 +373,9 @@ class LyricsModule : Module("lyrics", "Lyrics", "Synced lyrics for the song you 
                 pos >= spans.ends[i] -> 1f
                 else -> (pos - spans.starts[i]).toFloat() / (spans.ends[i] - spans.starts[i])
             }
-            when {
-                fill >= 1f -> g.drawString(font, text, x, y, sungColor, shadow)
-                fill <= 0f -> g.drawString(font, text, x, y, waitingColor, shadow)
-                else -> {
-                    // Split at the letter the singing has reached.
-                    var cut = 0
-                    while (cut < word.length && font.width(LyricFonts.styled(word.substring(0, cut + 1), face, bold)) <= w * fill) cut++
-                    val head = LyricFonts.styled(word.substring(0, cut), face, bold)
-                    g.drawString(font, head, x, y, sungColor, shadow)
-                    g.drawString(font, LyricFonts.styled(word.substring(cut), face, bold), x + font.width(head), y, waitingColor, shadow)
-                }
-            }
+            // The fill glides with a soft edge and a small light on it while the word is sung.
+            val light = if (playing && fill > 0f && fill < 1f) ClientUi.alpha(sungColor, 0.4f) else 0
+            dev.wyz.clientcore.lyrics.KaraokeWipe.word(g, font, text, x, y, w, fill, sungColor, waitingColor, shadow, light)
             x += w + space
         }
     }

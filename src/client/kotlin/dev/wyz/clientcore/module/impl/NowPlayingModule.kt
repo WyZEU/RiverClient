@@ -62,6 +62,7 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         const val MINI = 12           // album art in the compact bar
         const val MINI_TEXT = 150     // widest the compact bar's text gets
         const val DOTS_W = 10
+        val WORD_GAP = Regex("\\s+")
         val SPOTIFY_GREEN = 0xFF1DB954.toInt()
     }
 
@@ -133,9 +134,21 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
     private var wasOpen = false
 
     // The lyric line in the compact bar, worked out once per line.
-    private class BarLine(val words: List<String>, val starts: LongArray, val ends: LongArray)
+    private class BarLine(val words: List<String>, val starts: LongArray, val ends: LongArray) {
+        // Built and measured once per line, not every frame.
+        val parts: List<net.minecraft.network.chat.Component> = words.map { net.minecraft.network.chat.Component.literal(it) }
+        var widths: IntArray? = null
+        var total = 0
+        fun measure(font: net.minecraft.client.gui.Font): IntArray = widths ?: IntArray(words.size) { font.width(words[it]) }.also {
+            widths = it
+            total = it.sum() + font.width(" ") * (words.size - 1).coerceAtLeast(0)
+        }
+    }
     private var barLineKey = ""
     private var barLine: BarLine? = null
+    /** The line before, fading out upward while the new one comes in. */
+    private var previousBarLine: BarLine? = null
+    private var lineChangedAt = 0L
 
     private val bridgeDir: Path by lazy { DesktopBridge.riverDataRoot().resolve("River Client").resolve("bridge") }
     private val bridgeFile: Path by lazy { bridgeDir.resolve("nowplaying.json") }
@@ -417,7 +430,7 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
 
     private fun compactSize(client: Minecraft, t: Track, line: Pair<BarLine, Long>?): IntArray {
         val font = client.font
-        val textW = (if (line != null) wordsWidth(font, line.first.words) else font.width(compactText(t))).coerceIn(40, MINI_TEXT)
+        val textW = (if (line != null) line.first.run { measure(font); total } else font.width(compactText(t))).coerceIn(40, MINI_TEXT)
         val art = if (flag("np_art", true)) MINI + 5 else 0
         return intArrayOf(art + textW + 6 + DOTS_W, maxOf(if (art > 0) MINI else 0, font.lineHeight))
     }
@@ -432,18 +445,31 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         val tx = ox + if (showArt) MINI + 5 else 0
         val ty = oy + (size[1] - font.lineHeight) / 2 + 1
         val textW = size[0] - (tx - ox) - 6 - DOTS_W
+        val now = System.currentTimeMillis()
         if (line != null) {
-            drawKaraoke(graphics, font, line.first, line.second, tx, ty, textW, accent, ClientUi.alpha(accent, 0.5f), shadow)
+            // A new line rises in as the one before lifts away, over a fifth of a second.
+            val p = ((now - lineChangedAt) / 220f).coerceIn(0f, 1f)
+            val eased = 1f - (1f - p) * (1f - p) * (1f - p)
+            val before = previousBarLine
+            if (p < 1f && before != null) {
+                drawKaraoke(graphics, font, before, Long.MAX_VALUE, tx, ty - (eased * 3f).toInt(), textW, accent, shadow, 1f - eased, false)
+            }
+            drawKaraoke(graphics, font, line.first, line.second, tx, ty + ((1f - eased) * 3f).toInt(), textW, accent, shadow, eased, t.playing)
         } else {
             graphics.drawString(font, trim(font, compactText(t), textW), tx, ty, panelTextColor(), shadow)
         }
-        // Three dots that ripple while the song plays and rest dim when it is paused.
-        val now = System.currentTimeMillis()
+        // Three dots that ripple while the song plays and rest dim when it is paused. Round and
+        // placed by fractions of a pixel through the shape shader where there is one.
         val dx = ox + size[0] - DOTS_W
         val dy = oy + size[1] / 2 - 1
         for (i in 0 until 3) {
-            val a = if (t.playing) 0.35f + 0.65f * (0.5f + 0.5f * kotlin.math.sin(now / 180.0 - i * 0.9).toFloat()) else 0.35f
-            graphics.fill(dx + i * 4, dy, dx + i * 4 + 2, dy + 2, ClientUi.alpha(accent, a))
+            val wave = if (t.playing) 0.5f + 0.5f * kotlin.math.sin(now / 180.0 - i * 0.9).toFloat() else 0f
+            val color = ClientUi.alpha(accent, 0.35f + 0.65f * wave)
+            if (dev.wyz.clientcore.ui.RiverShapes.available) {
+                dev.wyz.clientcore.ui.RiverShapes.circle(graphics, dx + i * 4f - 0.2f, dy - wave * 1.2f + 0.6f, 2.4f, color)
+            } else {
+                graphics.fill(dx + i * 4, dy, dx + i * 4 + 2, dy + 2, color)
+            }
         }
     }
 
@@ -464,11 +490,13 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         val key = "${pb.title}|${pb.artist}|$index"
         if (key != barLineKey || barLine == null) {
             barLineKey = key
+            previousBarLine = barLine
+            lineChangedAt = System.currentTimeMillis()
             val timed = l.words
             barLine = if (timed != null && timed.isNotEmpty()) {
                 BarLine(timed.map { it.text }, LongArray(timed.size) { timed[it].startMs }, LongArray(timed.size) { timed[it].startMs + maxOf(120L, timed[it].durationMs) })
             } else {
-                val words = l.text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                val words = l.text.trim().split(WORD_GAP).filter { it.isNotEmpty() }
                 val end = lines.getOrNull(index + 1)?.timeMs ?: (l.timeMs + 5000L)
                 val starts = LyricScene.wordTimes(words.toTypedArray(), l.timeMs, maxOf(400L, end - l.timeMs))
                 BarLine(words, starts, LongArray(words.size) { if (it + 1 < words.size) starts[it + 1] else end })
@@ -477,18 +505,23 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         return barLine!! to pos
     }
 
-    private fun wordsWidth(font: net.minecraft.client.gui.Font, words: List<String>): Int =
-        words.sumOf { font.width(it) } + font.width(" ") * (words.size - 1).coerceAtLeast(0)
-
-    /** The line karaoke style: each word fills in from the left as it is sung. */
-    private fun drawKaraoke(g: GuiGraphics, font: net.minecraft.client.gui.Font, line: BarLine, pos: Long, x0: Int, y: Int, maxW: Int, sung: Int, waiting: Int, shadow: Boolean) {
+    /**
+     * The line karaoke style: each word fills in from the left as it is sung, the fill gliding
+     * with a soft edge (KaraokeWipe). [alpha] fades the whole line; [light] puts the shader
+     * light on the edge of the word being sung. Words still to come are the accent at half strength.
+     */
+    private fun drawKaraoke(g: GuiGraphics, font: net.minecraft.client.gui.Font, line: BarLine, pos: Long, x0: Int, y: Int, maxW: Int, sung: Int, shadow: Boolean, alpha: Float, light: Boolean) {
+        if (alpha < 0.03f) return
+        val widths = line.measure(font)
         val space = font.width(" ")
+        val sungColor = ClientUi.alpha(sung, alpha)
+        val waitingColor = ClientUi.alpha(sung, 0.45f * alpha)
+        val glow = if (light) ClientUi.alpha(sung, 0.45f * alpha) else 0
         var x = x0
         for (i in line.words.indices) {
-            val word = line.words[i]
-            val w = font.width(word)
+            val w = widths[i]
             if (x + w - x0 > maxW) {
-                if (x + font.width("...") - x0 <= maxW + 6) g.drawString(font, "...", x, y, waiting, shadow)
+                if (x + font.width("...") - x0 <= maxW + 6) g.drawString(font, "...", x, y, waitingColor, shadow)
                 break
             }
             val fill = when {
@@ -496,17 +529,7 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
                 pos >= line.ends[i] -> 1f
                 else -> (pos - line.starts[i]).toFloat() / (line.ends[i] - line.starts[i])
             }
-            when {
-                fill >= 1f -> g.drawString(font, word, x, y, sung, shadow)
-                fill <= 0f -> g.drawString(font, word, x, y, waiting, shadow)
-                else -> {
-                    var cut = 0
-                    while (cut < word.length && font.width(word.substring(0, cut + 1)) <= w * fill) cut++
-                    val head = word.substring(0, cut)
-                    g.drawString(font, head, x, y, sung, shadow)
-                    g.drawString(font, word.substring(cut), x + font.width(head), y, waiting, shadow)
-                }
-            }
+            dev.wyz.clientcore.lyrics.KaraokeWipe.word(g, font, line.parts[i], x, y, w, fill, sungColor, waitingColor, shadow, glow)
             x += w + space
         }
     }
