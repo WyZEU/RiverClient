@@ -7,8 +7,10 @@
  */
 import { compactUuid } from "./cosmetics.js";
 
-/** Days one paid month gives. A little over a month, so a renewal a day late never drops Plus. */
+/** Days one paid month gives. A little over a month, so a late renewal never drops Plus. */
 export const PLUS_MONTH_DAYS = 32;
+export const PLUS_PACKAGES = { 1: "7815389", 3: "7815393" };
+const PLUS_MONTHS = new Map(Object.entries(PLUS_PACKAGES).map(([months, id]) => [id, Number(months)]));
 
 const enc = new TextEncoder();
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -51,11 +53,7 @@ export function tebexUuid(subject) {
   return "";
 }
 
-/**
- * How many days a payment is for, from the package name ("River Plus (3 Months)" is 3 months).
- * One month is 31 days plus one spare day, so a renewal a day late never drops Plus.
- */
-export function tebexDays(subject) {
+function plusProducts(subject) {
   // Renewal webhooks put their payments directly on the subject. Prefer the most
   // recent payment, so a changed subscription uses its current package duration.
   const products = [
@@ -65,13 +63,7 @@ export function tebexDays(subject) {
     subject?.recurring_payment?.last_payment?.products,
     subject?.recurring_payment?.initial_payment?.products
   ].find((items) => Array.isArray(items) && items.length > 0) || [];
-  let days = 0;
-  for (const product of products) {
-    const months = Number(/(\d+)\s*month/i.exec(String(product?.name || ""))?.[1]) || 1;
-    const quantity = Math.max(1, Math.floor(Number(product?.quantity) || 1));
-    days += (months * 31 + 1) * quantity;
-  }
-  return days || PLUS_MONTH_DAYS;
+  return products.filter((product) => PLUS_MONTHS.has(String(product?.id)));
 }
 
 /**
@@ -84,10 +76,17 @@ export function tebexAction(event) {
   const type = String(event?.type || "");
   const subject = event?.subject || {};
   const uuid = tebexUuid(subject);
+  const products = plusProducts(subject);
+  if (!products.length) return { action: "none", uuid };
   switch (type) {
     case "payment.completed":
-    case "recurring-payment.renewed":
-      return { action: "grant", uuid, days: tebexDays(subject) };
+    case "recurring-payment.renewed": {
+      const days = products.reduce((total, product) => {
+        const quantity = Math.max(1, Math.floor(Number(product.quantity) || 1));
+        return total + (PLUS_MONTHS.get(String(product.id)) * 31 + 1) * quantity;
+      }, 0);
+      return { action: "grant", uuid, days };
+    }
     case "payment.refunded":
     case "payment.dispute.opened":
     case "payment.dispute.lost":
@@ -98,34 +97,39 @@ export function tebexAction(event) {
   }
 }
 
-/** The River Plus packages on the Tebex store, by how many months they are for. */
-export const PLUS_PACKAGES = { 1: "7815389", 3: "7815393" };
+export async function createTebexBasket(publicToken, packageId, type, options, fetchImpl = fetch) {
+  const base = `https://headless.tebex.io/api`;
+  async function post(path, body) {
+    try {
+      const response = await fetchImpl(base + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(8000),
+        body: JSON.stringify(body)
+      });
+      return response.ok ? await response.json() : null;
+    } catch {
+      return null;
+    }
+  }
+  const basket = await post(`/accounts/${publicToken}/baskets`, options);
+  const ident = basket?.data?.ident;
+  if (typeof ident !== "string" || !/^[\w-]+$/.test(ident)) return { basket: null, started: false };
+  const filled = await post(`/baskets/${ident}/packages`, { package_id: packageId, quantity: 1, type });
+  return { basket: filled?.data, started: true };
+}
 
-/**
- * A Tebex checkout link for River Plus, with the player's Minecraft account on the order so
- * the payment webhook knows whose Plus it is. Uses the store's public token only.
- */
+/** A River Plus subscription for the Minecraft account confirmed at checkout. */
 export async function tebexCheckout(publicToken, uuid, months, fetchImpl = fetch) {
   const packageId = PLUS_PACKAGES[months];
   if (!publicToken || !packageId || !uuid) return { ok: false, message: "Unavailable." };
-  const base = `https://headless.tebex.io/api`;
-  const basket = await fetchImpl(`${base}/accounts/${publicToken}/baskets`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      complete_url: "https://riverclient.xyz/plus?done=1",
-      cancel_url: "https://riverclient.xyz/plus",
-      complete_auto_redirect: true,
-      custom: { uuid }
-    })
-  }).then((r) => r.json()).catch(() => null);
-  const ident = basket?.data?.ident;
-  if (!ident) return { ok: false, message: "Tebex did not start an order." };
-  const filled = await fetchImpl(`${base}/baskets/${ident}/packages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ package_id: packageId, quantity: 1, type: "subscription" })
-  }).then((r) => r.json()).catch(() => null);
-  const url = filled?.data?.links?.checkout;
+  const { basket, started } = await createTebexBasket(publicToken, packageId, "subscription", {
+    complete_url: "https://riverclient.xyz/plus?done=1",
+    cancel_url: "https://riverclient.xyz/plus",
+    complete_auto_redirect: true,
+    custom: { uuid }
+  }, fetchImpl);
+  if (!started) return { ok: false, message: "Tebex did not start an order." };
+  const url = basket?.links?.checkout;
   return url ? { ok: true, url } : { ok: false, message: "Tebex did not add River Plus to the order." };
 }

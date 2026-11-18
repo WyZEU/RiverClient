@@ -22,6 +22,7 @@
  */
 
 import { HALLOWEEN_EVENT } from "./events.js";
+import { ownedWings, PLUS_WING, recordWingPayment, wingOrderStatus } from "./store.js";
 
 /** Cosmetics that require a redemption. Anything not listed is free to everyone. */
 export const GATED_COSMETICS = new Set(["axie", "casaeullo", "galaxy"]);
@@ -164,10 +165,14 @@ export class Cosmetics {
   }
 
   /** What a player may wear: what they redeemed or earned, plus the Plus capes while Plus is on. */
-  async wearable(uuid, now = Date.now()) {
+  async wearable(uuid, now = Date.now(), includeWings = false) {
     const wearing = new Set(await this.ownedBy(uuid));
-    if (plusActive(await this.plusRecord(uuid), now)) for (const cape of PLUS_COSMETICS) wearing.add(cape);
+    if (plusActive(await this.plusRecord(uuid), now)) {
+      for (const cape of PLUS_COSMETICS) wearing.add(cape);
+      if (includeWings) wearing.add(PLUS_WING);
+    }
     if (plusActive(await this.boosterRecord(uuid), now)) for (const cape of BOOSTER_COSMETICS) wearing.add(cape);
+    if (includeWings) for (const wing of await ownedWings(this.state.storage, compactUuid(uuid))) wearing.add(wing);
     return [...wearing];
   }
 
@@ -175,7 +180,7 @@ export class Cosmetics {
     return (await this.state.storage.get(`booster:${compactUuid(uuid)}`)) || null;
   }
 
-  async checkRedeemLimit(visitor) {
+  async checkRedeemLimit(visitor, scope = "redeem") {
     // The Worker supplies the address only to this DO. Persist a salted digest,
     // never the address itself; the salt stays in DO storage across evictions.
     const salt = await this.state.storage.transaction(async (txn) => {
@@ -188,7 +193,7 @@ export class Cosmetics {
     });
     const bytes = new TextEncoder().encode(`${salt}:${visitor || "unknown"}`);
     const digest = await crypto.subtle.digest("SHA-256", bytes);
-    const key = `redeem-rate:${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+    const key = `${scope}-rate:${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
     const now = Date.now();
     return this.state.storage.transaction(async (txn) => {
       const previous = await txn.get(key);
@@ -207,6 +212,29 @@ export class Cosmetics {
   async fetch(request) {
     const url = new URL(request.url);
     const payload = request.method === "POST" ? await request.json().catch(() => ({})) : {};
+
+    if (url.pathname === "/store/checkout-limit" && request.method === "POST") {
+      const retry = await this.checkRedeemLimit(request.headers.get("X-River-Visitor"), "store");
+      return retry
+        ? Response.json({ ok: false, message: "Too many checkout attempts. Try again later." }, {
+            status: 429, headers: { "Retry-After": String(retry) }
+          })
+        : Response.json({ ok: true });
+    }
+
+    if (url.pathname === "/store/owned" && request.method === "GET") {
+      return Response.json({ owned: await ownedWings(this.state.storage, url.searchParams.get("uuid")) });
+    }
+
+    if (url.pathname === "/store/order" && request.method === "GET") {
+      const status = await wingOrderStatus(this.state.storage, url.searchParams.get("id"));
+      return status ? Response.json({ ok: true, status }) : Response.json({ ok: false }, { status: 400 });
+    }
+
+    if (url.pathname === "/store/payment" && request.method === "POST") {
+      const outcome = await recordWingPayment(this.state.storage, payload);
+      return Response.json({ ok: true, outcome });
+    }
 
     /*
       Redeem a code. Codes are deliberately multi-use: a creator hands one code to a whole
@@ -312,7 +340,7 @@ export class Cosmetics {
     if (url.pathname === "/owned") {
       const uuid = normalizeUuid(url.searchParams.get("uuid"));
       if (!uuid) return Response.json({ ok: false, owned: [] }, { status: 400 });
-      return Response.json({ ok: true, owned: await this.wearable(uuid) });
+      return Response.json({ ok: true, owned: await this.wearable(uuid, Date.now(), true) });
     }
 
     /** An event reward. Reached only through grantCosmetic: the worker never routes here. */

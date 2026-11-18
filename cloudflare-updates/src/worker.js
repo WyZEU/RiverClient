@@ -138,6 +138,7 @@ import { Cosmetics, compactUuid, gatedCosmetics, normalizeUuid } from "./cosmeti
 import { Broadcast, PUSH_PROTOCOL } from "./broadcast.js";
 import { blockedUuids } from "./blocklist.js";
 import { tebexAction, tebexCheckout, tebexSignatureValid } from "./tebex.js";
+import { isOrderId, PLUS_WING, startWingCheckout, storeCorsOrigin, WING_COSMETICS, wingPayment } from "./store.js";
 import { CURSEFORGE_PREFIX, curseForgeProxy } from "./curseforge-proxy.js";
 import { effectiveMinimum, readPolicy, releaseVersions, versionStatus, writePolicy } from "./update-policy.js";
 
@@ -445,6 +446,36 @@ const latestManifest = {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/store/checkout" || url.pathname === "/store/order") {
+      const origin = storeCorsOrigin(request, env);
+      const cors = {
+        ...securityHeaders,
+        "Cache-Control": "no-store",
+        "Vary": "Origin",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      };
+      if (origin) cors["Access-Control-Allow-Origin"] = origin;
+      if (request.method === "OPTIONS") return new Response(null, { status: origin ? 204 : 403, headers: cors });
+      if (!origin) return Response.json({ ok: false }, { status: 403, headers: cors });
+      if (!env.COSMETICS_DO) return Response.json({ ok: false }, { status: 503, headers: cors });
+
+      const stub = env.COSMETICS_DO.get(env.COSMETICS_DO.idFromName("global"));
+      let result;
+      if (url.pathname === "/store/checkout" && request.method === "POST") {
+        result = await startWingCheckout(request, env, stub);
+      } else if (url.pathname === "/store/order" && request.method === "GET") {
+        const id = url.searchParams.get("id");
+        if (!isOrderId(id)) return Response.json({ ok: false }, { status: 400, headers: cors });
+        result = await stub.fetch(`https://cosmetics/store/order?id=${id}`);
+      } else {
+        return Response.json({ ok: false }, { status: 405, headers: cors });
+      }
+      const responseHeaders = new Headers(result.headers);
+      for (const [key, value] of Object.entries(cors)) responseHeaders.set(key, value);
+      return new Response(result.body, { status: result.status, headers: responseHeaders });
+    }
+
     if (request.method === "OPTIONS") {
       // Answered here for every route, so the dashboard's origin has to be recognised at
       // this point - the admin route below never sees a preflight otherwise.
@@ -932,10 +963,12 @@ export default {
       if (!env.COSMETICS_DO) return new Response("Unavailable.", { status: 503 });
       const { action, uuid, days } = tebexAction(event);
       const stub = env.COSMETICS_DO.get(env.COSMETICS_DO.idFromName("global"));
-      const result = await stub.fetch("https://cosmetics/plus/tebex", {
+      const payment = action === "none" ? await wingPayment(event, env) : null;
+      if (action === "none" && !payment) return Response.json({ ok: true, outcome: "ignored" });
+      const result = await stub.fetch(payment ? "https://cosmetics/store/payment" : "https://cosmetics/plus/tebex", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId: String(event?.id || ""), type: String(event?.type || ""), action, uuid, days })
+        body: JSON.stringify(payment ?? { eventId: String(event?.id || ""), type: String(event?.type || ""), action, uuid, days })
       });
       return new Response(result.body, { status: result.status, headers: { "Content-Type": "application/json" } });
     }
@@ -1730,18 +1763,37 @@ export class Presence {
     const name = String(payload?.name ?? "").slice(0, 32);
     const badge = payload?.badge === true;
     const cape = String(payload?.cape ?? "").replace(/[^a-z]/g, "").slice(0, 24);
+    const claimedWing = WING_COSMETICS.has(payload?.wing) ? payload.wing : "";
+    let wing = claimedWing;
+    let wingCheckedAt = now;
+    if (claimedWing && claimedWing !== PLUS_WING) {
+      const previous = this.players.get(uuid);
+      wing = "";
+      if (previous?.claimedWing === claimedWing && now - previous.wingCheckedAt < 60_000) {
+        wing = previous.wing;
+        wingCheckedAt = previous.wingCheckedAt;
+      } else if (this.env?.COSMETICS_DO) {
+        try {
+          const stub = this.env.COSMETICS_DO.get(this.env.COSMETICS_DO.idFromName("global"));
+          const res = await stub.fetch(`https://cosmetics/store/owned?uuid=${compactUuid(uuid)}`);
+          if (res.ok && (await res.json())?.owned?.includes(claimedWing)) wing = claimedWing;
+        } catch {}
+      }
+    }
     const cloth = payload?.cloth === true;
     const effects = Array.isArray(payload?.effects)
       ? payload.effects.slice(0, 16).map((e) => String(e).slice(0, 24))
       : [];
 
-    this.players.set(uuid, { uuid, name, server, badge, cape, cloth, effects, ts: now });
+    this.players.set(uuid, { uuid, name, server, badge, cape, cloth, effects, wing, claimedWing, wingCheckedAt, ts: now });
     this.prune(now);
 
     const players = [];
     for (const value of this.players.values()) {
       if (value.server !== server) continue;
-      players.push({ uuid: value.uuid, name: value.name, badge: value.badge === true, cape: value.cape ?? "", cloth: value.cloth === true, effects: value.effects ?? [] });
+      const player = { uuid: value.uuid, name: value.name, badge: value.badge === true, cape: value.cape ?? "", cloth: value.cloth === true, effects: value.effects ?? [] };
+      if (value.wing && now - value.wingCheckedAt < 60_000) player.wing = value.wing;
+      players.push(player);
     }
 
     /*
@@ -1790,6 +1842,7 @@ export class Presence {
     const plus = await this.plusSet(players.map((p) => p.uuid), now);
     for (const player of players) {
       player.plus = plus.has(compactUuid(player.uuid));
+      if (player.wing === PLUS_WING && !player.plus) delete player.wing;
       // Cloth capes are a Plus perk: the wish is the player's, the permission is the server's.
       player.cloth = player.plus && player.cloth;
     }

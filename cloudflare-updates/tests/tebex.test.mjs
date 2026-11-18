@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Cosmetics, DAY_MS } from "../src/cosmetics.js";
-import { tebexAction, tebexSignature, tebexSignatureValid, PLUS_MONTH_DAYS } from "../src/tebex.js";
+import { tebexAction, tebexSignature, tebexSignatureValid, PLUS_MONTH_DAYS, PLUS_PACKAGES } from "../src/tebex.js";
 
 const UUID = "0123456789abcdef0123456789abcdef";
 const DASHED = "01234567-89ab-cdef-0123-456789abcdef";
@@ -30,10 +30,11 @@ test("signature: right secret passes, wrong secret and edited body fail", async 
 });
 
 test("a payment grants a month to the buyer's Minecraft account", () => {
-  const a = tebexAction({ type: "payment.completed", subject: { customer: { username: { id: DASHED, username: "Steve" } } } });
+  const product = { id: PLUS_PACKAGES[1], username: { id: UUID } };
+  const a = tebexAction({ type: "payment.completed", subject: { products: [product], customer: { username: { id: DASHED, username: "Steve" } } } });
   assert.deepEqual(a, { action: "grant", uuid: UUID, days: PLUS_MONTH_DAYS });
-  assert.equal(tebexAction({ type: "payment.refunded", subject: { customer: { username: { id: UUID } } } }).action, "revoke");
-  assert.equal(tebexAction({ type: "payment.dispute.opened", subject: { products: [{ username: { id: UUID } }] } }).uuid, UUID);
+  assert.equal(tebexAction({ type: "payment.refunded", subject: { products: [product], customer: { username: { id: UUID } } } }).action, "revoke");
+  assert.equal(tebexAction({ type: "payment.dispute.opened", subject: { products: [product] } }).uuid, UUID);
   assert.equal(tebexAction({ type: "recurring-payment.cancellation.requested", subject: {} }).action, "none");
 });
 
@@ -53,20 +54,20 @@ test("each event counts once, a second event for the same charge adds nothing, r
   assert.equal(noAccount.outcome, "no-account");
 });
 
-test("the package name sets how long Plus lasts", () => {
-  const one = tebexAction({ type: "payment.completed", subject: { products: [{ name: "River Plus (1 Month)", username: { id: UUID } }] } });
-  const three = tebexAction({ type: "payment.completed", subject: { products: [{ name: "River Plus (3 Months)", username: { id: UUID } }] } });
+test("the package ID sets how long Plus lasts", () => {
+  const one = tebexAction({ type: "payment.completed", subject: { products: [{ id: PLUS_PACKAGES[1], username: { id: UUID } }] } });
+  const three = tebexAction({ type: "payment.completed", subject: { products: [{ id: PLUS_PACKAGES[3], username: { id: UUID } }] } });
   assert.equal(one.days, 32);
   assert.equal(three.days, 94);
 });
 
 test("the account River put on the order is the one that gets Plus", () => {
-  const a = tebexAction({ type: "payment.completed", subject: { custom: { uuid: DASHED }, products: [{ name: "River Plus (1 Month)" }] } });
+  const a = tebexAction({ type: "payment.completed", subject: { custom: { uuid: DASHED }, products: [{ id: PLUS_PACKAGES[1] }] } });
   assert.equal(a.uuid, UUID);
 });
 
 test("three-month renewals retain the full period from Tebex payment subjects", async () => {
-  const payment = { custom: { uuid: DASHED }, products: [{ name: "River Plus (3 Months)", quantity: 1 }] };
+  const payment = { custom: { uuid: DASHED }, products: [{ id: PLUS_PACKAGES[3], quantity: 1 }] };
   for (const subject of [
     { initial_payment: payment },
     { last_payment: payment },
@@ -89,8 +90,8 @@ test("three-month renewals retain the full period from Tebex payment subjects", 
 test("renewals use the latest package after a subscription changes", () => {
   for (const [initialMonths, currentMonths, expectedDays] of [[1, 3, 94], [3, 1, 32]]) {
     const subject = {
-      initial_payment: { custom: { uuid: UUID }, products: [{ name: `River Plus (${initialMonths} Months)` }] },
-      last_payment: { custom: { uuid: UUID }, products: [{ name: `River Plus (${currentMonths} Months)` }] }
+      initial_payment: { custom: { uuid: UUID }, products: [{ id: PLUS_PACKAGES[initialMonths] }] },
+      last_payment: { custom: { uuid: UUID }, products: [{ id: PLUS_PACKAGES[currentMonths] }] }
     };
     assert.equal(tebexAction({ type: "recurring-payment.renewed", subject }).days, expectedDays);
   }

@@ -14,8 +14,7 @@ The old project's package IDs and public token must not be reused.
 | River Plus (3 Months) | `7815393` | €13.99 every 3 months |
 
 Both packages belong to the River Plus category (`3504264`) and have product descriptions
-and the River Plus logo. Keep the duration in their English names: the webhook currently
-derives the entitlement period from the package name.
+and the River Plus logo. The Worker maps the package IDs to the entitlement duration.
 
 - `riverclient.xyz` ownership is verified through its Tebex DNS TXT record.
 - Customer support is confirmed as `support@riverclient.xyz`.
