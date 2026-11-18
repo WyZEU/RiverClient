@@ -392,6 +392,18 @@ object DevShot {
                     println("[river] lyrics search-only " + (again as? dev.wyz.clientcore.lyrics.LyricsState.Ready)?.let { "ready ${it.lines.size} lines" } + " first=" + cleaned::class.simpleName)
                 }.start()
             }
+            // The Booster cape on your own player, seen from behind. Two shots a few seconds apart
+            // land on different frames of its loop.
+            "world-booster-cape", "world-booster-cape-2", "world-booster-cape-3" -> {
+                client.setScreen(null)
+                dev.wyz.clientcore.cosmetic.CapeEntitlements.grantLocal("booster")
+                dev.wyz.clientcore.module.ModuleRegistry.get<dev.wyz.clientcore.module.impl.CapeModule>("cape")?.let {
+                    it.enabled = true
+                    it.setStyleIndex(dev.wyz.clientcore.cosmetic.RiverCape.STYLES.indexOf("booster"))
+                }
+                client.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK)
+                client.player?.connection?.sendCommand("time set noon")
+            }
             "world-cosmetics" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverCosmeticsScreen(null))
             "world-content" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverContentBrowserScreen(null))
             "servers", "world-servers" -> client.setScreen(dev.wyz.clientcore.ui.screen.RiverServerBrowserScreen(client.screen))

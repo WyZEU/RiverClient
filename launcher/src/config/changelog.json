@@ -3,7 +3,7 @@
   "title": "River Client 0.3.2",
   "summary": "A much smaller download.",
   "items": [
-    "Added: The Booster cape, for people boosting the River Discord for as long as they boost. Run /boostercape in Discord, then enter the code in Cosmetics.",
+    "Added: The Booster cape, animated, for people boosting the River Discord for as long as they boost. Run /boostercape in Discord, then enter the code in Cosmetics.",
     "Improved: River runs lighter. The aurora, Keystrokes, nametags, River capes and the entity checks do far less work each frame.",
     "Added: Freelook turns itself off on any server that blocks the Freelook mod, not only on River's own list.",
     "Changed: HUD style presets are new and set the whole look: Frosted glass, Frosted with border, Dark, Dark rounded, Faint, Outline only and Text only.",

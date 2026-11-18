@@ -58,8 +58,11 @@ object RiverCape {
     /** River Plus capes: wearable while Plus is on (the server keeps the same list). */
     val PLUS = setOf("plus", "gilded", "royal", "prism")
 
+    /** The capes that play a loop of frames: the Plus ones, and the Booster cape. */
+    private val ANIMATED = PLUS + "booster"
+
     /**
-     * The Plus capes are animated: `<id>_0.png` to `<id>_59.png`, played in a loop. A frame's
+     * The animated capes are `<id>_0.png` to `<id>_59.png`, played in a loop. A frame's
      * texture is only loaded once something shows it, so only capes being worn cost memory.
      * The wardrobe cards keep the still `<id>.png`.
      */
@@ -69,7 +72,7 @@ object RiverCape {
     /** The texture to show for this style right now: the current frame for an animated cape. */
     @JvmStatic
     fun frame(style: String): String =
-        if (style in PLUS) "${style}_${(System.currentTimeMillis() / FRAME_MS) % FRAMES}" else style
+        if (style in ANIMATED) "${style}_${(System.currentTimeMillis() / FRAME_MS) % FRAMES}" else style
 
     /** The player's own picture. It stays on this PC: other players see the River cape. */
     const val CUSTOM = "custom"
