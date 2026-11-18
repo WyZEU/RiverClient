@@ -11,7 +11,6 @@ import net.minecraft.client.gui.GuiGraphics
 //?}
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
-import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
@@ -20,8 +19,6 @@ class RiverMusicJamScreen(private val parent: Screen?) : Screen(Component.litera
     private var seen = -1
     private var tab = 0
     private var page = 0
-    private var link = ""
-    private var linkBox: EditBox? = null
     private val labels = ArrayList<Triple<String, Int, Int>>()
     private var x = 0
     private var y = 0
@@ -57,9 +54,7 @@ class RiverMusicJamScreen(private val parent: Screen?) : Screen(Component.litera
     }
 
     private fun rebuild() {
-        linkBox?.let { link = it.value }
         clearWidgets()
-        linkBox = null
         labels.clear()
         seen = MusicJam.revision
         w = minOf(420, width - 16); h = minOf(310, height - 16)
@@ -75,14 +70,7 @@ class RiverMusicJamScreen(private val parent: Screen?) : Screen(Component.litera
             val members = room.members.associateBy { it.uuid }
             val rows = if (MusicJam.hosting) (room.members.map { it.uuid to it.name } +
                 RiverSocial.friends.filter { it.uuid !in members && it.online }.map { it.uuid to it.name }) else room.members.map { it.uuid to it.name }
-            val listY = if (MusicJam.hosting) 96 else 68
-            if (MusicJam.hosting) {
-                linkBox = addRenderableWidget(EditBox(font, x + 12, y + 68, w - 100, 20, Component.literal("Current Spotify track link"))).apply {
-                    setMaxLength(200); value = link
-                    setHint(Component.literal("Spotify track link"))
-                }
-                button("Set link", x + w - 82, y + 68, 70, usable) { MusicJam.setTrackLink(linkBox?.value.orEmpty()) }
-            }
+            val listY = 68
             val count = ((h - listY - 62) / 24).coerceAtLeast(1)
             page = page.coerceIn(0, ((rows.size - 1) / count).coerceAtLeast(0))
             rows.drop(page * count).take(count).forEachIndexed { i, (uuid, name) ->
@@ -93,14 +81,13 @@ class RiverMusicJamScreen(private val parent: Screen?) : Screen(Component.litera
             }
             pager(rows.size, count, footer - 26)
         } else {
-            button("Start jam", x + 12, y + 30, (w - 30) / 2) { tab = 0; page = 0; rebuild() }
+            button("Host a jam", x + 12, y + 30, (w - 30) / 2) { tab = 0; page = 0; rebuild() }
             button("Invites (${MusicJam.invites.size})", x + w / 2 + 3, y + 30, (w - 30) / 2) { tab = 1; page = 0; MusicJam.refresh(); rebuild() }
             if (tab == 0) {
-                labels += Triple("Spotify track link (optional)", x + 12, y + 60)
-                linkBox = addRenderableWidget(EditBox(font, x + 12, y + 74, w - 24, 20, Component.literal("Spotify track link"))).apply {
-                    setMaxLength(200); value = link
-                }
-                button("Share current song", x + 12, y + 100, w - 24, usable) { MusicJam.start(linkBox?.value.orEmpty()) }
+                val source = MusicJam.sourceName()
+                labels += Triple(if (source.isEmpty()) "No song playing" else "Playing in $source", x + 12, y + 62)
+                labels += Triple("You will be the host. Friends follow you.", x + 12, y + 76)
+                button("Start jam", x + 12, y + 96, w - 24, usable && source.isNotEmpty()) { MusicJam.start() }
             } else {
                 val invites = MusicJam.invites.filter { it.expiresAt > System.currentTimeMillis() }
                 val count = ((h - 120) / 48).coerceAtLeast(1)
@@ -139,8 +126,8 @@ class RiverMusicJamScreen(private val parent: Screen?) : Screen(Component.litera
             MusicJam.busy -> "Connecting..."
             MusicJam.message.isNotEmpty() -> MusicJam.message
             MusicJam.following -> MusicJam.playerMessage
-            MusicJam.hosting -> if (MusicJam.room?.track?.uri.isNullOrEmpty()) "Add a Spotify link to share playback." else "Invite online friends to listen together."
-            else -> "Shares the song and lyrics with invited friends."
+            MusicJam.hosting -> "You are the host. Invite online friends."
+            else -> "Shares your song and lyrics with friends."
         }
         g.drawString(font, font.plainSubstrByWidth(notice, w - 24), x + 12, y + h - 40, ClientUi.MUTED, false)
 //? if >=26.1 {

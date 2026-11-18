@@ -102,10 +102,10 @@ object MusicJam {
         }
     }
 
-    fun start(link: String = "") {
-        val song = localSong() ?: run { message = "No song is playing."; revision++; return }
-        val uri = JamTimeline.spotifyUri(link) ?: JamTimeline.spotifyUri(song.uri).orEmpty()
-        if (link.isNotBlank() && uri.isEmpty()) { message = "Enter a Spotify track link."; revision++; return }
+    /** The host's own Spotify or YouTube Music session is the source: nothing to paste. */
+    fun start() {
+        val song = localSong() ?: run { message = "Play a song in Spotify or YouTube Music first."; revision++; return }
+        val uri = JamTimeline.spotifyUri(song.uri).orEmpty()
         request("/jam/create", JsonObject().apply { add("track", gson.toJsonTree(song.copy(uri = uri))) }) {
             requestedUri = uri
             uriSong = key(song)
@@ -122,16 +122,15 @@ object MusicJam {
         request("/jam/invite", identity(active).apply { addProperty("uuid", uuid) }) { revision++ }
     }
 
-    fun setTrackLink(link: String) {
-        if (!hosting) return
-        val uri = JamTimeline.spotifyUri(link) ?: run { message = "Enter a Spotify track link."; revision++; return }
-        val song = localSong() ?: return
-        requestedUri = uri
-        uriSong = key(song)
-        lastSent = null
-        nextPublish = 0
-        message = "Track link updated."
-        revision++
+    /** Which player the host is sharing from, for the screen. */
+    fun sourceName(): String {
+        val raw = MediaSession.current()?.source.orEmpty().lowercase()
+        return when {
+            raw.contains("spotify") -> "Spotify"
+            raw.contains("music.youtube") || raw.contains("youtube") || raw.contains("ytmd") || raw.contains("pear") -> "YouTube Music"
+            raw.isNotEmpty() -> raw.substringBefore('.').replaceFirstChar { it.uppercase() }
+            else -> ""
+        }
     }
 
     fun join(invite: Invite, play: Boolean) {

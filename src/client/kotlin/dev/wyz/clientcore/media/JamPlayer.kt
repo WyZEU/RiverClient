@@ -48,7 +48,7 @@ internal object JamPlayer {
     }
 
     fun sync(track: MediaSession.Track) {
-        val uri = JamTimeline.spotifyUri(track.trackUri) ?: run { message = "Lyrics only. The host has no Spotify track link."; return }
+        val uri = JamTimeline.spotifyUri(track.trackUri) ?: run { message = "Lyrics are synced. Play this song in your own player."; return }
         submit {
             val ok = if (os.contains("mac")) {
                 mac("sync", uri, track.title, track.artist, track.positionMs.toString(), track.playing.toString()) == "ok"
