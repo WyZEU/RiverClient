@@ -10,7 +10,7 @@ import { useT } from "../i18n/context.jsx";
 const PLUS_LAUNCHED = false;
 
 // Painted 1024x512 capes: scaled smoothly, the pixel-art ones stay crisp.
-const HD_CAPES = new Set(["river", "ember", "forest", "sunset", "storm", "galaxy", "plus", "gilded", "royal", "prism", "fox"]);
+const HD_CAPES = new Set(["river", "ember", "forest", "sunset", "storm", "galaxy", "plus", "gilded", "royal", "prism", "fox", "booster"]);
 
 function CapeCard({ label, active, disabled, onClick, children }) {
   return (
