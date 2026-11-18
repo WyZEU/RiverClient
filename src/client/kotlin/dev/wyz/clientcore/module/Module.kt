@@ -833,14 +833,6 @@ abstract class Module(
                 background -> ClientUi.fillRounded(graphics, k.x, k.y, k.w, k.h, radius, (opacity shl 24) or base)
             }
         }
-        val side = maxOf(1, radius)
-        for (i in keys.indices) {
-            val k = keys[i]
-            if (glassy[i] && k.w > side * 2) {
-                val depth = (k.h / 3).coerceIn(2, 24)
-                graphics.fillGradient(k.x + side, k.y + 1, k.x + k.w - side, k.y + 1 + depth, 0x14FFFFFF, 0x00FFFFFF)
-            }
-        }
         if (st.showBorder) {
             val border = (st.borderOpacity.coerceIn(0, 255) shl 24) or (ClientUi.BORDER and 0xFFFFFF)
             for (k in keys) if (!k.pressed) ClientUi.drawRoundedBorder(graphics, k.x, k.y, k.w, k.h, radius, border)

@@ -405,7 +405,6 @@ class RiverFriendsScreen(
         val x = cx - size / 2
         g.fill(x, y, x + size, y + size, lay(ClientUi.alpha(color, 0.14f), ClientUi.PANEL_SOFT))
         ClientUi.drawRoundedBorder(g, x, y, size, size, 0, ClientUi.alpha(color, 0.5f))
-        g.fill(x + 1, y + 1, x + size - 1, y + 2, ClientUi.alpha(0xFFFFFFFF.toInt(), 0.06f))
         RiverIcons.draw(g, icon, x + 8, y + 8, 16, color)
     }
 
@@ -1076,7 +1075,6 @@ class RiverFriendsScreen(
 
         g.fill(x, y, x + mw, y + mh, ClientUi.PANEL_ALT)
         ClientUi.drawRoundedBorder(g, x, y, mw, mh, 0, ClientUi.over(ClientUi.alpha(0xFFFFFFFF.toInt(), 0.10f), ClientUi.BORDER))
-        g.fill(x + 1, y + 1, x + mw - 1, y + 2, ClientUi.alpha(0xFFFFFFFF.toInt(), 0.06f))
         var iy = y + 4
         for ((id, icon, label) in items) {
             val hovered = inside(mx, my, x + 4, iy, mw - 8, itemH)

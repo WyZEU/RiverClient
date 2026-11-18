@@ -252,10 +252,9 @@ object ClientUi {
         // A soft shadow lifts the glass off the world where the shape shader can draw one.
         if (RiverShapes.available) RiverShapes.shadow(g, x, y, w, h, radius, 0x8C000000.toInt(), 22f)
         if (!seeThrough && Glass.backdrop(g, x, y, w, h, radius)) {
-            // The blurred world under a tint and a sheen, as Glass.surface draws it.
+            // The blurred world under a tint, as Glass.surface draws it. No light band along the
+            // top: a straight highlight poked out past the rounded corners and read as a stray line.
             fillRounded(g, x, y, w, h, radius, alpha(PANEL_SOFT, 0.7f))
-            val sheen = (h / 3).coerceIn(2, 24)
-            g.fillGradient(x + 1, y + 1, x + w - 1, y + 1 + sheen, 0x14FFFFFF, 0x00FFFFFF)
             glassFrame = true
         } else if (Glass.enabled()) {
             /*
@@ -270,9 +269,6 @@ object ClientUi {
             fillRounded(g, x, y, w, h, radius, PANEL_SOFT)
         }
         // No outline round panels (0.2.8): surfaces are told apart by their fill alone.
-        // Hairline on the top edge only - a lit bevel the way a Minecraft button has one,
-        // without tinting the whole surface.
-        fillRounded(g, x + 1, y + 1, w - 2, 1, 0, alpha(LIFT, 0.05f))
         // Halloween: a faint web in the corner of every large panel (not the small cards).
         if (w >= 300 && h >= 170 && halloweenUi) dev.wyz.clientcore.ui.menu.SeasonalFx.drawPanelWeb(g, x, y, w, h)
     }
@@ -315,7 +311,6 @@ object ClientUi {
         val border = if (primary) ACCENT_B else mix(BORDER, over(alpha(LIFT, 0.18f), BORDER), hoverAnim)
         fillRounded(g, x, y, w, h, RADIUS_BUTTON, fill)
         drawRoundedBorder(g, x, y, w, h, RADIUS_BUTTON, border)
-        fillRounded(g, x + 1, y + 1, w - 2, 1, 0, alpha(LIFT, 0.07f))
         g.drawString(font, label, x + (w - font.width(label)) / 2, y + (h - font.lineHeight) / 2, TEXT, true)
     }
 

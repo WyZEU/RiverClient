@@ -169,12 +169,14 @@ object Glass {
 *///?}
 
     /**
-     * A glass surface: the blurred world, a tint of [tint] over it, and a faint light top
-     * edge. Falls back to a solid fill of [solid] where glass is not available. True when
-     * it drew glass, so the caller can lighten what it puts on top.
+     * A glass surface: the blurred world and a tint of [tint] over it. Falls back to a solid
+     * fill of [solid] where glass is not available. True when it drew glass, so the caller can
+     * lighten what it puts on top. [sheen] is accepted and ignored: the light band along the top
+     * edge is gone from every panel.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun surface(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int, solid: Int, tint: Int = solid, tintAlpha: Float = 0.58f, sheen: Boolean = true): Boolean {
-        if (drawBackdrop(g, x, y, w, h, radius, ClientUi.alpha(tint or 0xFF000000.toInt(), tintAlpha), sheen)) return true
+        if (drawBackdrop(g, x, y, w, h, radius, ClientUi.alpha(tint or 0xFF000000.toInt(), tintAlpha), false)) return true
         ClientUi.fillRounded(g, x, y, w, h, radius, solid)
         return false
     }
