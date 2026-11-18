@@ -82,6 +82,22 @@ val packFormatRange = if (packFormat.toInt() > 64) {
 
 loom.splitEnvironmentSourceSets()
 
+// Development only. When RIVER_DEV_ACCESS_TOKEN is set in the environment (by a local helper that reads the
+// launcher's own sign-in; nothing stores it), runClient signs in as that account, like the launcher does,
+// so friends, Music Jam and anything else that needs a real Minecraft session work in the dev client.
+// With the variables unset this does nothing.
+System.getenv("RIVER_DEV_ACCESS_TOKEN")?.takeIf { it.isNotBlank() }?.let { devToken ->
+    val devName = System.getenv("RIVER_DEV_USERNAME").orEmpty()
+    val devUuid = System.getenv("RIVER_DEV_UUID").orEmpty()
+    if (devName.isNotBlank() && devUuid.isNotBlank()) {
+        loom.runs.configureEach {
+            if (name == "client") {
+                programArgs("--username", devName, "--uuid", devUuid, "--accessToken", devToken, "--userType", "msa")
+            }
+        }
+    }
+}
+
 loom.mods.create("clientcore") {
     sourceSet(sourceSets["main"])
     sourceSet(sourceSets["client"])
