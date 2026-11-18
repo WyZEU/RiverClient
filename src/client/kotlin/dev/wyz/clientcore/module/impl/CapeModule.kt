@@ -1,6 +1,7 @@
 package dev.wyz.clientcore.module.impl
 
 import dev.wyz.clientcore.cosmetic.RiverCape
+import dev.wyz.clientcore.cosmetic.WingCosmetics
 import dev.wyz.clientcore.module.Module
 import dev.wyz.clientcore.module.ModuleCategory
 import dev.wyz.clientcore.module.ModuleEditorProfile
@@ -24,6 +25,10 @@ class CapeModule : Module("cape", "River Cape", "Wear a River cape", ModuleCateg
     fun selectedStyle(): String = RiverCape.STYLES[styleIndex()]
 
     fun setStyleIndex(index: Int) = setScalar("style", index.coerceIn(0, RiverCape.STYLES.size - 1))
+
+    fun wingSlot(): Int = scalar("wingStyle", WingCosmetics.defaultSlot())
+
+    fun setWingSlot(slot: Int) = setScalar("wingStyle", slot)
 
     /** Cloth physics on your cape (a River Plus perk). On unless you turn it off. */
     fun cloth(): Boolean = scalar("cloth", 1) != 0

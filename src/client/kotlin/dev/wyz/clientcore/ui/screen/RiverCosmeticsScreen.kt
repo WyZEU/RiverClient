@@ -3,6 +3,7 @@ package dev.wyz.clientcore.ui.screen
 import dev.wyz.clientcore.RiverRuntime
 import dev.wyz.clientcore.cosmetic.CapeEntitlements
 import dev.wyz.clientcore.cosmetic.RiverCape
+import dev.wyz.clientcore.cosmetic.WingCosmetics
 import dev.wyz.clientcore.module.ModuleRegistry
 import dev.wyz.clientcore.module.impl.CapeModule
 import dev.wyz.clientcore.nametag.RiverBadgeState
@@ -127,6 +128,11 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         hits.clear()
 
         val cape = capeModule() ?: return
+        val ownedWings = WingCosmetics.owned()
+        if (tab == Tab.WINGS && ownedWings.isEmpty()) {
+            tab = Tab.ALL
+            cardsScroll = 0
+        }
         val px = MARGIN
         val py = MARGIN
         val pw = width - MARGIN * 2
@@ -171,7 +177,7 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         val rx = lx + lw + 16
         val rw = px + pw - 12 - rx
         val tabY = py + HEADER_H + 8
-        drawTabs(g, rx, tabY, mouseX, mouseY)
+        drawTabs(g, rx, tabY, mouseX, mouseY, ownedWings.isNotEmpty())
         g.fill(rx, tabY + 21, rx + rw, tabY + 22, ClientUi.alpha(ClientUi.BORDER, 0.8f))
 
         // A code cape nobody has redeemed is not listed at all: its name is the code, so even a
@@ -182,12 +188,13 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
             RiverCape.available(s) && inTab(s) &&
                 (if (s in RiverCape.PLUS) plusShown else !CapeEntitlements.locked(s))
         }.sortedBy { (_, s) -> s == RiverCape.CUSTOM } // My Cape stays last; newer capes are appended after it
+        val wingCards = if (tab == Tab.WINGS) ownedWings else emptyList()
         val includeNone = tab != Tab.PLUS
         val cardW = 74
         val cardH = 110
         val gap = 10
         val perRow = ((rw + gap) / (cardW + gap)).coerceAtLeast(1)
-        val count = styles.size + (if (includeNone) 1 else 0)
+        val count = styles.size + wingCards.size + (if (includeNone) 1 else 0)
         val rowsOfCards = (count + perRow - 1) / perRow
 
         val redeemY = py + ph - 14 - REDEEM_BLOCK
@@ -209,8 +216,9 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         val offset = if (includeNone) 1 else 0
         if (includeNone) {
             val (nx, ny) = cardPos(0)
-            drawNoneCard(g, nx, ny, cardW, cardH, mouseX, mouseY, equippedIndex == -1) {
-                cape.enabled = false
+            val none = if (tab == Tab.WINGS) WingCosmetics.equipped() == null else equippedIndex == -1
+            drawNoneCard(g, nx, ny, cardW, cardH, mouseX, mouseY, none) {
+                if (tab == Tab.WINGS) cape.setWingSlot(0) else cape.enabled = false
                 RiverRuntime.saveConfig()
             }
         }
@@ -222,6 +230,23 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
                 cape.setStyleIndex(i)
                 cape.enabled = true
                 RiverRuntime.saveConfig()
+            }
+        }
+        wingCards.forEachIndexed { index, wing ->
+            val (cx, cy) = cardPos(index + offset)
+            if (cy + cardH < areaTop || cy > areaBottom) return@forEachIndexed
+            val selected = cape.wingSlot() == wing.slot
+            val hovered = mouseX in cx..(cx + cardW) && mouseY in cy..(cy + cardH)
+            drawCardBase(g, cx, cy, cardW, cardH, hovered, selected)
+            val thumbW = cardW - 10
+            val thumbH = thumbW * 3 / 4
+            g.riverBlit(wing.preview, cx + 5, cy + (cardH - 22 - thumbH) / 2, 0f, 0f, thumbW, thumbH, 256, 192, 256, 192)
+            drawCardFooter(g, cx, cy, cardW, cardH, wing.name, selected)
+            hit(cx, cy, cardW, cardH) {
+                if (WingCosmetics.owns(wing)) {
+                    cape.setWingSlot(wing.slot)
+                    RiverRuntime.saveConfig()
+                }
             }
         }
         g.disableScissor()
@@ -241,7 +266,7 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
     }
 
     /** Which tab a cape belongs to. Plus capes show in every tab that lists them. */
-    private enum class Tab(val label: String) { ALL("All"), FREE("Free"), PLUS("River Plus") }
+    private enum class Tab(val label: String) { ALL("All"), FREE("Free"), PLUS("River Plus"), WINGS("Wings") }
 
     private var tab = Tab.ALL
 
@@ -249,6 +274,7 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         Tab.ALL -> true
         Tab.FREE -> style !in RiverCape.PLUS
         Tab.PLUS -> style in RiverCape.PLUS
+        Tab.WINGS -> false
     }
 
     private var cardsScroll = 0
@@ -499,10 +525,11 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
         }
     }
 
-    private fun drawTabs(g: GuiGraphics, x: Int, y: Int, mouseX: Int, mouseY: Int) {
+    private fun drawTabs(g: GuiGraphics, x: Int, y: Int, mouseX: Int, mouseY: Int, hasWings: Boolean) {
         var tx = x
         for (t in Tab.values()) {
             if (t == Tab.PLUS && !dev.wyz.clientcore.cosmetic.RiverPlus.shown()) continue
+            if (t == Tab.WINGS && !hasWings) continue
             val w = font.width(t.label) + 16
             val hovered = mouseX in tx..(tx + w) && mouseY in y..(y + 20)
             val active = tab == t
@@ -519,6 +546,11 @@ class RiverCosmeticsScreen(private val parent: Screen?) : Screen(Component.liter
 
     /** The cape you are wearing, its name and whether it is free or River Plus. */
     private fun drawCapeInfo(g: GuiGraphics, x: Int, y: Int, w: Int, cape: CapeModule) {
+        if (tab == Tab.WINGS) {
+            val name = trim(WingCosmetics.equipped()?.name ?: "No wings", w)
+            g.drawString(font, name, x + (w - font.width(name)) / 2, y, ClientUi.TEXT, true)
+            return
+        }
         val style = if (cape.enabled) cape.selectedStyle() else null
         val name = if (style != null) RiverCape.LABELS.getOrNull(cape.styleIndex()) ?: "Cape" else "No cape"
         val tag = when {

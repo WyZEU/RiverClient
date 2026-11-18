@@ -7,6 +7,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -45,12 +46,24 @@ object CapeEntitlements {
     private var owned: Set<String> = emptySet()
 
     private val refreshing = AtomicBoolean(false)
+    private data class WingOwnership(val profile: UUID, val owned: Set<String>)
+    @Volatile private var wings: WingOwnership? = null
+    private var lastWingRefresh = 0L
+    private var lastWingProfile: UUID? = null
 
     /** True when this cape needs redeeming and has not been. Plus capes open with Plus. */
     fun locked(style: String): Boolean =
         style in gated && style !in owned && !(style in RiverCape.PLUS && RiverPlus.active())
 
     fun owns(style: String): Boolean = style in owned
+
+    fun ownsWing(style: String): Boolean =
+        wings?.let { it.profile == Minecraft.getInstance().user.profileId && style in it.owned } == true
+
+    fun refreshWingsIfStale() {
+        val profile = Minecraft.getInstance().user.profileId
+        if (profile != lastWingProfile || System.currentTimeMillis() - lastWingRefresh >= 5 * 60_000L) refresh()
+    }
 
     /** An event reward the server just granted, shown as owned without waiting for a refresh. */
     fun grantLocal(style: String) {
@@ -68,9 +81,11 @@ object CapeEntitlements {
     fun refresh() {
         ServerCapes.fetchMissing()
         if (!refreshing.compareAndSet(false, true)) return
+        lastWingRefresh = System.currentTimeMillis()
+        lastWingProfile = Minecraft.getInstance().user.profileId
         Thread({
             try {
-                fetchGated()
+                runCatching { fetchGated() }
                 fetchOwned()
             } catch (_: Exception) {
                 // Offline, or the worker is down. Whatever was last known stays; a failed
@@ -88,10 +103,12 @@ object CapeEntitlements {
     }
 
     private fun fetchOwned() {
-        val uuid = selfUuid() ?: return
+        val uuid = Minecraft.getInstance().user?.profileId ?: return
         val body = get("$BASE/cosmetics/owned?uuid=$uuid") ?: return
         val array = JsonParser.parseString(body).asJsonObject.getAsJsonArray("owned") ?: return
-        owned = array.map { it.asString }.toSet()
+        val result = array.map { it.asString }.toSet()
+        owned = result
+        wings = WingOwnership(uuid, result)
     }
 
     private fun get(url: String): String? {
