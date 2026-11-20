@@ -8,15 +8,22 @@ const UUID = "0123456789abcdef0123456789abcdef";
 const DASHED = "01234567-89ab-cdef-0123-456789abcdef";
 const ORIGIN = "https://store.riverclient.xyz";
 const SECRET = "test-webhook-secret";
-const CHECKOUT = "https://pay.tebex.io/test-basket";
+const CHECKOUT_KEY = "00000000-0000-4000-8000-000000000001";
+const OTHER_CHECKOUT_KEY = "00000000-0000-4000-8000-000000000002";
+const checkoutUrl = (ident) => `https://pay.tebex.io/${ident}`;
 
-function setup(t) {
+function setup(t, beforeBasketCreated = async () => {}) {
   const values = new Map();
+  let transactions = Promise.resolve();
   const storage = {
     get: async (key) => structuredClone(values.get(key)),
     put: async (key, value) => values.set(key, structuredClone(value)),
     delete: async (key) => values.delete(key),
-    transaction: async (operation) => operation(storage)
+    transaction(operation) {
+      const result = transactions.then(() => operation(storage));
+      transactions = result.catch(() => {});
+      return result;
+    }
   };
   const cosmetics = new Cosmetics({ storage });
   const env = {
@@ -31,23 +38,43 @@ function setup(t) {
   };
   const request = (path, init) => worker.fetch(new Request(`https://updates.riverclient.xyz${path}`, init), env, {});
   let basket = null;
+  const baskets = new Map();
   let basketPrice = { currency: "EUR", amount: 5.99 };
+  const basketData = (entry) => ({
+    ident: entry.ident,
+    complete: entry.status === "paid",
+    currency: entry.price.currency,
+    total_price: entry.price.amount,
+    links: entry.status === "paid" ? { payment: "https://checkout.tebex.io/fixture" } : { checkout: checkoutUrl(entry.ident) }
+  });
   t.mock.method(globalThis, "fetch", async (url, init) => {
     if (String(url) === "https://api.mojang.com/users/profiles/minecraft/RiverPlayer") {
       return Response.json({ id: UUID, name: "RiverPlayer" });
     }
     if (String(url) === "https://headless.tebex.io/api/accounts/test/baskets") {
-      basket = JSON.parse(init.body);
-      return Response.json({ data: { ident: "test-basket" } });
+      const ident = `test-basket-${baskets.size + 1}`;
+      basket = { ...JSON.parse(init.body), ident, status: "open", price: basketPrice };
+      baskets.set(ident, basket);
+      await beforeBasketCreated(ident);
+      return Response.json({ data: { ident } });
     }
-    assert.equal(String(url), "https://headless.tebex.io/api/baskets/test-basket/packages");
-    assert.deepEqual(JSON.parse(init.body), { package_id: Number(basket.custom.river_package), quantity: 1, type: "single" });
-    return Response.json({ data: { currency: basketPrice.currency, total_price: basketPrice.amount, links: { checkout: CHECKOUT } } });
+    const lookup = /^https:\/\/headless\.tebex\.io\/api\/accounts\/test\/baskets\/([\w-]+)$/.exec(String(url));
+    if (lookup) {
+      const entry = baskets.get(lookup[1]);
+      if (!entry || entry.status === "expired") return new Response(null, { status: 404 });
+      if (entry.status === "unavailable") return new Response(null, { status: 503 });
+      return Response.json({ data: basketData(entry) });
+    }
+    const fill = /^https:\/\/headless\.tebex\.io\/api\/baskets\/([\w-]+)\/packages$/.exec(String(url));
+    assert.ok(fill, `Unexpected fetch ${url}`);
+    const entry = baskets.get(fill[1]);
+    assert.deepEqual(JSON.parse(init.body), { package_id: Number(entry.custom.river_package), quantity: 1, type: "single" });
+    return Response.json({ data: basketData(entry) });
   });
-  const checkout = (product, init = {}) => request("/store/checkout", {
+  const checkout = (product, init = {}, checkoutKey = CHECKOUT_KEY) => request("/store/checkout", {
     method: "POST",
     headers: { Origin: ORIGIN, "CF-Connecting-IP": "192.0.2.1" },
-    body: JSON.stringify({ product, packageId: WING_PACKAGES[product]?.packageId, playerName: "RiverPlayer" }),
+    body: JSON.stringify({ product, packageId: WING_PACKAGES[product]?.packageId, playerName: "RiverPlayer", checkoutKey }),
     ...init
   });
   const webhook = async (type, subject, sign = SECRET) => {
@@ -63,7 +90,13 @@ function setup(t) {
     payment_method: { name: "Test Payments" },
     products: [{ id: Number(basket.custom.river_package), quantity: 1 }]
   });
-  return { env, cosmetics, request, checkout, webhook, owned, order, payment, basket: () => basket, setBasketPrice: (value) => { basketPrice = value; } };
+  return {
+    env, cosmetics, request, checkout, webhook, owned, order, payment,
+    basket: () => basket,
+    basketCount: () => baskets.size,
+    setBasketPrice: (value) => { basketPrice = value; },
+    setBasketStatus: (status) => { basket.status = status; }
+  };
 }
 
 test("checkout, signed payment, and refund deliver each specific wing without granting Plus", async (t) => {
@@ -71,7 +104,9 @@ test("checkout, signed payment, and refund deliver each specific wing without gr
   for (const [slug, item] of Object.entries(WING_PACKAGES)) {
     const response = await flow.checkout(slug);
     assert.equal(response.headers.get("Access-Control-Allow-Origin"), ORIGIN);
-    assert.deepEqual(await response.json(), { ok: true, playerName: "RiverPlayer", currency: "EUR", totalPriceCents: 599, url: CHECKOUT });
+    assert.deepEqual(await response.json(), {
+      ok: true, playerName: "RiverPlayer", currency: "EUR", totalPriceCents: 599, url: checkoutUrl(flow.basket().ident)
+    });
     const order = flow.basket().custom.river_order;
     assert.ok(flow.basket().complete_url.endsWith(`/store/${slug}/?order=${order}`));
     assert.equal(await flow.order(order), "pending");
@@ -87,6 +122,93 @@ test("checkout, signed payment, and refund deliver each specific wing without gr
     assert.equal(await flow.order(order), "refunded");
     assert.deepEqual(await flow.owned(), []);
   }
+});
+
+test("concurrent checkouts reserve one basket and only the originating tab can resume it", async (t) => {
+  const started = Promise.withResolvers();
+  const proceed = Promise.withResolvers();
+  const flow = setup(t, async () => {
+    started.resolve();
+    await proceed.promise;
+  });
+  const open = flow.checkout("voidshard");
+  try {
+    await Promise.race([started.promise, open.then(() => assert.fail("Basket creation did not start"))]);
+    const concurrent = await flow.checkout("voidshard");
+    assert.equal(concurrent.status, 409);
+    assert.equal((await concurrent.json()).url, undefined);
+    assert.equal(flow.basketCount(), 1);
+  } finally {
+    proceed.resolve();
+  }
+
+  const response = await open;
+  assert.equal(response.status, 200);
+  const first = await response.json();
+  const repeated = await flow.checkout("voidshard");
+  assert.equal(repeated.status, 200);
+  assert.deepEqual(await repeated.json(), first);
+
+  const differentTab = await flow.checkout("voidshard", {}, OTHER_CHECKOUT_KEY);
+  assert.equal(differentTab.status, 409);
+  assert.equal((await differentTab.json()).url, undefined);
+  assert.equal(flow.basketCount(), 1);
+});
+
+test("a request that lost its reservation cannot expose a late basket", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"] });
+  const started = Promise.withResolvers();
+  const proceed = Promise.withResolvers();
+  const flow = setup(t, async (ident) => {
+    if (ident === "test-basket-1") {
+      started.resolve();
+      await proceed.promise;
+    }
+  });
+  const delayed = flow.checkout("voidshard");
+  try {
+    await Promise.race([started.promise, delayed.then(() => assert.fail("Basket creation did not start"))]);
+    t.mock.timers.tick(60_001);
+    const replacement = await flow.checkout("voidshard");
+    assert.equal(replacement.status, 200);
+    assert.equal((await replacement.json()).url, checkoutUrl("test-basket-2"));
+  } finally {
+    proceed.resolve();
+  }
+
+  const stale = await delayed;
+  assert.equal(stale.status, 503);
+  assert.equal((await stale.json()).url, undefined);
+  const resumed = await flow.checkout("voidshard");
+  assert.equal((await resumed.json()).url, checkoutUrl("test-basket-2"));
+});
+
+test("a reusable basket is replaced after expiry or refund and kept while payment is being processed", async (t) => {
+  const flow = setup(t);
+  assert.equal((await flow.checkout("voidshard")).status, 200);
+  const original = flow.basket().ident;
+  flow.setBasketStatus("unavailable");
+  assert.equal((await flow.checkout("voidshard")).status, 502);
+  assert.equal(flow.basketCount(), 1);
+
+  flow.setBasketStatus("expired");
+  const replacement = await flow.checkout("voidshard", {}, OTHER_CHECKOUT_KEY);
+  assert.equal(replacement.status, 200);
+  assert.notEqual((await replacement.json()).url, checkoutUrl(original));
+  assert.equal(flow.basketCount(), 2);
+
+  flow.setBasketStatus("paid");
+  const processing = await flow.checkout("voidshard", {}, OTHER_CHECKOUT_KEY);
+  assert.equal(processing.status, 409);
+  assert.match((await processing.json()).message, /being processed/);
+  assert.equal(flow.basketCount(), 2);
+
+  const payment = flow.payment("tbx-basket-paid");
+  await flow.webhook("payment.completed", payment);
+  assert.equal((await flow.checkout("voidshard")).status, 409);
+  await flow.webhook("payment.refunded", { transaction_id: payment.transaction_id });
+  assert.equal((await flow.checkout("voidshard")).status, 200);
+  assert.equal(flow.basketCount(), 3);
 });
 
 test("bad signatures, order data, prices, and unauthorized origins cannot grant or start a checkout", async (t) => {
@@ -138,6 +260,10 @@ test("a signed wing payment with the wrong currency or amount rejects the order 
     assert.equal(await flow.order(order), "rejected");
     assert.deepEqual(await flow.owned(), []);
 
+    const blocked = await flow.checkout("voidshard");
+    assert.equal(blocked.status, 409);
+    assert.match((await blocked.json()).message, /previous payment was rejected/);
+
     const retry = await flow.webhook("payment.completed", payment);
     assert.equal((await retry.json()).outcome, "duplicate");
     assert.equal(await flow.order(order), "rejected");
@@ -168,8 +294,16 @@ test("an earlier refund blocks a delayed delivery and reversing one charge keeps
   const flow = setup(t);
   await flow.checkout("ember-dragon");
   const first = flow.payment("tbx-first-order");
-  await flow.checkout("ember-dragon");
+  // A separate valid quote can exist from before checkout reservations.
+  const legacyId = crypto.randomUUID();
   const second = flow.payment("tbx-second-order");
+  second.custom = {
+    ...second.custom,
+    river_order: legacyId,
+    river_signature: await tebexSignature(
+      `river-store-v1\n${legacyId}\n${UUID}\n${first.custom.river_package}\n${first.custom.river_mode}\n599`, SECRET
+    )
+  };
   await flow.webhook("payment.completed", first);
   await flow.webhook("payment.completed", second);
   await flow.webhook("payment.dispute.lost", { transaction_id: first.transaction_id });

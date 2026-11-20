@@ -11,6 +11,7 @@ import { compactUuid } from "./cosmetics.js";
 export const PLUS_MONTH_DAYS = 32;
 export const PLUS_PACKAGES = { 1: "7815389", 3: "7815393" };
 const PLUS_MONTHS = new Map(Object.entries(PLUS_PACKAGES).map(([months, id]) => [id, Number(months)]));
+const HEADLESS_API = "https://headless.tebex.io/api";
 
 const enc = new TextEncoder();
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -98,10 +99,9 @@ export function tebexAction(event) {
 }
 
 export async function createTebexBasket(publicToken, packageId, type, options, fetchImpl = fetch) {
-  const base = `https://headless.tebex.io/api`;
   async function post(path, body) {
     try {
-      const response = await fetchImpl(base + path, {
+      const response = await fetchImpl(HEADLESS_API + path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: AbortSignal.timeout(8000),
@@ -116,7 +116,22 @@ export async function createTebexBasket(publicToken, packageId, type, options, f
   const ident = basket?.data?.ident;
   if (typeof ident !== "string" || !/^[\w-]+$/.test(ident)) return { basket: null, started: false };
   const filled = await post(`/baskets/${ident}/packages`, { package_id: packageId, quantity: 1, type });
-  return { basket: filled?.data, started: true };
+  return { basket: filled?.data, ident, started: true };
+}
+
+export async function getTebexBasket(publicToken, ident, fetchImpl = fetch) {
+  try {
+    const response = await fetchImpl(`${HEADLESS_API}/accounts/${publicToken}/baskets/${ident}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000)
+    });
+    if (response.status === 404 || response.status === 410) return { expired: true };
+    if (response.ok) {
+      const { data } = await response.json();
+      if (data?.ident === ident) return { basket: data };
+    }
+  } catch {}
+  return {};
 }
 
 /** A River Plus subscription for the Minecraft account confirmed at checkout. */

@@ -22,7 +22,7 @@
  */
 
 import { HALLOWEEN_EVENT } from "./events.js";
-import { ownedWings, PLUS_WING, recordWingPayment, wingOrderStatus } from "./store.js";
+import { finishWingCheckout, ownedWings, PLUS_WING, recordWingPayment, reserveWingCheckout, wingOrderStatus } from "./store.js";
 
 /** Cosmetics that require a redemption. Anything not listed is free to everyone. */
 export const GATED_COSMETICS = new Set(["axie", "casaeullo", "galaxy"]);
@@ -220,6 +220,14 @@ export class Cosmetics {
             status: 429, headers: { "Retry-After": String(retry) }
           })
         : Response.json({ ok: true });
+    }
+
+    if (url.pathname === "/store/checkout/reserve" && request.method === "POST") {
+      return Response.json(await reserveWingCheckout(this.state.storage, payload));
+    }
+
+    if (url.pathname === "/store/checkout/finish" && request.method === "POST") {
+      return Response.json({ ok: await finishWingCheckout(this.state.storage, payload) });
     }
 
     if (url.pathname === "/store/owned" && request.method === "GET") {
