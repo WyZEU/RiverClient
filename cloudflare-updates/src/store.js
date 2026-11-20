@@ -19,12 +19,16 @@ const packages = new Map(Object.values(WING_PACKAGES).map((entry) => [entry.pack
 export const PLUS_WING = "wingriverregalia";
 export const WING_COSMETICS = new Set([...packages.values()].map(({ cosmetic }) => cosmetic).concat(PLUS_WING));
 
-const cents = (value) => Math.round(Number(value) * 100);
 const orderKey = (id) => `store:order:${id}`;
 const transactionKey = (id) => `store:transaction:${id}`;
 const ownershipKey = (uuid) => `store:owned:${uuid}`;
 const quote = (id, uuid, packageId, mode) => `river-store-v1\n${id}\n${uuid}\n${packageId}\n${mode}\n${PRICE_CENTS}`;
 export const isOrderId = (id) => typeof id === "string" && ORDER_ID.test(id);
+
+function hasExpectedPrice(currency, amount) {
+  return currency === "EUR" && (typeof amount === "number" || typeof amount === "string") &&
+    Number(amount) === PRICE_CENTS / 100;
+}
 
 export function storeCorsOrigin(request, env) {
   const origin = request.headers.get("Origin");
@@ -105,7 +109,7 @@ export async function startWingCheckout(request, env, cosmetics, fetchImpl = fet
   }, fetchImpl);
   const basket = result.basket;
   const url = checkoutLink(basket?.links?.checkout);
-  if (!url || basket.currency !== "EUR" || cents(basket.total_price) !== PRICE_CENTS) {
+  if (!url || !hasExpectedPrice(basket.currency, basket.total_price)) {
     return httpError(502, "The Tebex price or checkout is unavailable.");
   }
   return Response.json({ ok: true, playerName, currency: "EUR", totalPriceCents: PRICE_CENTS, url });
@@ -134,10 +138,11 @@ export async function wingPayment(event, env) {
   if (typeof gateway !== "string" || !gateway.trim()) return null;
   const testPayment = subject.test === true || /^test payments?$/i.test(gateway.trim());
   if (testPayment !== (mode === "test") || (testPayment && env.RIVER_STORE_SANDBOX !== "1")) return null;
+  if (!(await tebexSignatureValid(quote(id, uuid, packageId, mode), signature, env.TEBEX_WEBHOOK_SECRET))) return null;
+
   const price = subject.price_paid ?? subject.price;
-  if (price?.currency !== "EUR" || cents(price.amount) !== PRICE_CENTS ||
-      !(await tebexSignatureValid(quote(id, uuid, packageId, mode), signature, env.TEBEX_WEBHOOK_SECRET))) return null;
-  return { action: "grant", transaction, id, uuid, cosmetic: product.cosmetic };
+  const action = hasExpectedPrice(price?.currency, price?.amount) ? "grant" : "reject";
+  return { action, transaction, id, uuid, cosmetic: product.cosmetic };
 }
 
 export async function ownedWings(storage, uuid) {
@@ -161,11 +166,13 @@ export function recordWingPayment(storage, payment) {
       if (prior?.refunded) return "duplicate";
       if (prior?.id) {
         const order = await txn.get(orderKey(prior.id));
-        const ownership = await txn.get(ownershipKey(order.uuid)) ?? {};
-        const remaining = (ownership[order.cosmetic] ?? []).filter((value) => value !== transaction);
-        if (remaining.length) ownership[order.cosmetic] = remaining;
-        else delete ownership[order.cosmetic];
-        await txn.put(ownershipKey(order.uuid), ownership);
+        if (order.status === "delivered") {
+          const ownership = await txn.get(ownershipKey(order.uuid)) ?? {};
+          const remaining = (ownership[order.cosmetic] ?? []).filter((value) => value !== transaction);
+          if (remaining.length) ownership[order.cosmetic] = remaining;
+          else delete ownership[order.cosmetic];
+          await txn.put(ownershipKey(order.uuid), ownership);
+        }
         await txn.put(orderKey(prior.id), { ...order, status: "refunded" });
       }
       await txn.put(key, { ...prior, refunded: true });
@@ -173,7 +180,8 @@ export function recordWingPayment(storage, payment) {
     }
 
     if (prior?.id || await txn.get(orderKey(id))) return "duplicate";
-    const status = prior?.refunded ? "refunded" : "delivered";
+    let status = payment.action === "grant" ? "delivered" : "rejected";
+    if (prior?.refunded) status = "refunded";
     if (status === "delivered") {
       const ownership = await txn.get(ownershipKey(uuid)) ?? {};
       ownership[cosmetic] = [...(ownership[cosmetic] ?? []), transaction];

@@ -31,7 +31,7 @@ function setup(t) {
   };
   const request = (path, init) => worker.fetch(new Request(`https://updates.riverclient.xyz${path}`, init), env, {});
   let basket = null;
-  let price = 5.99;
+  let basketPrice = { currency: "EUR", amount: 5.99 };
   t.mock.method(globalThis, "fetch", async (url, init) => {
     if (String(url) === "https://api.mojang.com/users/profiles/minecraft/RiverPlayer") {
       return Response.json({ id: UUID, name: "RiverPlayer" });
@@ -42,7 +42,7 @@ function setup(t) {
     }
     assert.equal(String(url), "https://headless.tebex.io/api/baskets/test-basket/packages");
     assert.deepEqual(JSON.parse(init.body), { package_id: Number(basket.custom.river_package), quantity: 1, type: "single" });
-    return Response.json({ data: { currency: "EUR", total_price: price, links: { checkout: CHECKOUT } } });
+    return Response.json({ data: { currency: basketPrice.currency, total_price: basketPrice.amount, links: { checkout: CHECKOUT } } });
   });
   const checkout = (product, init = {}) => request("/store/checkout", {
     method: "POST",
@@ -63,7 +63,7 @@ function setup(t) {
     payment_method: { name: "Test Payments" },
     products: [{ id: Number(basket.custom.river_package), quantity: 1 }]
   });
-  return { env, cosmetics, request, checkout, webhook, owned, order, payment, basket: () => basket, setPrice: (value) => { price = value; } };
+  return { env, cosmetics, request, checkout, webhook, owned, order, payment, basket: () => basket, setBasketPrice: (value) => { basketPrice = value; } };
 }
 
 test("checkout, signed payment, and refund deliver each specific wing without granting Plus", async (t) => {
@@ -93,15 +93,22 @@ test("bad signatures, order data, prices, and unauthorized origins cannot grant 
   const flow = setup(t);
   assert.equal((await flow.checkout("voidshard", { headers: { Origin: "https://other.example" } })).status, 403);
   assert.equal((await flow.checkout("voidshard", { body: '{"product":"voidshard","packageId":7815389,"playerName":"RiverPlayer"}' })).status, 400);
-  flow.setPrice(6.38);
-  assert.equal((await flow.checkout("voidshard")).status, 502);
-  flow.setPrice(5.99);
+  for (const price of [
+    { currency: "USD", amount: 5.99 },
+    { currency: "EUR", amount: 6.38 },
+    { currency: "EUR", amount: 5.991 }
+  ]) {
+    flow.setBasketPrice(price);
+    const response = await flow.checkout("voidshard");
+    assert.equal(response.status, 502);
+    assert.equal((await response.json()).url, undefined);
+  }
+  flow.setBasketPrice({ currency: "EUR", amount: 5.99 });
   await flow.checkout("voidshard");
   const payment = flow.payment("tbx-validation");
   assert.equal((await flow.webhook("payment.completed", payment, "wrong-secret")).status, 401);
   for (const wrong of [
     { ...payment, custom: { ...payment.custom, river_player: "a".repeat(32) } },
-    { ...payment, price_paid: { currency: "USD", amount: 5.99 } },
     { ...payment, products: [{ id: 7819952, quantity: 2 }] },
     { ...payment, custom: { uuid: UUID } }
   ]) assert.equal((await (await flow.webhook("payment.completed", wrong)).json()).outcome, "ignored");
@@ -110,6 +117,35 @@ test("bad signatures, order data, prices, and unauthorized origins cannot grant 
   assert.deepEqual(await flow.owned(), []);
   flow.env.RIVER_STORE_CHECKOUT_ENABLED = "0";
   assert.equal((await flow.checkout("voidshard")).status, 503);
+});
+
+test("a signed wing payment with the wrong currency or amount rejects the order without granting it", async (t) => {
+  const flow = setup(t);
+  const mismatches = [
+    { currency: "USD", amount: 5.99 },
+    { currency: "EUR", amount: 5.98 },
+    { currency: "EUR", amount: 5.991 }
+  ];
+  for (const [index, pricePaid] of mismatches.entries()) {
+    assert.equal((await flow.checkout("voidshard")).status, 200);
+    const order = flow.basket().custom.river_order;
+    const payment = flow.payment(`tbx-price-check-${index}`);
+    const event = { ...payment, price: payment.price_paid, price_paid: pricePaid };
+
+    const result = await flow.webhook("payment.completed", event);
+    assert.equal(result.status, 200);
+    assert.deepEqual(await result.json(), { ok: true, outcome: "rejected" });
+    assert.equal(await flow.order(order), "rejected");
+    assert.deepEqual(await flow.owned(), []);
+
+    const retry = await flow.webhook("payment.completed", payment);
+    assert.equal((await retry.json()).outcome, "duplicate");
+    assert.equal(await flow.order(order), "rejected");
+    assert.deepEqual(await flow.owned(), []);
+
+    await flow.webhook("payment.refunded", { transaction_id: payment.transaction_id });
+    assert.equal(await flow.order(order), "refunded");
+  }
 });
 
 test("an isolated checkout can return to its configured preview only in sandbox mode", async (t) => {
