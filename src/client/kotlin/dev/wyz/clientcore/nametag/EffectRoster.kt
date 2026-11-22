@@ -21,6 +21,8 @@ object EffectRoster {
 
     @Volatile
     private var remoteCloth: Set<UUID> = emptySet()
+    @Volatile
+    private var remoteWings: Map<UUID, String> = emptyMap()
 
     /** Whether a remote player is a River user broadcasting their badge. */
     @JvmStatic
@@ -38,12 +40,18 @@ object EffectRoster {
     @JvmStatic
     fun remoteCapeStyle(uuid: UUID): String? = remoteCapes[uuid]
 
+    fun remoteWingStyle(uuid: UUID): String? = remoteWings[uuid]
+
     @JvmStatic
-    fun setRemoteRoster(badges: Set<UUID>, capes: Map<UUID, String>, plus: Set<UUID> = emptySet(), cloth: Set<UUID> = emptySet()) {
+    fun setRemoteRoster(
+        badges: Set<UUID>, capes: Map<UUID, String>, plus: Set<UUID> = emptySet(),
+        cloth: Set<UUID> = emptySet(), wings: Map<UUID, String> = emptyMap()
+    ) {
         remoteBadges = badges.toSet()
         remoteCapes = capes.toMap()
         remotePlus = plus.toSet()
         remoteCloth = cloth.toSet()
+        remoteWings = wings.toMap()
     }
 
     @JvmStatic
@@ -52,5 +60,6 @@ object EffectRoster {
         remoteCapes = emptyMap()
         remotePlus = emptySet()
         remoteCloth = emptySet()
+        remoteWings = emptyMap()
     }
 }

@@ -2,6 +2,7 @@ package dev.wyz.clientcore.net
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import dev.wyz.clientcore.cosmetic.WingCosmetics
 import dev.wyz.clientcore.module.ModuleRegistry
 import dev.wyz.clientcore.nametag.EffectRoster
 import net.minecraft.client.Minecraft
@@ -33,6 +34,7 @@ object PresenceService {
         val name: String,
         val badge: Boolean,
         val cape: String,
+        val wing: String,
         val cloth: Boolean
     )
 
@@ -56,6 +58,7 @@ object PresenceService {
         tickCounter += 1
         if (tickCounter < 20) return
         tickCounter = 0
+        WingCosmetics.refreshEquipped()
 
         val server = client.currentServer
         val level = client.level
@@ -88,6 +91,7 @@ object PresenceService {
             name = client.user.name,
             badge = badgeOn,
             cape = capeStyle,
+            wing = WingCosmetics.equipped()?.id.orEmpty(),
             cloth = capeModule?.cloth() == true && dev.wyz.clientcore.cosmetic.RiverPlus.active()
         )
     }
@@ -139,6 +143,7 @@ object PresenceService {
             addProperty("name", snap.name)
             addProperty("badge", snap.badge)
             addProperty("cape", snap.cape)
+            if (snap.wing.isNotEmpty()) addProperty("wing", snap.wing)
             // "cape" carries the style id ("" = none).
             addProperty("cloth", snap.cloth)
         }
@@ -151,6 +156,7 @@ object PresenceService {
         val players = root.getAsJsonArray("players") ?: return
         val badges = HashSet<UUID>()
         val capes = HashMap<UUID, String>()
+        val wings = HashMap<UUID, String>()
         val plus = HashSet<UUID>()
         val cloth = HashSet<UUID>()
         players.forEach { element ->
@@ -163,8 +169,10 @@ object PresenceService {
             if (obj.get("cloth")?.asBoolean == true) cloth.add(uuid)
             val capeStyle = obj.get("cape")?.asString
             if (!capeStyle.isNullOrBlank()) capes[uuid] = capeStyle
+            val wing = obj.get("wing")?.asString
+            if (!wing.isNullOrBlank()) wings[uuid] = wing
         }
-        EffectRoster.setRemoteRoster(badges, capes, plus, cloth)
+        EffectRoster.setRemoteRoster(badges, capes, plus, cloth, wings)
     }
 
     private fun post(body: String): String? {
