@@ -1,8 +1,12 @@
 {
   "version": "0.3.2",
   "title": "River Client 0.3.2",
-  "summary": "A much smaller download.",
+  "summary": "River Plus, wings, the Booster cape and Music Jam.",
   "items": [
+    "Added: River Plus, from €4.99 a month. A gold badge next to your name, four animated Plus capes, cloth capes that move when you walk, the River Regalia wings and new features early. It keeps River free for everyone.",
+    "Added: Wings. Ember Dragon, Verdant Bloom, Voidshard and Vampire Lord, wear them from the new Wings tab in Cosmetics. Other River players see them too.",
+    "Added: Music Jam. Play a song in Spotify or YouTube Music and invite River friends: they follow your song with the same lyrics, and can play it in their own Spotify. Nothing to paste.",
+    "Added: The Linux launcher updates itself, like on Windows and Mac.",
     "Added: The Booster cape, animated, for people boosting the River Discord for as long as they boost. Run /boostercape in Discord, then enter the code in Cosmetics.",
     "Improved: River runs lighter. The aurora, Keystrokes, nametags, River capes and the entity checks do far less work each frame.",
     "Added: Freelook turns itself off on any server that blocks the Freelook mod, not only on River's own list.",
