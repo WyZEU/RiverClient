@@ -12,7 +12,11 @@ const { pickRiverModEntry, fileMatchesSha256 } = require("./river-mod-cache.js")
 const { verifyManifest } = require("./update-signature.js");
 const { buildApplyUpdateScript } = require("./update-apply.js");
 const { normalizeUpdateFilePath, buildDifferentialUpdatePlan, downloadFileViaBlockmap } = require("./update-files.js");
-const { nativeClassifierKey, matchesOsRule, isMacNativeLibraryAllowed, macJavaCandidates, javaArchitectureMatches, manualUpdateTarget } = require("./runtime-platform.js");
+const {
+  nativeClassifierKey, matchesOsRule, isMacNativeLibraryAllowed,
+  macJavaCandidates, javaArchitecture, javaArchitectureMatches, manualUpdateTarget
+} = require("./runtime-platform.js");
+const { needsFreeTypeSecurityUpdate, prepareFreeTypeSecurityArgument } = require("./freetype-security.js");
 // Never bundle River's CurseForge credential into a distributed launcher.
 function effectiveCurseForgeKey(settings) { return String(settings?.curseForgeApiKey || ""); }
 const { app, BrowserWindow, ipcMain, shell, dialog, screen, nativeImage, globalShortcut, clipboard, Notification, safeStorage } = require("electron");
@@ -5682,7 +5686,24 @@ async function launchStandaloneMinecraft(status, joinAddress = "", plainInstance
     writeSettings({ ...readSettings(), javaPath });
     status.settings.javaPath = javaPath;
   }
-  emit("launcher:log", `[launcher] Using Java: ${javaPath} (major ${javaMajorVersion(javaPath)})`);
+  const java = inspectJavaRuntime(javaPath, IS_MAC || launch.needsFreeTypePatch);
+  emit("launcher:log", `[launcher] Using Java: ${javaPath} (major ${java.major})`);
+
+  const jvmArgs = [...launch.jvmArgs];
+  if (launch.needsFreeTypePatch) {
+    try {
+      jvmArgs.push(await prepareFreeTypeSecurityArgument({
+        runtimeRoot: path.join(app.getPath("userData"), "minecraft-runtime"),
+        javaArch: java.arch,
+        download: downloadIfMissing,
+        readZipEntry: readZipEntryBuffer
+      }));
+    } catch (error) {
+      return { ok: false, message: `Could not prepare the Minecraft font security update: ${error.message}` };
+    }
+  }
+  if (launchCancelRequested) return { ok: false, message: "Launch cancelled." };
+  emitActivity({ title: "Preparing Minecraft", detail: "Runtime ready.", current: 7, total: 7, done: true });
 
   // java.exe is a console application: Windows gives it a console window, and closing
   // that window kills the whole process tree (the game dies with it). javaw.exe is the
@@ -5692,7 +5713,7 @@ async function launchStandaloneMinecraft(status, joinAddress = "", plainInstance
   if (launchExe !== javaPath) emit("launcher:log", `[launcher] Launching without a console via ${path.basename(launchExe)}.`);
 
   try {
-    launchProcess = spawn(launchExe, launch.args, {
+    launchProcess = spawn(launchExe, [...jvmArgs, launch.mainClass, ...launch.gameArgs], {
       cwd: status.instancePath,
       windowsHide: !status.settings.showConsoleOnLaunch,
       env: {
@@ -7866,20 +7887,26 @@ ipcMain.handle("launcher:install-java", async (_event, majorVersion = 21) => ins
  * Reads the major version of a Java executable (0 when it can't be run).
  * "21.0.3" -> 21, and the legacy "1.8.0_401" -> 8.
  */
-function javaMajorVersion(javaPath) {
+function inspectJavaRuntime(javaPath, showProperties = IS_MAC) {
+  const unavailable = { major: 0, arch: "" };
   try {
     const { spawnSync } = require("node:child_process");
-    const result = spawnSync(javaPath, IS_MAC ? ["-XshowSettings:properties", "-version"] : ["-version"], { encoding: "utf8", timeout: 6000 });
+    const args = showProperties ? ["-XshowSettings:properties", "-version"] : ["-version"];
+    const result = spawnSync(javaPath, args, { encoding: "utf8", timeout: 6000, windowsHide: true });
     const text = `${result.stderr || ""}${result.stdout || ""}`;
     // An Intel JVM can run under Rosetta but cannot load ARM64 LWJGL libraries.
-    if (result.status !== 0 || (IS_MAC && !javaArchitectureMatches(text))) return 0;
+    if (result.status !== 0 || (IS_MAC && !javaArchitectureMatches(text))) return unavailable;
     const m = text.match(/version "(\d+)(?:\.(\d+))?/);
-    if (!m) return 0;
-    const major = Number(m[1]);
-    return major === 1 ? Number(m[2] || 0) : major;
+    if (!m) return unavailable;
+    const major = Number(m[1] === "1" ? m[2] : m[1]) || 0;
+    return { major, arch: javaArchitecture(text) };
   } catch {
-    return 0;
+    return unavailable;
   }
+}
+
+function javaMajorVersion(javaPath) {
+  return inspectJavaRuntime(javaPath).major;
 }
 
 /**
@@ -11253,17 +11280,17 @@ async function preparePlainMinecraftLaunch(status, auth, authenticated, joinAddr
   for (const change of fpsChanges) emit("launcher:log", `[launcher] options.txt ${change}`);
 
   const maxHeapMb = Math.max(1024, Number(status.settings.memoryMb || 4096));
-  const args = [
+  const jvmArgs = [
     `-Xms${Math.min(1024, maxHeapMb)}M`,
     `-Xmx${maxHeapMb}M`,
     ...jvmArgsForJava(parseJvmArgs(status.settings.jvmArgs), javaMajor),
-    ...versionJvmArgs,
-    mainClass,
-    ...gameArgs
+    ...versionJvmArgs
   ];
 
-  emitActivity({ title: "Preparing Minecraft", detail: "Runtime ready.", current: 7, total: 7, done: true });
-  return { ok: true, javaPath, javaMajor, args, versionName };
+  return {
+    ok: true, javaPath, javaMajor, jvmArgs, mainClass, gameArgs, versionName,
+    needsFreeTypePatch: needsFreeTypeSecurityUpdate(libraries)
+  };
 }
 
 async function prepareStandaloneMinecraftLaunch(status, auth, authenticated, joinAddress = "") {
@@ -11291,9 +11318,8 @@ async function prepareStandaloneMinecraftLaunch(status, auth, authenticated, joi
   setLaunchStep(2, "Libraries");
   emitActivity({ title: "Preparing Minecraft", detail: "Downloading libraries...", current: 3, total: 7 });
   const classpath = [versionJar];
-  const libraries = mergeLibraries(vanilla.libraries, fabric.libraries);
+  const libraries = mergeLibraries(vanilla.libraries, fabric.libraries).filter(isLibraryAllowed);
   for (const library of libraries) {
-    if (!isLibraryAllowed(library)) continue;
     const artifact = library.downloads?.artifact || mavenArtifact(library);
     if (artifact?.url && artifact.path) {
       const target = path.join(librariesDir, artifact.path);
@@ -11367,7 +11393,7 @@ async function prepareStandaloneMinecraftLaunch(status, auth, authenticated, joi
   for (const change of fpsChanges) emit("launcher:log", `[launcher] options.txt ${change}`);
 
   const maxHeapMb = Math.max(1024, Number(status.settings.memoryMb || 4096));
-  const javaArgs = [
+  const jvmArgs = [
     // A starting heap, as Prism Launcher and Mojang's launcher give, so Java is not
     // growing the heap in small steps during the first minutes of play.
     `-Xms${Math.min(1024, maxHeapMb)}M`,
@@ -11384,13 +11410,10 @@ async function prepareStandaloneMinecraftLaunch(status, auth, authenticated, joi
     `-Dminecraft.launcher.version=${app.getVersion()}`,
     ...(riverInjection ? [`-javaagent:${river.bootstrapJar}`, `-Driver.client.jar=${river.clientJar}`] : []),
     "-cp",
-    runtimeClasspath,
-    mainClass,
-    ...gameArgs
+    runtimeClasspath
   ];
 
-  emitActivity({ title: "Preparing Minecraft", detail: "Runtime ready.", current: 7, total: 7, done: true });
-  return { ok: true, javaPath: status.settings.javaPath || "java", args: javaArgs };
+  return { ok: true, jvmArgs, mainClass, gameArgs, needsFreeTypePatch: needsFreeTypeSecurityUpdate(libraries) };
 }
 
 /**

@@ -42,9 +42,14 @@ function macJavaCandidates(home) {
   ];
 }
 
-function javaArchitectureMatches(output, arch = process.arch) {
+function javaArchitecture(output) {
   const value = String(output).match(/^\s*os\.arch\s*=\s*(\S+)\s*$/m)?.[1];
-  return Boolean(value && normalizedArch(value) === normalizedArch(arch));
+  return value ? normalizedArch(value) : "";
+}
+
+function javaArchitectureMatches(output, arch = process.arch) {
+  const detected = javaArchitecture(output);
+  return Boolean(detected && detected === normalizedArch(arch));
 }
 
 function manualUpdateTarget(update, fallback, platform = process.platform) {
@@ -55,5 +60,5 @@ function manualUpdateTarget(update, fallback, platform = process.platform) {
 
 module.exports = {
   nativeClassifierKey, matchesOsRule, isMacNativeLibraryAllowed,
-  macJavaCandidates, javaArchitectureMatches, manualUpdateTarget
+  macJavaCandidates, javaArchitecture, javaArchitectureMatches, manualUpdateTarget
 };
