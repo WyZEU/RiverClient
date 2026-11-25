@@ -88,7 +88,7 @@ internal object MprisReader {
         val status = players.associateWith { stringProperty(it, "PlaybackStatus") }
         val name = pick(players, status) ?: return null
         chosen = name
-        val metadata = property(name, "Metadata")?.getAsJsonArray("data")?.firstOrNull()?.asJsonObject ?: return null
+        val metadata = readMetadata(name) ?: return null
         val title = text(metadata, "xesam:title")
         if (title.isBlank()) return null
         val position = property(name, "Position")?.get("data")?.asLong ?: 0L
@@ -128,7 +128,7 @@ internal object MprisReader {
 
     fun syncJam(track: MediaSession.Track): Boolean {
         val name = chosen?.takeIf { it.contains("spotify", true) } ?: return false
-        val metadata = property(name, "Metadata")?.getAsJsonArray("data")?.firstOrNull()?.asJsonObject ?: return false
+        val metadata = readMetadata(name) ?: return false
         if (text(metadata, "xesam:title") != track.title || text(metadata, "xesam:artist") != track.artist) return false
         val id = text(metadata, "mpris:trackid").takeIf { it.startsWith("/") } ?: return false
         if (kotlin.math.abs((current()?.positionMs ?: 0L) - track.positionMs) > 1500 &&
@@ -139,6 +139,13 @@ internal object MprisReader {
     private fun property(name: String, property: String): JsonObject? {
         val out = run("get-property", "--json=short", name, PATH, PLAYER, property) ?: return null
         return runCatching { JsonParser.parseString(out).asJsonObject }.getOrNull()
+    }
+
+    private fun readMetadata(name: String): JsonObject? {
+        val data = property(name, "Metadata")?.get("data") ?: return null
+        // busctl represents a D-Bus dictionary as a JSON object. Also accept a wrapped dictionary.
+        val dictionary = if (data.isJsonArray) data.asJsonArray.firstOrNull() else data
+        return dictionary?.takeIf { it.isJsonObject }?.asJsonObject
     }
 
     /** busctl's output, or null when it could not run or failed. */
