@@ -805,6 +805,7 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null, 
         hit(resetX, resetY, resetW, resetH) {
             module.resetModuleSettings()
             settingsPanel.resetTransientState()
+            saveNow()
         }
     }
 

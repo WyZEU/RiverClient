@@ -21,17 +21,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * While Freelook is held, re-orients the already-set-up third person camera around the
  * player using the freelook yaw/pitch. Camera only — the player entity is untouched.
  *
- * 26.1 replaced setup(level, entity, detached, reverse, partialTick) with update(deltaTracker)
- * and moved what used to be arguments onto the camera itself, so that generation reads the
- * entity and partial tick back off Camera and hands them to the same body. `require = 0` does
- * not cover this: it decides whether a missing injection point is fatal, while a handler whose
- * descriptor disagrees with a target that does exist is rejected outright.
+ * Since 26.1 the camera update also builds the culling frustum. Apply the orbit
+ * after vanilla positions the camera so the frustum uses the view that gets drawn.
  */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
 
 //? if >=26.1 {
-/*    @Inject(method = "update", at = @At("TAIL"), require = 0)
+/*    @Inject(method = "update", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/client/Camera;alignWithEntity(F)V", shift = At.Shift.AFTER))
     private void clientcore$freelookOrbit(DeltaTracker deltaTracker, CallbackInfo ci) {
         Camera self = (Camera) (Object) this;
         clientcore$orbit(self.entity(), self.getCameraEntityPartialTicks(deltaTracker));

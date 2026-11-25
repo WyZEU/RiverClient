@@ -162,6 +162,11 @@ class NowPlayingModule : Module("now_playing", "Spotify", "Now playing and lyric
         Thread(runnable, "River Now Playing").apply { isDaemon = true }
     }
 
+    override fun resetModuleSettings() {
+        super.resetModuleSettings()
+        ModuleRegistry.get<LyricsModule>("lyrics")?.resetModuleSettings()
+    }
+
     override fun addModuleSettings(list: MutableList<Setting>) {
         list.add(SectionSetting("Now Playing"))
         list.add(dev.wyz.clientcore.module.settings.ActionSetting("Music Jam", "Open") {

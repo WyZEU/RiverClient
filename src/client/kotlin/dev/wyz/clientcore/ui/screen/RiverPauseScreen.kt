@@ -24,6 +24,7 @@ import net.minecraft.client.gui.GuiGraphics
 //? if >=1.21.9 {
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.input.MouseButtonInfo
 //?}
 //? if >=26.3 {
 /*import dev.wyz.clientcore.compat.GLFW
@@ -42,7 +43,7 @@ import java.lang.ref.WeakReference
  * supports, come with the game's own translated labels, and buttons other mods add to the pause
  * menu (Mod Menu, ReplayMod...) show up here too. Screens opened that way come back to that
  * vanilla screen when closed, which River swaps for this one again (see [takeOver]).
- * "More" shows the vanilla menu itself, untouched.
+ * "More" shows the original menu, including mods that draw their own controls there.
  */
 class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.translatable("menu.game")), RiverScreen {
 
@@ -52,6 +53,7 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
         /** True while this screen sets the vanilla one up to read its buttons. */
         private var harvesting = false
         private var swapping: WeakReference<PauseScreen>? = null
+        private val proxyLabel = Regex("<[a-z0-9]+(?:[_:.-][a-z0-9]+)+>")
 
         private val fancyMenu: Boolean by lazy { FabricLoader.getInstance().isModLoaded("fancymenu") }
 
@@ -92,7 +94,7 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
     }
 
     /** One of vanilla's pause menu buttons, as this menu shows it. */
-    private class Action(val button: AbstractButton, val key: String, val label: String)
+    private class Action(val button: AbstractButton, val label: String)
 
     private var actions: List<Action> = emptyList()
     private var disconnect: AbstractButton? = null
@@ -136,31 +138,26 @@ class RiverPauseScreen(private val vanilla: PauseScreen) : Screen(Component.tran
                 key == "menu.disconnect" || key == "menu.returnToMenu" -> leave = button
                 // River's own button: this menu already has River's places along the top.
                 label == "River Client" -> {}
-                key == "menu.options" -> list += Action(button, key, label)
-                key == "gui.advancements" -> list += Action(button, key, label)
-                key == "gui.stats" -> list += Action(button, key, label)
-                key == "menu.shareToLan" -> list += Action(button, key, label)
-                key == "menu.server_links" -> list += Action(button, key, label)
-                key == "options.worldOptions.button" -> list += Action(button, key, label)
-                key.startsWith("menu.custom_options") -> list += Action(button, key, label)
-                key == "menu.playerReporting" -> list += Action(button, key, label)
                 // Feedback and bug reports live under More, as they do on most menus.
                 key == "menu.feedback" || key == "menu.sendFeedback" || key == "menu.reportBugs" -> {}
-                // Anything else is another mod's button: shown here, a few at most (the rest under More).
-                else -> if (list.count { it.key == "" } < 3) list += Action(button, "", label)
+                // Proxy buttons only acquire their real presentation and action on the original screen.
+                label.isBlank() || label == key || proxyLabel.matches(label) -> {}
+                else -> list += Action(button, label)
             }
         }
         actions = list
         disconnect = leave
     }
 
-    /** Presses one of vanilla's buttons the way Enter would: its own click sound, its own action. */
+    /** Clicks the original widget, including any mouse handler supplied by another mod. */
     private fun press(button: AbstractButton) {
-        if (!button.active) return
+        if (!button.active || !button.visible) return
+        val x = button.x + button.width / 2.0
+        val y = button.y + button.height / 2.0
 //? if >=1.21.9 {
-        button.keyPressed(KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0))
+        button.mouseClicked(MouseButtonEvent(x, y, MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0)), false)
 //?} else {
-/*        button.keyPressed(GLFW.GLFW_KEY_ENTER, 0, 0)
+/*        button.mouseClicked(x, y, GLFW.GLFW_MOUSE_BUTTON_LEFT)
 *///?}
     }
 

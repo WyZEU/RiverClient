@@ -241,6 +241,7 @@ abstract class Module(
         config.scoreboard = null
         config.chatTweaks = null
         config.ping = null
+        config.scalars = null
         config.keybind = -1
     }
 
