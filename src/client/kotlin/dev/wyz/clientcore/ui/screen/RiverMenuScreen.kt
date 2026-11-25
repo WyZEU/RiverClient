@@ -1930,6 +1930,14 @@ class RiverMenuScreen(private val parent: Screen?, focusModule: Module? = null, 
         }
     }
 
+//? if >=26.3 {
+/*    override fun added() {
+        super.added()
+        // Typing anywhere in the menu can start a module search.
+        minecraft.onTextInputFocusChange(this, true)
+    }
+
+*///?}
     override fun onClose() {
         saveNow()
         minecraft?.setScreen(parent)

@@ -9,6 +9,7 @@
     "Added: The Linux launcher updates itself, like on Windows and Mac.",
     "Added: The Booster cape, animated, for people boosting the River Discord for as long as they boost. Run /boostercape in Discord, then enter the code in Cosmetics.",
     "Fixed the Lyrics reset button, including the Lyrics settings in Spotify.",
+    "Fixed typing in module search on Minecraft 26.3.",
     "Fixed missing chunks when the pause camera turns on Minecraft 26.x.",
     "Fixed extra mod buttons in the pause menu. More opens the original menu for mods such as Essential.",
     "Updated FreeType on older Minecraft versions to protect against unsafe fonts in resource packs.",
