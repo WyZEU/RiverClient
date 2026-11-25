@@ -68,7 +68,8 @@ class LyricScene {
     private fun prepareWord(font: Font, word: String) = measured.getOrPut(word) {
         Array(LyricFonts.NAMES.size * 2) { i ->
             val text = LyricFonts.styled(word, i / 2, i % 2 != 0)
-            Measured(text, font.width(text))
+            // Warm the shaped glyphs the world renderer will draw.
+            Measured(text, font.width(text.visualOrderText))
         }
     }
 

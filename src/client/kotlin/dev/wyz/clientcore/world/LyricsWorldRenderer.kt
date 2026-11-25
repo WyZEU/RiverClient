@@ -61,6 +61,14 @@ object LyricsWorldRenderer {
 
     private var registered = false
 
+    // Iris on 26.3 has no polygon-offset pipeline for grayscale text.
+    private val usePolygonOffset =
+//? if >=26.3 {
+/*        !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("iris")
+*///?} else {
+        true
+//?}
+
     private fun interface TextSink {
         fun draw(text: Component, x: Float, y: Float, color: Int, mode: Font.DisplayMode)
     }
@@ -272,7 +280,7 @@ object LyricsWorldRenderer {
         var x = x0
         var a = a0
         val under = if (look.walls) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.NORMAL
-        val top = if (look.walls) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.POLYGON_OFFSET
+        val top = if (look.walls || !usePolygonOffset) under else Font.DisplayMode.POLYGON_OFFSET
         if (glitch > 0f) {
             x += (glitch - 0.55f) * 4f
             a *= 0.55f + 0.3f * glitch
