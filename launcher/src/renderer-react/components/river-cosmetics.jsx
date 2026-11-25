@@ -7,7 +7,7 @@ import { CapeFront } from "./skin-art";
 import { useT } from "../i18n/context.jsx";
 
 // Off until the River Plus store is live; then the "Get River Plus" line shows again.
-const PLUS_LAUNCHED = true;
+const PLUS_LAUNCHED = false;
 
 // Painted 1024x512 capes: scaled smoothly, the pixel-art ones stay crisp.
 const HD_CAPES = new Set(["river", "ember", "forest", "sunset", "storm", "galaxy", "plus", "gilded", "royal", "prism", "fox", "booster"]);

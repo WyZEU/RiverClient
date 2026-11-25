@@ -24,7 +24,7 @@ object RiverPlus {
      * Off until the store is live. While off, nothing advertises Plus: no "Get River Plus"
      * link and no locked Plus capes. Anyone the server already has as Plus still gets it.
      */
-    const val LAUNCHED = true
+    const val LAUNCHED = false
 
     /** Whether Plus shows up at all for this player: launched, or they have it anyway. */
     @JvmStatic
