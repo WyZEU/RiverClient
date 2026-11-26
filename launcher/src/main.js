@@ -681,8 +681,7 @@ function instanceRunsRiverAt(instancePath) {
  * Makes sure River's jar for [mcVersion] is on disk. A build carries only its default version;
  * the others come from the update server the first time an instance needs them, are checked
  * against the release manifest's SHA-256, and are kept in the cache folder. Returns false when
- * River cannot be had (offline, or no build for that version): the instance still launches,
- * without River, the same as a version River does not build for.
+ * no bundled or downloaded copy is available.
  */
 async function prefetchRiverModJar(mcVersion) {
   const cacheDir = path.join(app.getPath("userData"), "river-mod-cache");
@@ -759,9 +758,7 @@ function ensureBundledClientCoreMod(instancePath, mcVersion = instanceMcVersion(
   const resolved = resolveRiverRuntimeJars(mcVersion);
   const sourceJar = resolved.clientJar;
   if (!isRealRuntimeJar(sourceJar)) {
-    // No River build for this Minecraft version ships with this launcher yet. The instance
-    // still launches (Fabric + support/optimization mods); River's own mod simply stays out
-    // until a matching clientcore-<ver>+<mc>.jar is bundled/published.
+    // An existing instance can still use its installed copy when the download is unavailable.
     return findCoreClientJarInMods(root, mcVersion);
   }
 
@@ -11294,7 +11291,23 @@ async function preparePlainMinecraftLaunch(status, auth, authenticated, joinAddr
 }
 
 async function prepareStandaloneMinecraftLaunch(status, auth, authenticated, joinAddress = "") {
-  const versionId = status.settings.selectedVersion || "1.21.11";
+  const versionId = status.settings.selectedVersion || DEFAULT_MC_VERSION;
+  await prefetchRiverModJar(versionId);
+  const installedClientMod = ensureBundledClientCoreMod(status.instancePath, versionId);
+  const riverArgs = [];
+  if (isRealRuntimeJar(installedClientMod)) {
+    emit("launcher:log", `[launcher] River Client will load from the instance mods folder (${path.basename(installedClientMod)}).`);
+  } else {
+    const river = stageRiverRuntimeForInstance(status.instancePath, versionId);
+    // The JVM needs real files for a Java agent and its client jar, outside the Electron archive.
+    if (isRealRuntimeJar(river.bootstrapJar) && isRealRuntimeJar(river.clientJar)) {
+      riverArgs.push(`-javaagent:${river.bootstrapJar}`, `-Driver.client.jar=${river.clientJar}`);
+      emit("launcher:log", `[launcher] River in-game injection enabled (agent: ${path.basename(river.bootstrapJar)}, client: ${path.basename(river.clientJar)}).`);
+    } else if (instanceRunsRiver(status.selectedInstance)) {
+      return { ok: false, message: `River Client for Minecraft ${versionId} could not be installed. Check the connection and try launching again.` };
+    }
+  }
+
   const runtimeRoot = path.join(app.getPath("userData"), "minecraft-runtime");
   const librariesDir = path.join(runtimeRoot, "libraries");
   const versionsDir = path.join(runtimeRoot, "versions");
@@ -11362,8 +11375,6 @@ async function prepareStandaloneMinecraftLaunch(status, auth, authenticated, joi
     resolution_width: String(status.settings.resolution?.width || 1280),
     resolution_height: String(status.settings.resolution?.height || 720)
   };
-  // Prefer the normal Fabric mod path for River Client by keeping clientcore inside the instance
-  // mods folder. The runtime injection path stays only as a fallback when the mod jar is absent.
   const mainClass = fabric.mainClass || vanilla.mainClass;
   if (!mainClass) return { ok: false, message: "Minecraft launch metadata did not include a main class." };
   const gameArgs = buildMinecraftArguments(vanilla, fabric, replacements);
@@ -11372,20 +11383,6 @@ async function prepareStandaloneMinecraftLaunch(status, auth, authenticated, joi
     gameArgs.push("--quickPlayMultiplayer", join);
   }
 
-  await prefetchRiverModJar(versionId);
-  const installedClientMod = ensureBundledClientCoreMod(status.instancePath, versionId);
-  const river = stageRiverRuntimeForInstance(status.instancePath, versionId);
-  // A -javaagent / classloader jar must be a real file the spawned JVM can open. Paths inside
-  // app.asar are virtual (readable only through Electron's fs shim) and make the JVM die with
-  // "agent library failed Agent_OnLoad: instrument / Error opening zip file or JAR manifest missing".
-  const riverInjection = !fs.existsSync(installedClientMod) && isRealRuntimeJar(river.bootstrapJar) && isRealRuntimeJar(river.clientJar);
-  if (fs.existsSync(installedClientMod)) {
-    emit("launcher:log", `[launcher] River Client will load from the instance mods folder (${path.basename(installedClientMod)}).`);
-  } else if (riverInjection) {
-    emit("launcher:log", `[launcher] River in-game injection enabled (agent: ${path.basename(river.bootstrapJar)}, client: ${path.basename(river.clientJar)}).`);
-  } else {
-    emit("launcher:log", "[launcher] River in-game jars not found — launching plain Fabric. Run `gradlew build` to produce the agent + client jars.");
-  }
   const runtimeClasspath = replacements.classpath;
 
   // A new instance starts uncapped (see applyFrameRateOptions); after that it is left alone.
@@ -11408,7 +11405,7 @@ async function prepareStandaloneMinecraftLaunch(status, auth, authenticated, joi
     `-Djava.library.path=${nativesDir}`,
     "-Dminecraft.launcher.brand=river-client",
     `-Dminecraft.launcher.version=${app.getVersion()}`,
-    ...(riverInjection ? [`-javaagent:${river.bootstrapJar}`, `-Driver.client.jar=${river.clientJar}`] : []),
+    ...riverArgs,
     "-cp",
     runtimeClasspath
   ];
