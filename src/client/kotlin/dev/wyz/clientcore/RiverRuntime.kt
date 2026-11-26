@@ -153,7 +153,7 @@ object RiverRuntime {
 
     fun renderHud(client: Minecraft, graphics: GuiGraphics, tickDelta: Float) {
         initialize()
-        if (dev.wyz.clientcore.dev.DevShot.hudHidden) return
+        if (dev.wyz.clientcore.dev.DevShot.hudHidden || HudRenderer.inReplay()) return
         HudRenderer.render(client, graphics, tickDelta)
         // Drawn after the HUD so a message is never hidden behind a module.
         dev.wyz.clientcore.ui.FriendMessageToasts.render(client, graphics)
@@ -162,14 +162,15 @@ object RiverRuntime {
     @Suppress("UNUSED_PARAMETER")
     fun renderScreen(client: Minecraft, screen: Screen?, graphics: GuiGraphics, mouseX: Int, mouseY: Int, tickDelta: Float) {
         initialize()
-        if (screen != null) dev.wyz.clientcore.ui.SeasonEvent.renderScreen(client, screen, graphics)
-        if (screen != null && screen === client.screen) {
+        if (screen == null || HudRenderer.inReplay()) return
+        dev.wyz.clientcore.ui.SeasonEvent.renderScreen(client, screen, graphics)
+        if (screen === client.screen) {
             ModuleRegistry.get<dev.wyz.clientcore.module.impl.NowPlayingModule>("now_playing")?.renderMenu(client, graphics)
         }
         // Watermark shows over regular menus (pause, inventory, ...) but never on the
         // main menu, River's own screens, or the multiplayer server list - there its
         // top-right corner overlaps server pings and other clients' overlays.
-        if (screen == null || screen is RiverScreen || screen is TitleScreen || screen is JoinMultiplayerScreen) return
+        if (screen is RiverScreen || screen is TitleScreen || screen is JoinMultiplayerScreen) return
         WatermarkRenderer.renderOverlay(client, graphics)
     }
 

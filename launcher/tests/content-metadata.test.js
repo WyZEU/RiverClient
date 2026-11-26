@@ -7,6 +7,14 @@ const vm = require("node:vm");
 const { sameInstalledContent, mergeMissingMetadata } = require("../src/content-metadata.js");
 
 const source = fs.readFileSync(path.join(__dirname, "../src/main.js"), "utf8");
+function loadFunctions(context, names) {
+  for (const name of names) {
+    const start = source.indexOf(`async function ${name}(`);
+    assert.notEqual(start, -1);
+    vm.runInContext(source.slice(start, source.indexOf("\n}", start) + 2), context);
+  }
+}
+
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "river-metadata-test-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -35,11 +43,7 @@ function fixture(t) {
     getModrinthVersion: async () => { started(); await gate; return { id: "v2", version_number: "2" }; },
     emit() {}
   });
-  for (const name of ["backfillInstalledIcons", "checkModUpdates"]) {
-    const start = source.indexOf(`async function ${name}(`);
-    assert.notEqual(start, -1);
-    vm.runInContext(source.slice(start, source.indexOf("\n}", start) + 2), context);
-  }
+  loadFunctions(context, ["backfillInstalledIcons", "checkModUpdates"]);
   return { root, read, write, context, release, waiting };
 }
 
@@ -135,4 +139,45 @@ test("update scans merge into current content without overwriting concurrent cha
       if (change === "install") assert.deepEqual(actual.updates["mod:new.jar"], current.updates["mod:new.jar"]);
     });
   }
+});
+
+const voiceChatRelease = { id: "DKSq5wO6", version_type: "release", date_published: "2026-08-08T00:00:00Z" };
+const voiceChatBeta = { id: "ul3tRpKz", version_type: "beta", date_published: "2026-10-28T00:00:00Z" };
+
+function voiceChatFixture(t, versions) {
+  const f = fixture(t);
+  const manifest = f.read();
+  Object.assign(manifest.mods["example.jar"], {
+    projectId: "simple-voice-chat", versionId: voiceChatBeta.id, gameVersion: "26.2", loader: "fabric"
+  });
+  f.write(manifest);
+  const installed = [];
+  Object.assign(f.context, {
+    URL, AbortSignal, launcherUserAgent: "Test", normalizeContentType: (type) => type,
+    fetch: async () => ({ ok: true, json: async () => versions }),
+    emitActivity() {},
+    installModrinthVersion: async ({ version }) => { installed.push(version.id); return { ok: true }; }
+  });
+  loadFunctions(f.context, ["getModrinthVersion", "applyAvailableModUpdates"]);
+  return { ...f, installed };
+}
+
+test("content repair preserves a newer beta instead of downgrading to an older release", async (t) => {
+  const f = voiceChatFixture(t, [voiceChatBeta, voiceChatRelease]);
+  const result = await f.context.applyAvailableModUpdates(f.root);
+  assert.equal(result.ok, true);
+  assert.equal(f.read().updates["mod:example.jar"].available, false);
+  assert.deepEqual(f.installed, []);
+});
+
+test("fresh installs still prefer releases and updates can select a newer release", async (t) => {
+  const versions = [voiceChatBeta, voiceChatRelease];
+  const f = voiceChatFixture(t, versions);
+  const initial = await f.context.getModrinthVersion("simple-voice-chat", "26.2", "fabric");
+  assert.equal(initial.id, voiceChatRelease.id);
+  const newerRelease = { id: "new-release", version_type: "release", date_published: "2026-11-15T00:00:00Z" };
+  versions.unshift(newerRelease);
+  const result = await f.context.checkModUpdates(f.root);
+  assert.equal(result.count, 1);
+  assert.equal(f.read().updates["mod:example.jar"].latestVersionId, newerRelease.id);
 });

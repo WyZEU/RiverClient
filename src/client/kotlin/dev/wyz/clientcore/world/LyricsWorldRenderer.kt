@@ -1,5 +1,6 @@
 package dev.wyz.clientcore.world
 
+import dev.wyz.clientcore.hud.HudRenderer
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
 import dev.wyz.clientcore.lyrics.LyricFonts
@@ -87,7 +88,7 @@ object LyricsWorldRenderer {
     private fun module(client: Minecraft, now: Long): LyricsModule? {
         if (client.level == null || client.player == null) return null
         val module = ModuleRegistry.get<LyricsModule>("lyrics") ?: return null
-        if (!module.active || !module.showWorld()) return null
+        if (!module.active || !module.showWorld() || HudRenderer.inReplay()) return null
         module.scene.frame(client, now, module.sceneConfig())
         return if (module.scene.pieces.isEmpty()) null else module
     }

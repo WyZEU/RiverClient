@@ -1,3 +1,5 @@
+const { spawn } = require("node:child_process");
+const { EventEmitter, once } = require("node:events");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -56,4 +58,56 @@ test("launch still proceeds when a matching installed mod is already available",
 test("launch still proceeds when a matching client and its bootstrap can be staged", async (t) => {
   const { launch, preparingMinecraft } = riverLaunch(t, { staged: true });
   await assert.rejects(launch, (error) => error === preparingMinecraft);
+});
+
+function monitorGameProcess(child, state = "launching") {
+  const activity = [];
+  const context = vm.createContext({
+    launchProcess: child,
+    launchState: state,
+    lastLaunchFailure: null,
+    emit() {},
+    promoteLaunchStateFromOutput() {},
+    emitActivity: (entry) => activity.push(entry),
+    setLaunchState: (next) => { context.launchState = next; },
+    recordSessionEnd() {},
+    getCrashInfo: () => ({ summary: "Crash report." }),
+    nowPlaying: { stop() {} },
+    emitStatus() {}
+  });
+  vm.runInContext(extract("attachLaunchProcess"), context);
+  context.attachLaunchProcess({ instancePath: "" });
+  return { context, activity };
+}
+
+test("a process that returns zero before Minecraft starts is shown as a launch failure", async () => {
+  const child = spawn(process.execPath, ["-e", "process.exit(0)"]);
+  const { context, activity } = monitorGameProcess(child);
+  assert.deepEqual(await once(child, "exit"), [0, null]);
+  assert.match(context.lastLaunchFailure?.message || "", /closed before its window opened/i);
+  assert.equal(activity.at(-1)?.error, true);
+  assert.equal(context.launchState, "idle");
+});
+
+test("a normal close and a requested stop do not show a startup error", () => {
+  const running = new EventEmitter();
+  const normal = monitorGameProcess(running, "running");
+  running.emit("exit", 0);
+  assert.equal(normal.context.lastLaunchFailure, null);
+  assert.equal(normal.context.launchState, "idle");
+
+  const stopped = new EventEmitter();
+  const cancelled = monitorGameProcess(stopped);
+  cancelled.context.launchProcess = null;
+  stopped.emit("exit", 0);
+  assert.equal(cancelled.context.lastLaunchFailure, null);
+  assert.equal(cancelled.context.launchState, "idle");
+});
+
+test("a nonzero exit still points to the crash report", () => {
+  const child = new EventEmitter();
+  const { context, activity } = monitorGameProcess(child);
+  child.emit("exit", 1);
+  assert.match(context.lastLaunchFailure?.message || "", /code 1\. Crash report\./);
+  assert.equal(activity.at(-1)?.error, true);
 });

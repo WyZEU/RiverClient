@@ -5759,18 +5759,19 @@ async function launchStandaloneMinecraft(status, joinAddress = "", plainInstance
 }
 
 function attachLaunchProcess(status) {
-  if (!launchProcess) return;
-  launchProcess.stdout?.on("data", (chunk) => {
+  const child = launchProcess;
+  if (!child) return;
+  child.stdout?.on("data", (chunk) => {
     const text = chunk.toString();
     promoteLaunchStateFromOutput(text);
     emit("launcher:log", text);
   });
-  launchProcess.stderr?.on("data", (chunk) => {
+  child.stderr?.on("data", (chunk) => {
     const text = chunk.toString();
     promoteLaunchStateFromOutput(text);
     emit("launcher:log", text);
   });
-  launchProcess.on("error", (error) => {
+  child.on("error", (error) => {
     emit("launcher:log", `[launcher] Failed to launch: ${error.message}`);
     lastLaunchFailure = {
       message: error.code === "ENOENT"
@@ -5785,18 +5786,21 @@ function attachLaunchProcess(status) {
     setLaunchState("idle");
     emitStatus();
   });
-  launchProcess.on("exit", (code) => {
+  child.on("exit", (code) => {
     emit("launcher:log", `[launcher] Minecraft process exited with code ${code ?? "unknown"}.`);
+    const closedDuringStartup = code === 0 && launchProcess === child && !child.killed && launchState === "launching";
     recordSessionEnd();
-    if (code !== 0 && code !== null) {
-      const crash = getCrashInfo(status.instancePath);
+    if (closedDuringStartup || (code !== 0 && code !== null)) {
+      const message = closedDuringStartup
+        ? "Minecraft closed before its window opened. Check the game log and Java settings."
+        : `Minecraft exited with code ${code}. ${getCrashInfo(status.instancePath).summary || "Check Logs for the crash details."}`.trim();
       lastLaunchFailure = {
-        message: `Minecraft exited with code ${code}. ${crash.summary || "Check Logs for the crash details."}`.trim(),
+        message,
         at: new Date().toISOString(),
         fixable: true,
         supportUrl: "https://discord.riverclient.xyz"
       };
-      emitActivity({ title: "Minecraft closed with an error", detail: lastLaunchFailure.message, current: 1, total: 1, done: true, error: true });
+      emitActivity({ title: closedDuringStartup ? "Launch failed" : "Minecraft closed with an error", detail: message, current: 1, total: 1, done: true, error: true });
     }
     launchProcess = null;
     // The now-playing feed only exists for the in-game module, so it stops with the game.
@@ -6452,7 +6456,7 @@ async function transferMods({ fromInstanceId, toInstanceId } = {}) {
     try {
       if (projectId) {
         // A longer wait than a search allows: this runs once per mod, not on every keystroke.
-        const version = await getModrinthVersion(projectId, to.version, targetLoader, "mod", 30000);
+        const version = await getModrinthVersion(projectId, to.version, targetLoader, "mod", { timeoutMs: 30000 });
         const res = version
           ? await installModrinthVersion({
             projectIdOrSlug: projectId,
@@ -11783,7 +11787,7 @@ function getKnownSearchConflict(projectId, manifest) {
   };
 }
 
-async function getModrinthVersion(projectIdOrSlug, gameVersion, loader, contentType = "mod", timeoutMs = 8000) {
+async function getModrinthVersion(projectIdOrSlug, gameVersion, loader, contentType = "mod", { timeoutMs = 8000, installedVersionId } = {}) {
   const info = contentTypeInfo(contentType);
   const url = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectIdOrSlug)}/version`);
   url.searchParams.set("game_versions", JSON.stringify([gameVersion]));
@@ -11800,7 +11804,13 @@ async function getModrinthVersion(projectIdOrSlug, gameVersion, loader, contentT
     });
     if (!response.ok) return null;
     const versions = await response.json();
-    return versions.find((version) => version.version_type === "release") || versions[0] || null;
+    const preferred = versions.find((version) => version.version_type === "release") || versions[0] || null;
+    const installed = installedVersionId && versions.find((version) => version.id === installedVersionId);
+    // An installed beta may have been published after the latest stable release.
+    if (installed && preferred && Date.parse(preferred.date_published) < Date.parse(installed.date_published)) {
+      return installed;
+    }
+    return preferred;
   } catch {
     return null;
   }
@@ -13059,7 +13069,9 @@ async function checkModUpdates(instancePath) {
     while (cursor < tasks.length) {
       const task = tasks[cursor++];
       const { contentType, file, item } = task;
-      const latest = await getModrinthVersion(item.projectId, item.gameVersion, item.loader, contentType);
+      const latest = await getModrinthVersion(item.projectId, item.gameVersion, item.loader, contentType, {
+        installedVersionId: item.versionId
+      });
       if (!latest) continue;
       updates[updateKey(contentType, file)] = {
         contentType,

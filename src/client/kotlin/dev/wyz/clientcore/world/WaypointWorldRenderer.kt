@@ -1,5 +1,6 @@
 package dev.wyz.clientcore.world
 
+import dev.wyz.clientcore.hud.HudRenderer
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
 import dev.wyz.clientcore.config.WaypointData
@@ -88,7 +89,7 @@ object WaypointWorldRenderer {
     private fun shouldRender(client: Minecraft): Boolean {
         val module = ModuleRegistry.get<WaypointsModule>("waypoints") ?: return false
         if (!module.active) return false
-        if (client.level == null || client.player == null) return false
+        if (client.level == null || client.player == null || HudRenderer.inReplay()) return false
         return module.editorWaypointSettings().showWorldMarkers
     }
 

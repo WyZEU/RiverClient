@@ -16,8 +16,7 @@ object HudRenderer {
 
     /**
      * Flashback's isInReplay(), looked up once by name so River needs nothing of Flashback at
-     * build time. In a replay the player is a free camera: the HUD would show the camera's
-     * coordinates and empty key presses in the editor and in every exported video.
+     * build time. Use it to keep live overlays out of replay editing and exports.
      */
     private val flashbackInReplay: java.lang.reflect.Method? by lazy {
         if (!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("flashback")) null
@@ -40,7 +39,6 @@ object HudRenderer {
         // module would draw twice (text looks doubled/bold and overlaps itself). The
         // editor draws all the modules itself, so stand down while it's open.
         if (client.screen is RiverHudEditorScreen) return
-        if (inReplay()) return
         ClientUi.menuFrame = false
         // Time River's whole HUD pass so the Perf Stats readout reflects real cost.
         val start = System.nanoTime()
