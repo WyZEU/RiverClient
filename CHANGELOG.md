@@ -7,3 +7,4 @@
 - Hide world lyrics, waypoints, the watermark and friend message popups in Flashback replays.
 - Show a launch error when Minecraft closes before its window opens, even if Java exits with code 0.
 - Fixed Repair and Update All replacing newer Modrinth builds with older releases.
+- Hide the custom crosshair in third-person views.

@@ -183,6 +183,7 @@ class CrosshairModule : Module("crosshair", "Custom Crosshair", "Pick, shape or 
     }
 
     override fun render(client: Minecraft, graphics: GuiGraphics, tickDelta: Float) {
+        if (!client.options.cameraType.isFirstPerson) return
 //? if >=26.2 {
 /*        if (client.gui.hud.isHidden()) return
 *///?} else {
